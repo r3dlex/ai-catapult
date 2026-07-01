@@ -12,6 +12,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Vendor skills
+        run: bash setup.sh
+      - name: Verify vendor integrity
+        run: bash scripts/verify-vendor.sh
       - run: npm test
 
   vendor:

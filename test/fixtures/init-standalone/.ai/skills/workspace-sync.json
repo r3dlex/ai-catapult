@@ -1,0 +1,6 @@
+{
+  "name": "workspace-sync",
+  "version": "1.0.0",
+  "operations": ["sync.pull", "sync.push", "sync.diff", "sync.status"],
+  "requires_confirmation": ["sync.push"]
+}

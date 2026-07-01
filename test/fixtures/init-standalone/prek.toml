@@ -1,0 +1,13 @@
+# prek configuration — pre-commit hook manager (Rust-based, github.com/j178/prek)
+# Schema mirrors `.pre-commit-config.yaml` (top-level `repos` field).
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "validate-rules"
+name = "Validate Archgate rules structure"
+entry = "bash scripts/validate-rules.sh"
+language = "system"
+files = '\.rules\.ts$'
+pass_filenames = false
