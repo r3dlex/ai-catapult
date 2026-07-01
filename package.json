@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "node --test",
-    "regen:fixture": "bash scripts/regen-fixture.sh"
+    "regen:fixture": "bash scripts/regen-fixture.sh",
+    "build:plugin:codex": "bash scripts/build-codex-plugin.sh"
   },
   "engines": {
     "node": ">=18"
