@@ -3,11 +3,11 @@
 ╚══════════════════════════════════════════════════════════════╝
 
 Mechanical v3 skeleton scaffolded into:
-  /Users/andreburgstahler/Ws/Personal/ai-catapult/test/fixtures/init-standalone
+  .
 
 Key emitted paths (verified on disk):
-  • /Users/andreburgstahler/Ws/Personal/ai-catapult/test/fixtures/init-standalone/.ai/matrix.json
-  • /Users/andreburgstahler/Ws/Personal/ai-catapult/test/fixtures/init-standalone/AGENTS.md
+  • ./.ai/matrix.json
+  • ./AGENTS.md
 
 Judgment-laden phases NOT yet written (require in-harness plugin):
   • .ai/handoff/init-ai-repo-handoff.md

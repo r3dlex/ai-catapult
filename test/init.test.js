@@ -114,18 +114,12 @@ test('ai-catapult init emits mechanical scaffold matching committed fixture', ()
     }
 
     // Byte-compare each fixture file.
-    // NEXT-STEPS.md contains the resolved target path by design (it's part of
-    // the finish prompt). Normalise both sides to <TARGET> before comparing so
-    // the test is not coupled to a specific filesystem path while still
-    // verifying that all non-path content is byte-identical.
-    const NEXT_STEPS_REL = '.ai/handoff/NEXT-STEPS.md';
+    // NEXT-STEPS.md now uses relative paths in the file (pathDisplay='.') so it
+    // is machine-independent and byte-identical across environments — no
+    // normalisation needed.
     for (const relPath of fixtureFiles) {
-      let expected = readFileSync(join(fixtureDir, relPath), 'utf8');
-      let actual = readFileSync(join(tmpDir, relPath), 'utf8');
-      if (relPath === NEXT_STEPS_REL) {
-        expected = expected.replaceAll(fixtureDir, '<TARGET>');
-        actual = actual.replaceAll(tmpDir, '<TARGET>');
-      }
+      const expected = readFileSync(join(fixtureDir, relPath), 'utf8');
+      const actual = readFileSync(join(tmpDir, relPath), 'utf8');
       assert.equal(actual, expected, `Content mismatch for ${relPath}`);
     }
   } finally {

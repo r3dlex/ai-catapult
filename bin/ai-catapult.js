@@ -89,20 +89,22 @@ function parseArgs(argv) {
  * scaffold. Content is deterministic given same inputs.
  *
  * @param {object} opts
- * @param {string}   opts.targetDir           - resolved absolute target path
+ * @param {string}   opts.targetDir           - resolved absolute target path (used in "scaffolded into" line)
+ * @param {string}   opts.pathDisplay         - base used for anchor path bullet lines (e.g. targetDir for
+ *                                              stdout, '.' for the file so it stays machine-independent)
  * @param {string[]} opts.emittedPaths         - relative paths actually written
  * @param {string[]} opts.judgmentLadenPaths   - from boundary-manifest.json
  * @returns {string}
  */
-function buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths }) {
+function buildFinishPrompt({ targetDir, pathDisplay, emittedPaths, judgmentLadenPaths }) {
   // Pick two anchor paths that are always mechanical (existence already verified
   // by scaffold — if they are missing scaffold would have failed earlier).
   const matrixPath = emittedPaths.includes('.ai/matrix.json') ? '.ai/matrix.json' : emittedPaths[0] ?? null;
   const agentsPath = emittedPaths.includes('AGENTS.md') ? 'AGENTS.md' : null;
 
   const anchorLines = [];
-  if (matrixPath) anchorLines.push(`  • ${targetDir}/${matrixPath}`);
-  if (agentsPath) anchorLines.push(`  • ${targetDir}/${agentsPath}`);
+  if (matrixPath) anchorLines.push(`  • ${pathDisplay}/${matrixPath}`);
+  if (agentsPath) anchorLines.push(`  • ${pathDisplay}/${agentsPath}`);
 
   const jlLines = judgmentLadenPaths.map((p) => `  • ${p}`).join('\n');
 
@@ -112,7 +114,7 @@ function buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths }) {
     '╚══════════════════════════════════════════════════════════════╝',
     '',
     'Mechanical v3 skeleton scaffolded into:',
-    `  ${targetDir}`,
+    `  ${pathDisplay}`,
     '',
     'Key emitted paths (verified on disk):',
     ...anchorLines,
@@ -162,18 +164,23 @@ function runInit(argv) {
     targetDir, templatesDir: VENDOR_TEMPLATES, repoId, date, upstreamUrl, upstreamRef, force,
   });
 
-  // Build finish prompt — deterministic given same inputs.
-  const finishPrompt = buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths });
+  // Build finish prompt for stdout — uses absolute targetDir so the user sees
+  // real paths they can open directly.
+  const finishPromptStdout = buildFinishPrompt({ targetDir, pathDisplay: targetDir, emittedPaths, judgmentLadenPaths });
 
   // Emit to stdout.
-  process.stdout.write(finishPrompt + '\n');
+  process.stdout.write(finishPromptStdout + '\n');
 
-  // Write the same content to <target>/.ai/handoff/NEXT-STEPS.md.
+  // Build finish prompt for the file — uses '.' as the path base so the file
+  // contains only relative paths and is byte-identical across machines/CI runs.
+  const finishPromptFile = buildFinishPrompt({ targetDir, pathDisplay: '.', emittedPaths, judgmentLadenPaths });
+
+  // Write to <target>/.ai/handoff/NEXT-STEPS.md.
   // Safe to write unconditionally: scaffold's collision guard has already run
   // and would have exited 1 on mechanical collisions before reaching this line.
   const nextStepsPath = join(targetDir, '.ai/handoff/NEXT-STEPS.md');
   mkdirSync(dirname(nextStepsPath), { recursive: true });
-  writeFileSync(nextStepsPath, finishPrompt, 'utf8');
+  writeFileSync(nextStepsPath, finishPromptFile, 'utf8');
 }
 
 // ---------------------------------------------------------------------------

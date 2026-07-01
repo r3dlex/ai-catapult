@@ -156,7 +156,7 @@ test('finish-prompt: NEXT-STEPS.md is written to <target>/.ai/handoff/NEXT-STEPS
   }
 });
 
-test('finish-prompt: NEXT-STEPS.md contains the same key references as stdout', () => {
+test('finish-prompt: NEXT-STEPS.md uses relative paths and references key emitted files', () => {
   const tmpDir = makeTmpDir('ai-catapult-fp-nextsteps-match-');
 
   try {
@@ -172,22 +172,39 @@ test('finish-prompt: NEXT-STEPS.md contains the same key references as stdout', 
     const nextStepsPath = join(tmpDir, '.ai/handoff/NEXT-STEPS.md');
     const fileContent = readFileSync(nextStepsPath, 'utf8');
 
-    // Both stdout and file should reference the target dir
+    // File must NOT contain the absolute target path — it uses relative paths
+    // so it is machine-independent and byte-identical across CI runs.
     assert.ok(
-      fileContent.includes(tmpDir),
-      `NEXT-STEPS.md must contain the resolved target path "${tmpDir}"\nFile content:\n${fileContent}`,
+      !fileContent.includes(tmpDir),
+      `NEXT-STEPS.md must NOT contain the absolute target path (file uses relative paths)\nFile content:\n${fileContent}`,
     );
 
-    // Both should reference .ai/matrix.json
+    // File should reference .ai/matrix.json (relative)
     assert.ok(
       fileContent.includes('.ai/matrix.json'),
       `NEXT-STEPS.md must reference ".ai/matrix.json"\nFile content:\n${fileContent}`,
     );
 
-    // Both should reference AGENTS.md
+    // File should reference AGENTS.md (relative)
     assert.ok(
       fileContent.includes('AGENTS.md'),
       `NEXT-STEPS.md must reference "AGENTS.md"\nFile content:\n${fileContent}`,
+    );
+
+    // The relative paths must actually resolve to real files under tmpDir
+    assert.ok(
+      existsSync(join(tmpDir, '.ai/matrix.json')),
+      `.ai/matrix.json referenced in NEXT-STEPS.md must exist under ${tmpDir}`,
+    );
+    assert.ok(
+      existsSync(join(tmpDir, 'AGENTS.md')),
+      `AGENTS.md referenced in NEXT-STEPS.md must exist under ${tmpDir}`,
+    );
+
+    // stdout must still contain the absolute path
+    assert.ok(
+      result.stdout.includes(tmpDir),
+      `stdout must contain the absolute target path "${tmpDir}"\nActual stdout:\n${result.stdout}`,
     );
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
@@ -302,9 +319,11 @@ test('finish-prompt: stdout mentions the ai-catapult-init skill invocation', () 
 // (e) determinism — same inputs produce identical NEXT-STEPS.md content
 // ---------------------------------------------------------------------------
 
-test('finish-prompt: NEXT-STEPS.md content is deterministic for same inputs (different target paths)', () => {
-  // Two different target dirs — the prompt content should differ only in the
-  // target path, but both must be valid (non-empty, structured).
+test('finish-prompt: NEXT-STEPS.md is byte-identical across two different target directories', () => {
+  // The file uses relative paths (pathDisplay='.') so it must be fully
+  // byte-identical regardless of where the target directory lives — no
+  // normalisation required. This is the stronger property that enables the
+  // parity oracle in init.test.js to do a direct byte-diff.
   const tmpDir1 = makeTmpDir('ai-catapult-fp-det1-');
   const tmpDir2 = makeTmpDir('ai-catapult-fp-det2-');
 
@@ -318,16 +337,15 @@ test('finish-prompt: NEXT-STEPS.md content is deterministic for same inputs (dif
     assert.equal(r1.status, 0, `Run 1 failed: ${r1.stderr}`);
     assert.equal(r2.status, 0, `Run 2 failed: ${r2.stderr}`);
 
-    // Replace target dir in content to compare structure
-    const normalise = (dir, content) => content.replaceAll(dir, '<TARGET>');
-
     const f1 = readFileSync(join(tmpDir1, '.ai/handoff/NEXT-STEPS.md'), 'utf8');
     const f2 = readFileSync(join(tmpDir2, '.ai/handoff/NEXT-STEPS.md'), 'utf8');
 
+    // Byte-identical — no normalisation needed
     assert.equal(
-      normalise(tmpDir1, f1),
-      normalise(tmpDir2, f2),
-      'NEXT-STEPS.md structure must be identical given same inputs (modulo target path)',
+      f1,
+      f2,
+      'NEXT-STEPS.md must be byte-identical across two different target directories ' +
+      '(file uses relative paths, so the absolute target path must not appear in it)',
     );
   } finally {
     rmSync(tmpDir1, { recursive: true, force: true });
