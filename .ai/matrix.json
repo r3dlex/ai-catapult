@@ -1,0 +1,9 @@
+{
+  "schema_version": "3",
+  "topology_type": "standalone",
+  "identity": {
+    "name": "ai-catapult",
+    "repository": "https://github.com/r3dlex/ai-catapult",
+    "description": "Deterministic CLI + plugins for init-ai-repo v3 AI-SDLC governance scaffolding"
+  }
+}
