@@ -32,6 +32,7 @@ Options:
   --date <YYYY-MM-DD>    Scaffold date token                        (default: today)
   --upstream-url <url>   Upstream git URL for matrix.json           (default: "")
   --upstream-ref <ref>   Upstream git ref for matrix.json           (default: "main")
+  --force                Overwrite existing files without error
   -h, --help             Show this help`;
 
 // ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ Options:
 
 /**
  * Parse flags from an argv array (already sliced past [node, script]).
- * Returns { positionals: string[], flags: Map<string, string|boolean> }
+ * Returns { positionals: string[], flags: Map<string, string|boolean>, firstPositionalIdx: number }
  * --foo bar   → flags.get('foo') === 'bar'
  * --foo       → flags.get('foo') === true
  * -h          → flags.get('h') === true
@@ -48,6 +49,8 @@ Options:
 function parseArgs(argv) {
   const positionals = [];
   const flags = new Map();
+  // Track the raw index of the first positional in argv (for subcommand slicing)
+  let firstPositionalIdx = -1;
   let i = 0;
   while (i < argv.length) {
     const arg = argv[i];
@@ -69,11 +72,12 @@ function parseArgs(argv) {
       flags.set(arg.slice(1), true);
       i += 1;
     } else {
+      if (firstPositionalIdx === -1) firstPositionalIdx = i;
       positionals.push(arg);
       i += 1;
     }
   }
-  return { positionals, flags };
+  return { positionals, flags, firstPositionalIdx };
 }
 
 // ---------------------------------------------------------------------------
@@ -95,8 +99,9 @@ function runInit(argv) {
   const date = String(flags.get('date') || today);
   const upstreamUrl = String(flags.get('upstream-url') || '');
   const upstreamRef = String(flags.get('upstream-ref') || 'main');
+  const force = flags.has('force');
 
-  scaffold({ targetDir, templatesDir: VENDOR_TEMPLATES, repoId, date, upstreamUrl, upstreamRef });
+  scaffold({ targetDir, templatesDir: VENDOR_TEMPLATES, repoId, date, upstreamUrl, upstreamRef, force });
 
   console.log(`Scaffolded v3 .ai/ skeleton into ${targetDir}`);
   console.log(`  repo-id:      ${repoId}`);
@@ -119,7 +124,7 @@ function runInstall(_argv) {
 // ---------------------------------------------------------------------------
 
 const rawArgv = process.argv.slice(2);
-const { positionals: topPositionals, flags: topFlags } = parseArgs(rawArgv);
+const { positionals: topPositionals, flags: topFlags, firstPositionalIdx } = parseArgs(rawArgv);
 
 if (topFlags.has('version') || topFlags.has('v')) {
   console.log(pkg.version);
@@ -142,16 +147,18 @@ if (!verb) {
 }
 
 if (verb === 'init') {
-  // Pass everything after 'init' to the subcommand parser
-  const verbIdx = rawArgv.indexOf('init');
-  runInit(rawArgv.slice(verbIdx + 1));
+  // Fix #2: use firstPositionalIdx (the index of 'init' in rawArgv) rather than
+  // rawArgv.indexOf('init'), which would match the first literal 'init' anywhere
+  // — e.g. `ai-catapult --date init init <target>` would mis-dispatch to ./init.
+  runInit(rawArgv.slice(firstPositionalIdx + 1));
   process.exit(0);
 }
 
 if (verb === 'install') {
-  const verbIdx = rawArgv.indexOf('install');
-  runInstall(rawArgv.slice(verbIdx + 1));
-  // exits inside
+  runInstall(rawArgv.slice(firstPositionalIdx + 1));
+  // runInstall always calls process.exit — unreachable, but process.exit here
+  // makes the fallthrough unreachable by construction (fix #7).
+  process.exit(1);
 }
 
 process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);
