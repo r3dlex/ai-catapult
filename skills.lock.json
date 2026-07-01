@@ -1,5 +1,5 @@
 {
-  "repo": "git@github.com:r3dlex/skills.git",
+  "repo": "https://github.com/r3dlex/skills.git",
   "ref": "main",
   "sha": "aab18fc0cc76160f5d31ccff8f54a4c0a3a2d076",
   "_note": "Pin to skills main as of 2026-07-01. The skills repo still uses 'init-ai-repo' naming in some skills (e.g. the init skill); the ai-catapult rename PR has not yet landed there. Bump this SHA deliberately when that rename merges or when new skills are needed."

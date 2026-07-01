@@ -22,8 +22,11 @@ if [[ ! -f "${LOCK_FILE}" ]]; then
   exit 1
 fi
 
-# Use node to parse JSON (already required by the project)
-LOCKED_SHA="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('${LOCK_FILE}','utf8')).sha)")"
+# Use node to parse JSON (already required by the project).
+# Path is passed via env to avoid shell-injection on paths with quotes/backslashes.
+# This script trusts the HEAD_SHA sentinel written by setup.sh — it stays non-mutating
+# and offline rather than re-deriving the SHA via git.
+LOCKED_SHA="$(LOCK_FILE="${LOCK_FILE}" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.LOCK_FILE,'utf8')).sha)")"
 
 if [[ -z "${LOCKED_SHA}" ]]; then
   echo "ERROR: could not read .sha from ${LOCK_FILE}" >&2

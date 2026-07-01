@@ -7,8 +7,8 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -40,7 +40,8 @@ test('verify gate exits non-zero when vendor/skills directory is absent', () => 
   mkdirSync(tmp, { recursive: true });
 
   const result = runVerify(tmp);
-  assert.notEqual(result.status, 0, `expected non-zero exit when vendor/skills absent; got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  assert.equal(result.status, 1, `expected exit code 1 when vendor/skills absent; got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  assert.ok(result.stderr.includes('not found'), `expected stderr to include "not found"; got: ${result.stderr}`);
 
   rmSync(tmp, { recursive: true, force: true });
 });
@@ -55,7 +56,8 @@ test('verify gate exits non-zero when vendor/skills HEAD SHA mismatches lockfile
   writeFileSync(fakeHead, 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n');
 
   const result = runVerify(tmp);
-  assert.notEqual(result.status, 0, `expected non-zero exit on SHA mismatch; got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  assert.equal(result.status, 1, `expected exit code 1 on SHA mismatch; got ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  assert.ok(result.stderr.includes('mismatch'), `expected stderr to include "mismatch"; got: ${result.stderr}`);
 
   rmSync(tmp, { recursive: true, force: true });
 });
@@ -65,8 +67,8 @@ test('verify gate exits zero when vendor/skills exists and HEAD SHA matches lock
   rmSync(tmp, { recursive: true, force: true });
   mkdirSync(join(tmp, 'skills'), { recursive: true });
 
-  // Read the real locked SHA from skills.lock.json
-  const lock = JSON.parse(execFileSync('cat', [lockFile], { encoding: 'utf8' }));
+  // Read the real locked SHA from skills.lock.json using readFileSync (portable, no cat)
+  const lock = JSON.parse(readFileSync(lockFile, 'utf8'));
   const lockedSha = lock.sha;
 
   // Create a HEAD_SHA file with the correct SHA (simulates what setup.sh writes)

@@ -15,9 +15,9 @@ if [[ ! -f "${LOCK_FILE}" ]]; then
   exit 1
 fi
 
-SKILLS_REPO="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('${LOCK_FILE}','utf8')).repo)")"
-LOCKED_SHA="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('${LOCK_FILE}','utf8')).sha)")"
-LOCKED_REF="$(node -e "process.stdout.write(JSON.parse(require('fs').readFileSync('${LOCK_FILE}','utf8')).ref)")"
+SKILLS_REPO="$(LOCK_FILE="${LOCK_FILE}" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.LOCK_FILE,'utf8')).repo)")"
+LOCKED_SHA="$(LOCK_FILE="${LOCK_FILE}" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.LOCK_FILE,'utf8')).sha)")"
+LOCKED_REF="$(LOCK_FILE="${LOCK_FILE}" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.LOCK_FILE,'utf8')).ref)")"
 
 echo "skills lock: ${SKILLS_REPO}@${LOCKED_REF} (${LOCKED_SHA})"
 
@@ -31,6 +31,10 @@ if [[ -f "${VENDOR_DIR}/HEAD_SHA" ]]; then
   echo "vendor/skills is at ${CURRENT_SHA}, re-vendoring to ${LOCKED_SHA}..."
   rm -rf "${VENDOR_DIR}"
 fi
+
+# Clear any stale/partial vendor dir left by a previously interrupted run.
+# (The idempotency short-circuit above already returned for a healthy, SHA-matched dir.)
+[[ -e "${VENDOR_DIR}" ]] && rm -rf "${VENDOR_DIR}"
 
 mkdir -p "$(dirname "${VENDOR_DIR}")"
 
