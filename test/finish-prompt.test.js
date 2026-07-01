@@ -55,6 +55,17 @@ test('finish-prompt: stdout references the resolved target directory', () => {
       result.stdout.includes(tmpDir),
       `stdout must contain the resolved target path "${tmpDir}"\nActual stdout:\n${result.stdout}`,
     );
+
+    // Unique finish-prompt markers — proves this is the finish prompt, not a
+    // plain console.log that happened to print the target directory.
+    assert.ok(
+      result.stdout.includes('scaffold complete'),
+      `stdout must contain "scaffold complete" (unique finish-prompt header)\nActual stdout:\n${result.stdout}`,
+    );
+    assert.ok(
+      result.stdout.includes('Next step: complete in-harness'),
+      `stdout must contain "Next step: complete in-harness"\nActual stdout:\n${result.stdout}`,
+    );
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
@@ -344,6 +355,50 @@ test('finish-prompt: .ai/handoff/NEXT-STEPS.md exists after init (fixture regres
     assert.ok(
       existsSync(join(tmpDir, '.ai/handoff/NEXT-STEPS.md')),
       '.ai/handoff/NEXT-STEPS.md must be emitted (it lands in the fixture after regen)',
+    );
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// (g) drift-guard: if install handler is still a stub (exits non-zero),
+//     the prompt must carry the forthcoming-marker so they cannot silently
+//     drift apart. When install ships (Slice 7), the stub exit code changes
+//     to 0 and this test will force a prompt update.
+// ---------------------------------------------------------------------------
+
+test('finish-prompt drift-guard: if install is still a stub, prompt must contain forthcoming-marker', () => {
+  // Probe whether the install handler is still a stub by running it.
+  const installResult = spawnSync(process.execPath, [bin, 'install'], { encoding: 'utf8' });
+  const installIsStub = installResult.status !== 0;
+
+  if (!installIsStub) {
+    // install has shipped — drift-guard is not needed for this direction.
+    // The test passes trivially; a separate test should verify the prompt
+    // no longer carries the forthcoming-marker.
+    return;
+  }
+
+  // install is still a stub: the finish prompt must carry the forthcoming-marker.
+  const tmpDir = makeTmpDir('ai-catapult-fp-driftguard-');
+
+  try {
+    const result = spawnSync(process.execPath, [bin, 'init', tmpDir, ...FIXED_ARGS], {
+      encoding: 'utf8',
+    });
+
+    assert.equal(
+      result.status, 0,
+      `ai-catapult init exited ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+
+    assert.match(
+      result.stdout,
+      /later slice|upcoming release|not yet available/i,
+      'While install is a stub, the finish prompt must contain a forthcoming-marker ' +
+      '(e.g. "upcoming release") so prompt and stub cannot silently drift apart.\n' +
+      `Actual stdout:\n${result.stdout}`,
     );
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });

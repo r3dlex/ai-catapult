@@ -23,7 +23,8 @@ Judgment-laden phases NOT yet written (require in-harness plugin):
 
 ── Next step: complete in-harness ─────────────────────────────
 
-1. Install the ai-catapult plugin:
+1. Install the ai-catapult plugin (install command lands in an upcoming release —
+   for now, add the plugin manually or watch the repo):
      npx ai-catapult install
 
 2. Open the scaffolded repo in Claude Code or Codex, then run:

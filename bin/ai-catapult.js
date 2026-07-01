@@ -97,10 +97,11 @@ function parseArgs(argv) {
 function buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths }) {
   // Pick two anchor paths that are always mechanical (existence already verified
   // by scaffold — if they are missing scaffold would have failed earlier).
-  const matrixPath = emittedPaths.includes('.ai/matrix.json') ? '.ai/matrix.json' : emittedPaths[0];
+  const matrixPath = emittedPaths.includes('.ai/matrix.json') ? '.ai/matrix.json' : emittedPaths[0] ?? null;
   const agentsPath = emittedPaths.includes('AGENTS.md') ? 'AGENTS.md' : null;
 
-  const anchorLines = [`  • ${targetDir}/${matrixPath}`];
+  const anchorLines = [];
+  if (matrixPath) anchorLines.push(`  • ${targetDir}/${matrixPath}`);
   if (agentsPath) anchorLines.push(`  • ${targetDir}/${agentsPath}`);
 
   const jlLines = judgmentLadenPaths.map((p) => `  • ${p}`).join('\n');
@@ -121,7 +122,8 @@ function buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths }) {
     '',
     '── Next step: complete in-harness ─────────────────────────────',
     '',
-    '1. Install the ai-catapult plugin:',
+    '1. Install the ai-catapult plugin (install command lands in an upcoming release —',
+    '   for now, add the plugin manually or watch the repo):',
     '     npx ai-catapult install',
     '',
     '2. Open the scaffolded repo in Claude Code or Codex, then run:',
@@ -167,6 +169,8 @@ function runInit(argv) {
   process.stdout.write(finishPrompt + '\n');
 
   // Write the same content to <target>/.ai/handoff/NEXT-STEPS.md.
+  // Safe to write unconditionally: scaffold's collision guard has already run
+  // and would have exited 1 on mechanical collisions before reaching this line.
   const nextStepsPath = join(targetDir, '.ai/handoff/NEXT-STEPS.md');
   mkdirSync(dirname(nextStepsPath), { recursive: true });
   writeFileSync(nextStepsPath, finishPrompt, 'utf8');
