@@ -1,0 +1,20 @@
+{
+  "name": "ai-catapult",
+  "version": "0.1.0",
+  "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
+  "type": "module",
+  "bin": {
+    "ai-catapult": "./bin/ai-catapult.js"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/r3dlex/ai-catapult.git"
+  }
+}
