@@ -25,8 +25,8 @@
  *   (everything else maps 1:1)
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 
 /**
  * Map a template-relative path to its real output path.
@@ -63,27 +63,50 @@ function substituteTokens(content, tokens) {
 }
 
 /**
+ * Assert that destPath is strictly inside targetDir.
+ * Throws a clear error if a path traversal is detected.
+ * @param {string} destPath  - absolute destination path
+ * @param {string} targetDir - absolute target root
+ */
+function assertNoTraversal(destPath, targetDir) {
+  const resolvedDest = resolve(destPath);
+  const resolvedRoot = resolve(targetDir) + sep;
+  if (!resolvedDest.startsWith(resolvedRoot)) {
+    throw new Error(
+      `Path traversal detected: manifest path resolves to "${resolvedDest}" which is outside target directory "${resolve(targetDir)}". Aborting.`,
+    );
+  }
+}
+
+/**
  * Recursively copy any .gitkeep files from the template tree into targetDir,
  * using the same dot-* path mapping as templatePathToRealPath.
  *
  * @param {string} baseTemplatesDir - absolute path to templates root (for computing relative paths)
  * @param {string} currentDir       - current directory being walked
  * @param {string} targetDir        - absolute output root
+ * @param {boolean} force           - overwrite existing files
+ * @param {string[]} collisions     - accumulator for collision paths (when force=false)
  */
-function emitGitkeeps(baseTemplatesDir, currentDir, targetDir) {
+function emitGitkeeps(baseTemplatesDir, currentDir, targetDir, force, collisions) {
   const entries = readdirSync(currentDir, { withFileTypes: true });
   // Sort for determinism
   entries.sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
     const srcFull = join(currentDir, entry.name);
     if (entry.isDirectory()) {
-      emitGitkeeps(baseTemplatesDir, srcFull, targetDir);
+      emitGitkeeps(baseTemplatesDir, srcFull, targetDir, force, collisions);
     } else if (entry.name === '.gitkeep') {
       // e.g. baseTemplatesDir = "/…/templates", srcFull = "/…/templates/dot-ai/evals/.gitkeep"
       // relFromTemplates = "dot-ai/evals/.gitkeep"
       const relFromTemplates = srcFull.slice(baseTemplatesDir.length + 1);
       const realRel = templatePathToRealPath(relFromTemplates);
       const destFull = join(targetDir, realRel);
+      assertNoTraversal(destFull, targetDir);
+      if (!force && existsSync(destFull)) {
+        collisions.push(realRel);
+        continue;
+      }
       mkdirSync(dirname(destFull), { recursive: true });
       writeFileSync(destFull, '', 'utf8');
     }
@@ -100,10 +123,22 @@ function emitGitkeeps(baseTemplatesDir, currentDir, targetDir) {
  * @param {string} opts.date           - {{DATE}} substitution value (YYYY-MM-DD)
  * @param {string} opts.upstreamUrl    - {{UPSTREAM_URL}} substitution value
  * @param {string} opts.upstreamRef    - {{UPSTREAM_REF}} substitution value
+ * @param {boolean} [opts.force]       - overwrite existing files without error
  */
-export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, upstreamRef }) {
+export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, upstreamRef, force = false }) {
   const manifestPath = join(templatesDir, 'boundary-manifest.json');
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+
+  // Fix #8: friendly error when vendor/manifest is missing
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      process.stderr.write('vendor/ missing or stale — run: bash setup.sh\n');
+      process.exit(1);
+    }
+    throw err;
+  }
 
   const tokens = {
     REPO_ID: repoId,
@@ -111,6 +146,9 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
     UPSTREAM_URL: upstreamUrl,
     UPSTREAM_REF: upstreamRef,
   };
+
+  // Fix #3: collect collisions before writing anything
+  const collisions = [];
 
   // Iterate in manifest order (deterministic — not filesystem readdir order).
   for (const entry of manifest.paths) {
@@ -125,6 +163,36 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
     const srcPath = join(templatesDir, templateRelPath);
     const destPath = join(targetDir, realRelPath);
 
+    // Fix #4: defense-in-depth traversal check
+    assertNoTraversal(destPath, targetDir);
+
+    if (!force && existsSync(destPath)) {
+      collisions.push(realRelPath);
+    }
+  }
+
+  // Fix #3: refuse if collisions exist and --force not passed
+  if (collisions.length > 0) {
+    process.stderr.write(
+      `error: init would overwrite existing files in ${targetDir}:\n` +
+      collisions.map((p) => `  ${p}`).join('\n') +
+      '\nPass --force to overwrite.\n',
+    );
+    process.exit(1);
+  }
+
+  // All clear — write files
+  for (const entry of manifest.paths) {
+    if (entry.classification !== 'mechanical' || entry.template === null) {
+      continue;
+    }
+
+    const templateRelPath = entry.template;
+    const realRelPath = templatePathToRealPath(templateRelPath);
+
+    const srcPath = join(templatesDir, templateRelPath);
+    const destPath = join(targetDir, realRelPath);
+
     const raw = readFileSync(srcPath, 'utf8');
     const rendered = substituteTokens(raw, tokens);
 
@@ -135,5 +203,8 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   // Emit .gitkeep files so tracked empty directories land in the target.
   // These are not listed in the boundary-manifest (they are git artifacts),
   // so we walk the template tree for .gitkeep files and mirror them verbatim.
-  emitGitkeeps(templatesDir, templatesDir, targetDir);
+  const gitkeepCollisions = [];
+  emitGitkeeps(templatesDir, templatesDir, targetDir, force, gitkeepCollisions);
+  // .gitkeep collisions are non-fatal — they are empty marker files; silently
+  // skip them if --force was not given (the directory already exists).
 }
