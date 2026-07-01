@@ -43,6 +43,13 @@ else
   echo "=== DRY-RUN MODE (no packages will be published) ==="
 fi
 
+# --provenance requires OIDC (only available in CI environments like GitHub Actions).
+# Guard it so local runs don't fail with "provenance not supported".
+PROVENANCE_FLAG=""
+if [[ "${CI:-}" == "true" || "${NPM_PROVENANCE:-}" == "1" ]]; then
+  PROVENANCE_FLAG="--provenance"
+fi
+
 # ---------------------------------------------------------------------------
 # Verify builds exist (build if absent)
 # ---------------------------------------------------------------------------
@@ -66,7 +73,7 @@ echo ""
 # ---------------------------------------------------------------------------
 echo "--- [1/2] Publishing ai-catapult (unscoped) ---"
 # shellcheck disable=SC2086
-(cd "${REPO_ROOT}" && npm publish ${DRY_RUN_FLAG} --access public)
+(cd "${REPO_ROOT}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -118,7 +125,7 @@ process.stdout.write('Scoped package staged at: ' + dest + '\n');
 STAGE_EOF
 
 # shellcheck disable=SC2086
-(cd "${TMPDIR_SCOPED}" && npm publish ${DRY_RUN_FLAG} --access public)
+(cd "${TMPDIR_SCOPED}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
 echo ""
 
 # ---------------------------------------------------------------------------

@@ -393,8 +393,7 @@ test('finish-prompt drift-guard: if install is still a stub, prompt must contain
 
   if (!installIsStub) {
     // install has shipped — drift-guard is not needed for this direction.
-    // The test passes trivially; a separate test should verify the prompt
-    // no longer carries the forthcoming-marker.
+    // The complementary test below enforces the shipped invariant.
     return;
   }
 
@@ -416,6 +415,50 @@ test('finish-prompt drift-guard: if install is still a stub, prompt must contain
       /later slice|upcoming release|not yet available/i,
       'While install is a stub, the finish prompt must contain a forthcoming-marker ' +
       '(e.g. "upcoming release") so prompt and stub cannot silently drift apart.\n' +
+      `Actual stdout:\n${result.stdout}`,
+    );
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// (h) drift-guard complement: once install ships (exit 0), the prompt must
+//     NOT carry forthcoming-marker language. This prevents stale "coming soon"
+//     text from lingering after the feature is live.
+// ---------------------------------------------------------------------------
+
+test('finish-prompt drift-guard complement: once install ships, prompt must NOT contain forthcoming-marker', () => {
+  // Probe whether install has shipped (exits 0 with no harness dirs present).
+  const installResult = spawnSync(process.execPath, [bin, 'install'], {
+    encoding: 'utf8',
+    env: { ...process.env, HOME: '/nonexistent-no-home', CODEX_HOME: '/nonexistent-no-codex' },
+  });
+  const installIsStub = installResult.status !== 0;
+
+  if (installIsStub) {
+    // install is still a stub — complementary check does not apply yet.
+    return;
+  }
+
+  // install has shipped: the finish prompt must NOT carry the forthcoming-marker.
+  const tmpDir = makeTmpDir('ai-catapult-fp-driftguard-shipped-');
+
+  try {
+    const result = spawnSync(process.execPath, [bin, 'init', tmpDir, ...FIXED_ARGS], {
+      encoding: 'utf8',
+    });
+
+    assert.equal(
+      result.status, 0,
+      `ai-catapult init exited ${result.status}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+    );
+
+    assert.doesNotMatch(
+      result.stdout,
+      /upcoming release|later slice|not yet available/i,
+      'Now that install has shipped, the finish prompt must NOT contain forthcoming-marker language ' +
+      '(e.g. "upcoming release", "later slice", "not yet available").\n' +
       `Actual stdout:\n${result.stdout}`,
     );
   } finally {

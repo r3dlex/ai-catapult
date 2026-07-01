@@ -8,11 +8,15 @@
  *   (a) harness detection (claude/codex/both via env)
  *   (b) --dry-run: no writes, clear output
  *   (c) fresh install: payload lands, plugin.json name correct
- *   (d) idempotent re-install: wipe+recopy, no duplicates
+ *   (d) idempotent re-install: wipe+recopy, no stale artefacts
  *   (e) foreign-dir refusal without --force
  *   (f) --force allows overwrite of foreign dir
  *   (g) --harness selection (claude only, codex only, all)
  *   (h) missing harness dir is skipped gracefully (no crash)
+ *   (i) --help shows install usage
+ *   (j) isSafeToOverwrite: non-empty manifest-less dir is refused without --force
+ *   (k) claude install does NOT write installed_plugins.json; prints /plugin instructions
+ *   (l) codex install does NOT write marketplace.json; prints TOML block
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -95,7 +99,7 @@ test('install --dry-run: no files written for claude harness', () => {
     );
 
     // Plugin dir must NOT be created
-    const pluginDir = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local');
+    const pluginDir = join(fakeHome, '.claude', 'plugins');
     assert.ok(
       !existsSync(pluginDir),
       `--dry-run must NOT create plugin dir at ${pluginDir}`,
@@ -104,7 +108,7 @@ test('install --dry-run: no files written for claude harness', () => {
     // Must mention dry-run in output
     assert.match(
       r.stdout + r.stderr,
-      /dry.?run|would install|no changes/i,
+      /dry.?run|would install|would copy|no changes/i,
       `--dry-run output must describe what would happen\nstdout: ${r.stdout}`,
     );
   } finally {
@@ -155,13 +159,13 @@ test('install: fresh claude install places plugin.json with correct name', () =>
       `Expected exit 0 for fresh claude install\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
     );
 
-    // Plugin must land at cache path
-    const pluginRoot = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local');
-    const pluginJson = join(pluginRoot, '.claude-plugin', 'plugin.json');
+    // Plugin must land at stable payload path
+    const payloadPath = join(fakeHome, '.claude', 'plugins', 'ai-catapult');
+    const pluginJson = join(payloadPath, '.claude-plugin', 'plugin.json');
 
     assert.ok(
-      existsSync(pluginRoot),
-      `Plugin dir must exist at ${pluginRoot}`,
+      existsSync(payloadPath),
+      `Plugin dir must exist at ${payloadPath}`,
     );
     assert.ok(
       existsSync(pluginJson),
@@ -171,23 +175,59 @@ test('install: fresh claude install places plugin.json with correct name', () =>
     const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
     assert.equal(manifest.name, 'ai-catapult', `plugin.json name must be "ai-catapult", got: ${manifest.name}`);
     assert.ok(manifest.version, 'plugin.json must have a version field');
+  } finally {
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
 
-    // installed_plugins.json must be written/updated
+// ---------------------------------------------------------------------------
+// (k) Claude: no installed_plugins.json; prints /plugin instructions
+// ---------------------------------------------------------------------------
+
+test('install: claude install does NOT write installed_plugins.json', () => {
+  const fakeHome = makeTmpDir('ai-catapult-home-nojson-');
+  mkdirSync(join(fakeHome, '.claude'), { recursive: true });
+
+  try {
+    const r = runInstall(['--harness', 'claude'], { home: fakeHome });
+
+    assert.equal(
+      r.status, 0,
+      `Expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
+    );
+
     const installedPluginsPath = join(fakeHome, '.claude', 'plugins', 'installed_plugins.json');
     assert.ok(
-      existsSync(installedPluginsPath),
-      `installed_plugins.json must be written at ${installedPluginsPath}`,
+      !existsSync(installedPluginsPath),
+      `installed_plugins.json must NOT be written (Claude Code internal file)\nFound at: ${installedPluginsPath}`,
+    );
+  } finally {
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
+test('install: claude install prints /plugin marketplace add instruction', () => {
+  const fakeHome = makeTmpDir('ai-catapult-home-plugincmd-');
+  mkdirSync(join(fakeHome, '.claude'), { recursive: true });
+
+  try {
+    const r = runInstall(['--harness', 'claude'], { home: fakeHome });
+
+    assert.equal(
+      r.status, 0,
+      `Expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
     );
 
-    const installedPlugins = JSON.parse(readFileSync(installedPluginsPath, 'utf8'));
-    assert.ok(
-      installedPlugins.plugins,
-      'installed_plugins.json must have a plugins field',
+    assert.match(
+      r.stdout,
+      /\/plugin marketplace add/i,
+      `stdout must contain "/plugin marketplace add" instruction\nActual stdout:\n${r.stdout}`,
     );
-    const key = 'ai-catapult@ai-catapult-local';
-    assert.ok(
-      installedPlugins.plugins[key],
-      `installed_plugins.json must have key "${key}"`,
+
+    assert.match(
+      r.stdout,
+      /\/plugin install ai-catapult@/i,
+      `stdout must contain "/plugin install ai-catapult@<marketplace>" instruction\nActual stdout:\n${r.stdout}`,
     );
   } finally {
     rmSync(fakeHome, { recursive: true, force: true });
@@ -228,22 +268,89 @@ test('install: fresh codex install places plugin.json with correct name', () => 
 
     const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
     assert.equal(manifest.name, 'ai-catapult', `plugin.json name must be "ai-catapult", got: ${manifest.name}`);
+  } finally {
+    rmSync(fakeCodexHome, { recursive: true, force: true });
+  }
+});
 
-    // Marketplace registration file must exist
+// ---------------------------------------------------------------------------
+// (l) Codex: no marketplace.json written; prints TOML block
+// ---------------------------------------------------------------------------
+
+test('install: codex install does NOT write marketplace.json', () => {
+  const fakeCodexHome = makeTmpDir('ai-catapult-codex-nojson-');
+  mkdirSync(fakeCodexHome, { recursive: true });
+
+  try {
+    const r = runInstall(['--harness', 'codex'], {
+      home: '/nonexistent-no-home',
+      codexHome: fakeCodexHome,
+    });
+
+    assert.equal(
+      r.status, 0,
+      `Expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
+    );
+
+    // The old (broken) marketplace.json path must not be created
     const marketplaceFile = join(fakeCodexHome, 'plugins', 'ai-catapult-local', 'marketplace.json');
     assert.ok(
-      existsSync(marketplaceFile),
-      `Codex marketplace file must exist at ${marketplaceFile}`,
+      !existsSync(marketplaceFile),
+      `marketplace.json must NOT be written (Codex uses config.toml, not this file)\nFound at: ${marketplaceFile}`,
+    );
+  } finally {
+    rmSync(fakeCodexHome, { recursive: true, force: true });
+  }
+});
+
+test('install: codex install prints TOML block for config.toml registration', () => {
+  const fakeCodexHome = makeTmpDir('ai-catapult-codex-toml-');
+  mkdirSync(fakeCodexHome, { recursive: true });
+
+  try {
+    const r = runInstall(['--harness', 'codex'], {
+      home: '/nonexistent-no-home',
+      codexHome: fakeCodexHome,
+    });
+
+    assert.equal(
+      r.status, 0,
+      `Expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
     );
 
-    const marketplace = JSON.parse(readFileSync(marketplaceFile, 'utf8'));
-    assert.ok(
-      Array.isArray(marketplace.plugins) && marketplace.plugins.length > 0,
-      'marketplace.json must have a non-empty plugins array',
+    // Must print a [marketplaces.<name>] TOML table
+    assert.match(
+      r.stdout,
+      /\[marketplaces\.ai-catapult-local\]/,
+      `stdout must contain [marketplaces.ai-catapult-local] TOML block\nActual stdout:\n${r.stdout}`,
     );
-    assert.equal(
-      marketplace.plugins[0].name, 'ai-catapult',
-      `marketplace plugins[0].name must be "ai-catapult"`,
+
+    // Must include source_type and source
+    assert.match(
+      r.stdout,
+      /source_type\s*=\s*"local"/,
+      `stdout must contain source_type = "local"\nActual stdout:\n${r.stdout}`,
+    );
+
+    // Must print a [plugins."<plugin>@<marketplace>"] entry
+    assert.match(
+      r.stdout,
+      /\[plugins\."ai-catapult@ai-catapult-local"\]/,
+      `stdout must contain [plugins."ai-catapult@ai-catapult-local"] TOML block\nActual stdout:\n${r.stdout}`,
+    );
+
+    // Must include enabled = true
+    assert.match(
+      r.stdout,
+      /enabled\s*=\s*true/,
+      `stdout must contain enabled = true\nActual stdout:\n${r.stdout}`,
+    );
+
+    // The source path must point at the installed payload
+    const pluginRoot = join(fakeCodexHome, 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local');
+    assert.ok(
+      r.stdout.includes(pluginRoot),
+      `stdout must include the actual payload path ${pluginRoot}\nActual stdout:\n${r.stdout}`,
     );
   } finally {
     rmSync(fakeCodexHome, { recursive: true, force: true });
@@ -251,7 +358,7 @@ test('install: fresh codex install places plugin.json with correct name', () => 
 });
 
 // ---------------------------------------------------------------------------
-// (d) Idempotent re-install: wipe+recopy, no duplicates
+// (d) Idempotent re-install: wipe+recopy, no stale artefacts
 // ---------------------------------------------------------------------------
 
 test('install: idempotent re-install for claude refreshes plugin without duplication', () => {
@@ -267,12 +374,13 @@ test('install: idempotent re-install for claude refreshes plugin without duplica
     const r2 = runInstall(['--harness', 'claude'], { home: fakeHome });
     assert.equal(r2.status, 0, `Second install failed: ${r2.stderr}`);
 
-    // installed_plugins.json must not have duplicate entries
-    const installedPluginsPath = join(fakeHome, '.claude', 'plugins', 'installed_plugins.json');
-    const installedPlugins = JSON.parse(readFileSync(installedPluginsPath, 'utf8'));
-    const entries = installedPlugins.plugins['ai-catapult@ai-catapult-local'];
-    assert.ok(Array.isArray(entries), 'Expected entries array');
-    assert.equal(entries.length, 1, `Expected exactly 1 install entry, got ${entries.length}`);
+    // Plugin payload must still exist and be valid
+    const payloadPath = join(fakeHome, '.claude', 'plugins', 'ai-catapult');
+    const pluginJson = join(payloadPath, '.claude-plugin', 'plugin.json');
+    assert.ok(existsSync(pluginJson), `plugin.json must still exist after re-install`);
+
+    const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
+    assert.equal(manifest.name, 'ai-catapult', `plugin name must still be correct after re-install`);
   } finally {
     rmSync(fakeHome, { recursive: true, force: true });
   }
@@ -286,12 +394,12 @@ test('install: refuses to overwrite foreign plugin dir (not ai-catapult) without
   const fakeHome = makeTmpDir('ai-catapult-home-foreign-');
   mkdirSync(join(fakeHome, '.claude'), { recursive: true });
 
-  // Create a "foreign" plugin dir at our target path (no plugin.json naming ours)
-  const pluginRoot = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local');
-  mkdirSync(join(pluginRoot, '.claude-plugin'), { recursive: true });
+  // Create a "foreign" plugin dir at our target path (plugin.json naming someone else)
+  const payloadPath = join(fakeHome, '.claude', 'plugins', 'ai-catapult');
+  mkdirSync(join(payloadPath, '.claude-plugin'), { recursive: true });
   // Write a foreign plugin.json (different name)
   writeFileSync(
-    join(pluginRoot, '.claude-plugin', 'plugin.json'),
+    join(payloadPath, '.claude-plugin', 'plugin.json'),
     JSON.stringify({ name: 'some-other-plugin', version: '1.0.0' }),
   );
 
@@ -313,6 +421,57 @@ test('install: refuses to overwrite foreign plugin dir (not ai-catapult) without
 });
 
 // ---------------------------------------------------------------------------
+// (j) isSafeToOverwrite: non-empty manifest-less dir is refused without --force
+// ---------------------------------------------------------------------------
+
+test('install: refuses to overwrite non-empty dir without manifest (no --force)', () => {
+  const fakeHome = makeTmpDir('ai-catapult-home-nonempty-');
+  mkdirSync(join(fakeHome, '.claude'), { recursive: true });
+
+  // Create a non-empty dir at our target path, but with no plugin.json
+  const payloadPath = join(fakeHome, '.claude', 'plugins', 'ai-catapult');
+  mkdirSync(payloadPath, { recursive: true });
+  // Write some random file — non-empty, but no manifest
+  writeFileSync(join(payloadPath, 'somefile.txt'), 'unexpected content\n');
+
+  try {
+    const r = runInstall(['--harness', 'claude'], { home: fakeHome });
+
+    assert.equal(
+      r.status, 1,
+      `Expected exit 1 when non-empty manifest-less dir exists\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
+    );
+    assert.match(
+      r.stdout + r.stderr,
+      /use --force/i,
+      `Expected --force hint in refusal message\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
+    );
+  } finally {
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
+test('install: empty dir at target path is safe to overwrite without --force', () => {
+  const fakeHome = makeTmpDir('ai-catapult-home-emptydir-');
+  mkdirSync(join(fakeHome, '.claude'), { recursive: true });
+
+  // Create an empty dir at our target path
+  const payloadPath = join(fakeHome, '.claude', 'plugins', 'ai-catapult');
+  mkdirSync(payloadPath, { recursive: true });
+
+  try {
+    const r = runInstall(['--harness', 'claude'], { home: fakeHome });
+
+    assert.equal(
+      r.status, 0,
+      `Expected exit 0 when target dir is empty\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
+    );
+  } finally {
+    rmSync(fakeHome, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // (f) --force: allows overwrite of foreign dir
 // ---------------------------------------------------------------------------
 
@@ -320,10 +479,10 @@ test('install --force: overwrites foreign plugin dir and succeeds', () => {
   const fakeHome = makeTmpDir('ai-catapult-home-force-');
   mkdirSync(join(fakeHome, '.claude'), { recursive: true });
 
-  const pluginRoot = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local');
-  mkdirSync(join(pluginRoot, '.claude-plugin'), { recursive: true });
+  const payloadPath = join(fakeHome, '.claude', 'plugins', 'ai-catapult');
+  mkdirSync(join(payloadPath, '.claude-plugin'), { recursive: true });
   writeFileSync(
-    join(pluginRoot, '.claude-plugin', 'plugin.json'),
+    join(payloadPath, '.claude-plugin', 'plugin.json'),
     JSON.stringify({ name: 'some-other-plugin', version: '1.0.0' }),
   );
 
@@ -336,7 +495,7 @@ test('install --force: overwrites foreign plugin dir and succeeds', () => {
     );
 
     // Our plugin.json must now be there
-    const pluginJson = join(pluginRoot, '.claude-plugin', 'plugin.json');
+    const pluginJson = join(payloadPath, '.claude-plugin', 'plugin.json');
     const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
     assert.equal(manifest.name, 'ai-catapult', `Expected our plugin.json, got name: ${manifest.name}`);
   } finally {
@@ -359,7 +518,7 @@ test('install --harness claude: only touches claude dir, not codex', () => {
     assert.equal(r.status, 0, `Expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
 
     // Claude plugin must exist
-    const claudePlugin = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local', '.claude-plugin', 'plugin.json');
+    const claudePlugin = join(fakeHome, '.claude', 'plugins', 'ai-catapult', '.claude-plugin', 'plugin.json');
     assert.ok(existsSync(claudePlugin), `Claude plugin.json must exist at ${claudePlugin}`);
 
     // Codex plugin must NOT exist
@@ -404,7 +563,7 @@ test('install --harness all: installs to both harnesses', () => {
     const r = runInstall(['--harness', 'all'], { home: fakeHome, codexHome: fakeCodexHome });
     assert.equal(r.status, 0, `Expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
 
-    const claudePlugin = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local', '.claude-plugin', 'plugin.json');
+    const claudePlugin = join(fakeHome, '.claude', 'plugins', 'ai-catapult', '.claude-plugin', 'plugin.json');
     assert.ok(existsSync(claudePlugin), `Claude plugin.json must exist`);
 
     const codexPlugin = join(fakeCodexHome, 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local', '.codex-plugin', 'plugin.json');
@@ -436,7 +595,7 @@ test('install: auto-detect skips harness when its dir does not exist', () => {
     );
 
     // Claude plugin should be installed
-    const claudePlugin = join(fakeHome, '.claude', 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local', '.claude-plugin', 'plugin.json');
+    const claudePlugin = join(fakeHome, '.claude', 'plugins', 'ai-catapult', '.claude-plugin', 'plugin.json');
     assert.ok(existsSync(claudePlugin), `Claude plugin.json must exist when .claude/ detected`);
   } finally {
     rmSync(fakeHome, { recursive: true, force: true });

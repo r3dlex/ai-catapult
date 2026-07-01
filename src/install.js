@@ -2,12 +2,19 @@
  * install.js — wire assembled plugins into Claude Code and/or Codex harnesses.
  *
  * Install targets:
- *   Claude Code: ${HOME}/.claude/plugins/cache/ai-catapult-local/ai-catapult/local/
- *                + update ${HOME}/.claude/plugins/installed_plugins.json
- *   Codex:       ${CODEX_HOME}/plugins/cache/ai-catapult-local/ai-catapult/local/
- *                + write ${CODEX_HOME}/plugins/ai-catapult-local/marketplace.json
+ *   Claude Code: copies payload to
+ *                ${HOME}/.claude/plugins/ai-catapult/
+ *                then prints the two-step manual registration:
+ *                  /plugin marketplace add <payload-path>
+ *                  /plugin install ai-catapult@<marketplace-name>
  *
- * All layout decisions follow the real installed plugin examples in ~/.claude and ~/.codex.
+ *   Codex:       copies payload to
+ *                ${CODEX_HOME}/plugins/cache/ai-catapult-local/ai-catapult/local/
+ *                then prints the TOML block the user must add to config.toml
+ *
+ * Neither handler writes to Claude Code's internal installed_plugins.json nor
+ * to Codex's config.toml — those mutations are too invasive and carry corruption
+ * risk. We copy the payload and tell the user exactly what to do.
  */
 
 import {
@@ -16,7 +23,7 @@ import {
   rmSync,
   cpSync,
   readFileSync,
-  writeFileSync,
+  readdirSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -40,12 +47,23 @@ const VERSION_DIR = 'local'; // version dir for local installs
 
 /**
  * Ensure the plugin dist is present, building it if needed.
- * @param {string} script  - shell script filename under scripts/
- * @param {string} distDir - dist output directory; rebuilds if absent
- * @param {boolean} dryRun - if true, skip
+ * @param {string} script   - shell script filename under scripts/
+ * @param {string} distDir  - dist output directory; rebuilds if absent
+ * @param {boolean} dryRun  - if true, skip
  */
 function ensureBuilt(script, distDir, dryRun) {
   if (dryRun) return;
+
+  // If DIST_ROOT was overridden via env and the distDir is missing, fail with
+  // a clear message rather than silently rebuilding into the wrong place.
+  if (process.env.AI_CATAPULT_DIST_ROOT && !existsSync(distDir)) {
+    throw new Error(
+      `AI_CATAPULT_DIST_ROOT is set but the expected dist directory is not populated.\n` +
+      `Expected: ${distDir}\n` +
+      `Run the build scripts first, or unset AI_CATAPULT_DIST_ROOT to use dist/.`,
+    );
+  }
+
   // Check for either harness manifest to determine if already built
   const claudeManifest = join(distDir, '.claude-plugin', 'plugin.json');
   const codexManifest = join(distDir, '.codex-plugin', 'plugin.json');
@@ -68,6 +86,12 @@ function ensureBuilt(script, distDir, dryRun) {
 /**
  * Check if an existing directory is a prior ai-catapult install (or empty).
  * Returns true if safe to overwrite without --force.
+ *
+ * Rules:
+ *   - Dir does not exist → safe
+ *   - Dir exists and is empty → safe
+ *   - Dir exists and carries our plugin.json name → safe
+ *   - Dir exists and is non-empty without our plugin.json → NOT safe
  */
 function isSafeToOverwrite(dir) {
   if (!existsSync(dir)) return true;
@@ -94,8 +118,12 @@ function isSafeToOverwrite(dir) {
     }
   }
 
-  // Dir exists but has no manifest — treat as safe (empty dir from prior failed install)
-  return true;
+  // Dir exists but has no manifest — only safe if it is empty
+  try {
+    return readdirSync(dir).length === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -112,7 +140,11 @@ function resetDir(dir) {
 
 /**
  * Install the Claude Code plugin.
- * Target: ${HOME}/.claude/plugins/cache/ai-catapult-local/ai-catapult/local/
+ *
+ * Copies the plugin payload to a stable path under ~/.claude/plugins/ai-catapult/
+ * and prints the two-step manual registration the user must run inside Claude Code.
+ * We do NOT write installed_plugins.json — that is a Claude Code internal file
+ * and hand-writing it is brittle.
  *
  * @param {object} opts
  * @param {string} opts.claudeDir - ${HOME}/.claude/
@@ -120,19 +152,21 @@ function resetDir(dir) {
  * @param {boolean} opts.force
  */
 function installClaude({ claudeDir, dryRun, force }) {
-  const pluginRoot = join(claudeDir, 'plugins', 'cache', MARKETPLACE_NAME, PLUGIN_NAME, VERSION_DIR);
-  const installedPluginsPath = join(claudeDir, 'plugins', 'installed_plugins.json');
+  // Stable payload path (not inside the cache hierarchy — avoids collision with
+  // Claude Code's own cache management).
+  const payloadPath = join(claudeDir, 'plugins', PLUGIN_NAME);
 
   if (dryRun) {
-    process.stdout.write(`[dry-run] claude: would install to ${pluginRoot}\n`);
+    process.stdout.write(`[dry-run] claude: would copy payload to ${payloadPath}\n`);
+    process.stdout.write(`[dry-run] claude: would print /plugin registration instructions\n`);
     return;
   }
 
   // Safety check
-  if (!isSafeToOverwrite(pluginRoot)) {
+  if (!isSafeToOverwrite(payloadPath)) {
     if (!force) {
       process.stderr.write(
-        `Error: ${pluginRoot} exists and is not a prior ai-catapult install.\n` +
+        `Error: ${payloadPath} exists and is not a prior ai-catapult install.\n` +
         `Use --force to overwrite.\n`,
       );
       process.exit(1);
@@ -144,48 +178,21 @@ function installClaude({ claudeDir, dryRun, force }) {
   const distDir = join(DIST_ROOT, 'claude-plugin');
   ensureBuilt('build-claude-plugin.sh', distDir, dryRun);
 
-  // Copy dist/claude-plugin → pluginRoot
-  resetDir(pluginRoot);
-  cpSync(distDir, pluginRoot, { recursive: true });
+  // Copy dist/claude-plugin → payloadPath
+  resetDir(payloadPath);
+  cpSync(distDir, payloadPath, { recursive: true });
 
-  // Update installed_plugins.json
-  const pluginsDir = join(claudeDir, 'plugins');
-  mkdirSync(pluginsDir, { recursive: true });
-
-  let installedPlugins = { version: 2, plugins: {} };
-  if (existsSync(installedPluginsPath)) {
-    try {
-      installedPlugins = JSON.parse(readFileSync(installedPluginsPath, 'utf8'));
-      if (!installedPlugins.plugins) installedPlugins.plugins = {};
-    } catch {
-      // corrupt — reset
-      installedPlugins = { version: 2, plugins: {} };
-    }
-  }
-
-  const key = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
   // Read version from installed plugin.json
-  const pluginJson = join(pluginRoot, '.claude-plugin', 'plugin.json');
+  const pluginJson = join(payloadPath, '.claude-plugin', 'plugin.json');
   const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
-  const now = new Date().toISOString();
-
-  // Idempotent: replace existing entry entirely (no duplicates)
-  installedPlugins.plugins[key] = [
-    {
-      scope: 'user',
-      installPath: pluginRoot,
-      version: manifest.version,
-      installedAt: now,
-      lastUpdated: now,
-    },
-  ];
-
-  writeFileSync(installedPluginsPath, JSON.stringify(installedPlugins, null, 2) + '\n', 'utf8');
+  const marketplaceName = manifest.name ?? PLUGIN_NAME;
 
   process.stdout.write(`Installed Claude Code plugin ai-catapult@${manifest.version}\n`);
-  process.stdout.write(`  → ${pluginRoot}\n`);
-  process.stdout.write(`\nNext step: reload Claude Code or run:\n`);
-  process.stdout.write(`  /plugin marketplace add ${pluginRoot}\n`);
+  process.stdout.write(`  payload: ${payloadPath}\n`);
+  process.stdout.write(`\nTo register the plugin in Claude Code, run these two commands inside Claude Code:\n`);
+  process.stdout.write(`\n  /plugin marketplace add ${payloadPath}\n`);
+  process.stdout.write(`  /plugin install ${marketplaceName}@${MARKETPLACE_NAME}\n`);
+  process.stdout.write(`\nThen reload Claude Code for the plugin to take effect.\n`);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,8 +201,14 @@ function installClaude({ claudeDir, dryRun, force }) {
 
 /**
  * Install the Codex plugin.
- * Target: ${CODEX_HOME}/plugins/cache/ai-catapult-local/ai-catapult/local/
- * Marketplace: ${CODEX_HOME}/plugins/ai-catapult-local/marketplace.json
+ *
+ * Copies the plugin payload to the standard Codex cache path and prints
+ * the TOML block the user must add to their config.toml. We do NOT
+ * auto-mutate config.toml — that carries corruption risk.
+ *
+ * Codex discovers plugins via config.toml tables:
+ *   [marketplaces.<name>]   with source_type/source
+ *   [plugins."<plugin>@<marketplace>"]  with enabled = true
  *
  * @param {object} opts
  * @param {string} opts.codexHome - ${CODEX_HOME:-~/.codex}
@@ -204,12 +217,10 @@ function installClaude({ claudeDir, dryRun, force }) {
  */
 function installCodex({ codexHome, dryRun, force }) {
   const pluginRoot = join(codexHome, 'plugins', 'cache', MARKETPLACE_NAME, PLUGIN_NAME, VERSION_DIR);
-  const marketplaceDir = join(codexHome, 'plugins', MARKETPLACE_NAME);
-  const marketplaceFile = join(marketplaceDir, 'marketplace.json');
 
   if (dryRun) {
-    process.stdout.write(`[dry-run] codex: would install to ${pluginRoot}\n`);
-    process.stdout.write(`[dry-run] codex: would write marketplace.json at ${marketplaceFile}\n`);
+    process.stdout.write(`[dry-run] codex: would copy payload to ${pluginRoot}\n`);
+    process.stdout.write(`[dry-run] codex: would print TOML block for config.toml registration\n`);
     return;
   }
 
@@ -234,35 +245,21 @@ function installCodex({ codexHome, dryRun, force }) {
   cpSync(distDir, pluginRoot, { recursive: true });
 
   // Read version from installed plugin.json
-  const pluginJson = join(pluginRoot, '.codex-plugin', 'plugin.json');
-  const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
-
-  // Write marketplace.json (idempotent — full overwrite)
-  mkdirSync(marketplaceDir, { recursive: true });
-  const marketplace = {
-    name: MARKETPLACE_NAME,
-    interface: { displayName: 'ai-catapult Local' },
-    plugins: [
-      {
-        name: PLUGIN_NAME,
-        source: {
-          source: 'local',
-          path: pluginRoot,
-        },
-        policy: {
-          installation: 'AVAILABLE',
-          authentication: 'NONE',
-        },
-        category: 'Developer Tools',
-      },
-    ],
-  };
-  writeFileSync(marketplaceFile, JSON.stringify(marketplace, null, 2) + '\n', 'utf8');
+  const pluginJsonPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
+  const manifest = JSON.parse(readFileSync(pluginJsonPath, 'utf8'));
 
   process.stdout.write(`Installed Codex plugin ai-catapult@${manifest.version}\n`);
-  process.stdout.write(`  → ${pluginRoot}\n`);
-  process.stdout.write(`  marketplace: ${marketplaceFile}\n`);
-  process.stdout.write(`\nNext step: in Codex, invoke the ai-catapult-init skill.\n`);
+  process.stdout.write(`  payload: ${pluginRoot}\n`);
+  process.stdout.write(`\nTo register the plugin, add the following block to your Codex config.toml\n`);
+  process.stdout.write(`(typically at \${CODEX_HOME:-~/.codex}/config.toml):\n`);
+  process.stdout.write(`\n`);
+  process.stdout.write(`[marketplaces.${MARKETPLACE_NAME}]\n`);
+  process.stdout.write(`source_type = "local"\n`);
+  process.stdout.write(`source = "${pluginRoot}"\n`);
+  process.stdout.write(`\n`);
+  process.stdout.write(`[plugins."${PLUGIN_NAME}@${MARKETPLACE_NAME}"]\n`);
+  process.stdout.write(`enabled = true\n`);
+  process.stdout.write(`\nThen restart Codex for the plugin to take effect.\n`);
 }
 
 // ---------------------------------------------------------------------------

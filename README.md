@@ -66,15 +66,18 @@ After install, reload Claude Code and run `/ai-catapult-init` to complete the in
 
 ### Install path
 
-Plugin is placed at:
+Running `npx ai-catapult install` copies the plugin payload to:
 ```
-~/.claude/plugins/cache/ai-catapult-local/ai-catapult/local/
+~/.claude/plugins/ai-catapult/
 ```
 
-`installed_plugins.json` is updated so Claude Code picks it up on next reload. Alternatively, add the plugin manually via:
-```sh
-/plugin marketplace add ~/.claude/plugins/cache/ai-catapult-local/ai-catapult/local
+Then follow the printed two-step registration inside Claude Code:
 ```
+/plugin marketplace add ~/.claude/plugins/ai-catapult
+/plugin install ai-catapult@ai-catapult-local
+```
+
+The installer does **not** write `installed_plugins.json` — that is a Claude Code internal file. Use the `/plugin` commands above to register the plugin.
 
 ### Build the plugin locally
 
@@ -89,15 +92,22 @@ npm run build:plugin:claude    # assemble into dist/claude-plugin/
 
 ### Install path
 
-Plugin payload lands at:
+Running `npx ai-catapult install` copies the plugin payload to:
 ```
 ${CODEX_HOME:-~/.codex}/plugins/cache/ai-catapult-local/ai-catapult/local/
 ```
 
-A marketplace registration file is written at:
+Then add the printed TOML block to your `${CODEX_HOME:-~/.codex}/config.toml`:
+```toml
+[marketplaces.ai-catapult-local]
+source_type = "local"
+source = "<printed payload path>"
+
+[plugins."ai-catapult@ai-catapult-local"]
+enabled = true
 ```
-${CODEX_HOME:-~/.codex}/plugins/ai-catapult-local/marketplace.json
-```
+
+The installer does **not** auto-mutate `config.toml` — you add the block manually. See [docs/codex-install.md](docs/codex-install.md) for details.
 
 ### Build the plugin locally
 

@@ -1,7 +1,8 @@
 name: Release
 
 # Triggered on semver tag push (e.g. v0.1.0).
-# Publishes both ai-catapult (unscoped) and @r3dlex/ai-catapult (scoped).
+# Publishes both ai-catapult (unscoped) and @r3dlex/ai-catapult (scoped)
+# via publish-both.sh — the single source of truth for both names.
 #
 # Prerequisites (set in GitHub repo secrets):
 #   NPM_TOKEN — npm access token with publish rights for both package names.
@@ -44,23 +45,17 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Install smoke — dry-run against temp harness dirs
+      - name: Install smoke — real install against temp harness dirs
         run: |
           FAKE_HOME=$(mktemp -d)
           FAKE_CODEX=$(mktemp -d)
           mkdir -p "${FAKE_HOME}/.claude"
-          node bin/ai-catapult.js install --harness all --dry-run
-        env:
-          HOME: ${{ runner.temp }}/fake-home
-          CODEX_HOME: ${{ runner.temp }}/fake-codex
+          export HOME="${FAKE_HOME}"
+          export CODEX_HOME="${FAKE_CODEX}"
+          node bin/ai-catapult.js install --harness all
 
-      - name: Publish ai-catapult (unscoped) with provenance
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish @r3dlex/ai-catapult (scoped mirror) with provenance
+      - name: Publish both names with provenance
         run: AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          AI_CATAPULT_PUBLISH: '1'
+          CI: 'true'
