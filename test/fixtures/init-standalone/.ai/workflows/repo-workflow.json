@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "init-ai-repo",
+  "repo_id": "example-repo",
+  "description": "Four-phase AI-SDLC initialization workflow for this repository.",
+  "phases": [
+    {
+      "id": "01-discover-decide",
+      "title": "Discover & Decide",
+      "status_file": ".ai/phases/01-discover-decide/status.json"
+    },
+    {
+      "id": "02-govern-plan",
+      "title": "Govern & Plan",
+      "status_file": ".ai/phases/02-govern-plan/status.json"
+    },
+    {
+      "id": "03-configure-generate",
+      "title": "Configure & Generate",
+      "status_file": ".ai/phases/03-configure-generate/status.json"
+    },
+    {
+      "id": "04-validate-handoff",
+      "title": "Validate & Handoff",
+      "status_file": ".ai/phases/04-validate-handoff/status.json"
+    }
+  ],
+  "optional_branches": [
+    {
+      "id": "multi-repo-cascade",
+      "title": "Multi-repo Cascade",
+      "status": "available",
+      "enabled": false
+    },
+    {
+      "id": "skill-modernization",
+      "title": "Skill Modernization Audit",
+      "status": "available",
+      "enabled": false
+    }
+  ]
+}

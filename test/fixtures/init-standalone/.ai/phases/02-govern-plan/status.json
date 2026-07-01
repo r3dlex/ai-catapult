@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "init-ai-repo",
+  "phase_id": "02-govern-plan",
+  "title": "Govern & Plan",
+  "required": true,
+  "status": "pending",
+  "inputs": [".ai/init/repo-profile.json", ".ai/init/sdlc-path.md"],
+  "outputs": [
+    "docs/architecture/adr/",
+    ".ai/policies/model-routing.json"
+  ],
+  "evidence": null,
+  "next_actions": ["Complete phase 01 first."]
+}

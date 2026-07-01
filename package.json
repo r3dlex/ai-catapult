@@ -7,7 +7,8 @@
     "ai-catapult": "./bin/ai-catapult.js"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "regen:fixture": "bash scripts/regen-fixture.sh"
   },
   "engines": {
     "node": ">=18"
