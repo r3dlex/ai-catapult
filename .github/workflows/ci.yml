@@ -13,3 +13,15 @@ jobs:
         with:
           node-version: '20'
       - run: npm test
+
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Vendor skills
+        run: bash setup.sh
+      - name: Verify vendor integrity
+        run: bash scripts/verify-vendor.sh
