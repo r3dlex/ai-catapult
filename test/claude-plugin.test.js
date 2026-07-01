@@ -27,8 +27,9 @@ const buildScript = join(root, 'scripts/build-claude-plugin.sh');
 const distPlugin = join(root, 'dist/claude-plugin');
 const pluginManifest = join(distPlugin, '.claude-plugin/plugin.json');
 const marketplaceManifest = join(distPlugin, '.claude-plugin/marketplace.json');
-const bundledSkillDir = join(distPlugin, '.claude-plugin/skills/ai-catapult-init');
+const bundledSkillDir = join(distPlugin, 'skills/ai-catapult-init');
 const bundledSkillMd = join(bundledSkillDir, 'SKILL.md');
+const badNestedSkillDir = join(distPlugin, '.claude-plugin/skills');
 
 function runBuild() {
   return spawnSync('bash', [buildScript], {
@@ -75,6 +76,13 @@ test('bundled skill SKILL.md exists inside dist/claude-plugin', () => {
 test('bundled skill has modules/ directory inside dist/claude-plugin', () => {
   const modulesDir = join(bundledSkillDir, 'modules');
   assert.ok(existsSync(modulesDir), `bundled skill modules/ not found at ${modulesDir}`);
+});
+
+test('skills/ must NOT be nested inside .claude-plugin/ (regression guard)', () => {
+  assert.ok(
+    !existsSync(badNestedSkillDir),
+    `.claude-plugin/skills/ must not exist — skills belong at the plugin root, not nested inside .claude-plugin/. Found: ${badNestedSkillDir}`,
+  );
 });
 
 test('marketplace.json exists with $schema, plugins array referencing ai-catapult', () => {

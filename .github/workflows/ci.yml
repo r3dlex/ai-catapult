@@ -81,5 +81,6 @@ jobs:
         run: npm test
       - name: Idempotence check (rebuild and diff)
         run: |
+          cp -R dist/claude-plugin /tmp/plugin-snap
           npm run build:plugin:claude
-          diff -r dist/claude-plugin dist/claude-plugin || (echo "ERROR: non-idempotent build" && exit 1)
+          diff -r /tmp/plugin-snap dist/claude-plugin || (echo "ERROR: non-idempotent build" && exit 1)

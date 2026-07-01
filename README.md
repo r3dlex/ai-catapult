@@ -40,7 +40,7 @@ bash setup.sh                  # vendor the pinned skill source
 npm run build:plugin:claude    # assemble into dist/claude-plugin/
 ```
 
-The assembled plugin lands in `dist/claude-plugin/.claude-plugin/` (gitignored — never committed). It contains `plugin.json`, `marketplace.json`, and the bundled `skills/ai-catapult-init/` directory.
+The assembled plugin lands in `dist/claude-plugin/` (gitignored — never committed). `.claude-plugin/` holds only the manifests (`plugin.json`, `marketplace.json`); the bundled `skills/ai-catapult-init/` directory sits at the plugin root (`dist/claude-plugin/skills/`).
 
 ### Install (future — Slice 7)
 

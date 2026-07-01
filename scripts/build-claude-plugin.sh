@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # build-claude-plugin.sh — assemble the ai-catapult Claude Code plugin into dist/claude-plugin/.
 #
-# Output layout:
-#   dist/claude-plugin/
+# Output layout (per Claude Code plugin contract):
+#   dist/claude-plugin/            ← PLUGIN ROOT (paths in plugin.json resolve from here)
 #     .claude-plugin/
 #       plugin.json        (manifest: name, version, description, author, skills)
 #       marketplace.json   (marketplace entry with $schema)
-#       skills/
-#         ai-catapult-init/  (copy of vendor/skills/ai-catapult-init/)
+#     skills/
+#       ai-catapult-init/  (copy of vendor/skills/ai-catapult-init/)
+#
+# .claude-plugin/ holds ONLY manifests. All skill paths in plugin.json are
+# relative to the plugin root (dist/claude-plugin/), NOT to .claude-plugin/.
+# So "./skills/ai-catapult-init/" resolves to dist/claude-plugin/skills/ai-catapult-init/.
 #
 # Nothing assembled here is committed (dist/ is gitignored, decision 7).
 # Deterministic: version is read from package.json, no timestamps embedded.
@@ -27,7 +31,7 @@ PACKAGE_JSON="${REPO_ROOT}/package.json"
 VENDOR_SKILL="${REPO_ROOT}/vendor/skills/ai-catapult-init"
 DIST_DIR="${REPO_ROOT}/dist/claude-plugin"
 PLUGIN_DIR="${DIST_DIR}/.claude-plugin"
-SKILLS_OUT="${PLUGIN_DIR}/skills"
+SKILLS_OUT="${DIST_DIR}/skills"
 
 # --- Fail closed if vendor/ is missing ---
 if [[ ! -d "${VENDOR_SKILL}" ]]; then
@@ -54,6 +58,7 @@ echo "Building Claude Code plugin ai-catapult@${VERSION}..."
 
 # --- Clean and recreate output dirs ---
 rm -rf "${DIST_DIR}"
+mkdir -p "${PLUGIN_DIR}"
 mkdir -p "${SKILLS_OUT}"
 
 # --- Copy vendored skill (deterministic: rsync excludes .git, HEAD_SHA sentinel) ---
@@ -144,12 +149,20 @@ MARKETPLACE="${PLUGIN_DIR}/marketplace.json" node -e "
   if (!Array.isArray(m.plugins) || m.plugins.length === 0)  { process.stderr.write('marketplace.json missing plugins array\n'); process.exit(1); }
 "
 
-# 3. Referenced skill dirs exist and contain SKILL.md
+# 3. Regression guard: skills must NOT be nested inside .claude-plugin/
+if [[ -d "${PLUGIN_DIR}/skills" ]]; then
+  echo "ERROR: skills/ must NOT be nested inside .claude-plugin/ — found ${PLUGIN_DIR}/skills" >&2
+  echo "       Skills must live at the plugin root: ${DIST_DIR}/skills/" >&2
+  exit 1
+fi
+
+# 4. Referenced skill dirs exist and contain SKILL.md
+#    Paths in plugin.json are relative to the plugin root (DIST_DIR), not PLUGIN_DIR.
 for SKILL_REL in $(PLUGIN_JSON="${PLUGIN_DIR}/plugin.json" node -e "
   const p = JSON.parse(require('fs').readFileSync(process.env.PLUGIN_JSON,'utf8'));
   p.skills.forEach(s => process.stdout.write(s + '\n'));
 "); do
-  SKILL_ABS="${PLUGIN_DIR}/${SKILL_REL}"
+  SKILL_ABS="${DIST_DIR}/${SKILL_REL}"
   if [[ ! -d "${SKILL_ABS}" ]]; then
     echo "ERROR: skill directory referenced in plugin.json not found: ${SKILL_ABS}" >&2
     exit 1
