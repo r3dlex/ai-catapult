@@ -124,6 +124,7 @@ function emitGitkeeps(baseTemplatesDir, currentDir, targetDir, force, collisions
  * @param {string} opts.upstreamUrl    - {{UPSTREAM_URL}} substitution value
  * @param {string} opts.upstreamRef    - {{UPSTREAM_REF}} substitution value
  * @param {boolean} [opts.force]       - overwrite existing files without error
+ * @returns {{ emittedPaths: string[], judgmentLadenPaths: string[] }}
  */
 export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, upstreamRef, force = false }) {
   const manifestPath = join(templatesDir, 'boundary-manifest.json');
@@ -182,6 +183,7 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   }
 
   // All clear — write files
+  const emittedPaths = [];
   for (const entry of manifest.paths) {
     if (entry.classification !== 'mechanical' || entry.template === null) {
       continue;
@@ -198,6 +200,7 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
 
     mkdirSync(dirname(destPath), { recursive: true });
     writeFileSync(destPath, rendered, 'utf8');
+    emittedPaths.push(realRelPath);
   }
 
   // Emit .gitkeep files so tracked empty directories land in the target.
@@ -207,4 +210,11 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   emitGitkeeps(templatesDir, templatesDir, targetDir, force, gitkeepCollisions);
   // .gitkeep collisions are non-fatal — they are empty marker files; silently
   // skip them if --force was not given (the directory already exists).
+
+  // Collect judgment-laden paths from manifest (for finish prompt).
+  const judgmentLadenPaths = manifest.paths
+    .filter((e) => e.classification === 'judgment_laden')
+    .map((e) => e.path);
+
+  return { emittedPaths, judgmentLadenPaths };
 }

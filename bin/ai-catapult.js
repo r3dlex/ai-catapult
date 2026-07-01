@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, basename } from 'node:path';
 import { scaffold } from '../src/scaffold.js';
@@ -81,6 +81,61 @@ function parseArgs(argv) {
 }
 
 // ---------------------------------------------------------------------------
+// Finish prompt builder
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the structured next-steps block shown to the user after a successful
+ * scaffold. Content is deterministic given same inputs.
+ *
+ * @param {object} opts
+ * @param {string}   opts.targetDir           - resolved absolute target path
+ * @param {string[]} opts.emittedPaths         - relative paths actually written
+ * @param {string[]} opts.judgmentLadenPaths   - from boundary-manifest.json
+ * @returns {string}
+ */
+function buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths }) {
+  // Pick two anchor paths that are always mechanical (existence already verified
+  // by scaffold — if they are missing scaffold would have failed earlier).
+  const matrixPath = emittedPaths.includes('.ai/matrix.json') ? '.ai/matrix.json' : emittedPaths[0];
+  const agentsPath = emittedPaths.includes('AGENTS.md') ? 'AGENTS.md' : null;
+
+  const anchorLines = [`  • ${targetDir}/${matrixPath}`];
+  if (agentsPath) anchorLines.push(`  • ${targetDir}/${agentsPath}`);
+
+  const jlLines = judgmentLadenPaths.map((p) => `  • ${p}`).join('\n');
+
+  return [
+    '╔══════════════════════════════════════════════════════════════╗',
+    '║          ai-catapult — scaffold complete                     ║',
+    '╚══════════════════════════════════════════════════════════════╝',
+    '',
+    'Mechanical v3 skeleton scaffolded into:',
+    `  ${targetDir}`,
+    '',
+    'Key emitted paths (verified on disk):',
+    ...anchorLines,
+    '',
+    'Judgment-laden phases NOT yet written (require in-harness plugin):',
+    jlLines,
+    '',
+    '── Next step: complete in-harness ─────────────────────────────',
+    '',
+    '1. Install the ai-catapult plugin:',
+    '     npx ai-catapult install',
+    '',
+    '2. Open the scaffolded repo in Claude Code or Codex, then run:',
+    '     Claude Code:  /ai-catapult-init',
+    '     Codex:        invoke the ai-catapult-init skill',
+    '',
+    'The ai-catapult-init skill will guide you through topology decisions,',
+    'ADRs, cascade configuration, and traceability — the judgment-laden',
+    'phases that require knowledge of your specific repository.',
+    '────────────────────────────────────────────────────────────────',
+  ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Subcommand: init
 // ---------------------------------------------------------------------------
 
@@ -101,13 +156,20 @@ function runInit(argv) {
   const upstreamRef = String(flags.get('upstream-ref') || 'main');
   const force = flags.has('force');
 
-  scaffold({ targetDir, templatesDir: VENDOR_TEMPLATES, repoId, date, upstreamUrl, upstreamRef, force });
+  const { emittedPaths, judgmentLadenPaths } = scaffold({
+    targetDir, templatesDir: VENDOR_TEMPLATES, repoId, date, upstreamUrl, upstreamRef, force,
+  });
 
-  console.log(`Scaffolded v3 .ai/ skeleton into ${targetDir}`);
-  console.log(`  repo-id:      ${repoId}`);
-  console.log(`  date:         ${date}`);
-  console.log(`  upstream-url: ${upstreamUrl || '(none)'}`);
-  console.log(`  upstream-ref: ${upstreamRef}`);
+  // Build finish prompt — deterministic given same inputs.
+  const finishPrompt = buildFinishPrompt({ targetDir, emittedPaths, judgmentLadenPaths });
+
+  // Emit to stdout.
+  process.stdout.write(finishPrompt + '\n');
+
+  // Write the same content to <target>/.ai/handoff/NEXT-STEPS.md.
+  const nextStepsPath = join(targetDir, '.ai/handoff/NEXT-STEPS.md');
+  mkdirSync(dirname(nextStepsPath), { recursive: true });
+  writeFileSync(nextStepsPath, finishPrompt, 'utf8');
 }
 
 // ---------------------------------------------------------------------------
