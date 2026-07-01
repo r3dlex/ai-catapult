@@ -63,3 +63,24 @@ jobs:
             exit 1
           fi
           echo "OK: dist/ is not tracked by git"
+
+  plugin-claude:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Vendor skills
+        run: bash setup.sh
+      - name: Verify vendor integrity
+        run: bash scripts/verify-vendor.sh
+      - name: Build Claude Code plugin
+        run: npm run build:plugin:claude
+      - name: Test (includes plugin assembly + no-committed-mirrors assertions)
+        run: npm test
+      - name: Idempotence check (rebuild and diff)
+        run: |
+          cp -R dist/claude-plugin /tmp/plugin-snap
+          npm run build:plugin:claude
+          diff -r /tmp/plugin-snap dist/claude-plugin || (echo "ERROR: non-idempotent build" && exit 1)
