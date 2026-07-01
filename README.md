@@ -29,6 +29,27 @@ ai-catapult init
 
 Both `ai-catapult` (unscoped) and `@r3dlex/ai-catapult` (scoped mirror) will be published to npm. The scoped package lands in a later slice.
 
+## Claude Code plugin
+
+`ai-catapult` ships as a Claude Code plugin that bundles the `ai-catapult-init` skill.
+
+### Build the plugin locally
+
+```sh
+bash setup.sh                  # vendor the pinned skill source
+npm run build:plugin:claude    # assemble into dist/claude-plugin/
+```
+
+The assembled plugin lands in `dist/claude-plugin/.claude-plugin/` (gitignored — never committed). It contains `plugin.json`, `marketplace.json`, and the bundled `skills/ai-catapult-init/` directory.
+
+### Install (future — Slice 7)
+
+Marketplace publish and the `/plugin marketplace add ai-catapult` install path land with Slice 7. Until then, point Claude Code at the local build:
+
+```sh
+# coming in Slice 7
+```
+
 ## License
 
 MIT © Andre Burgstahler (r3dlex)
