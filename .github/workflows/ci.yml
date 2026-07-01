@@ -29,3 +29,37 @@ jobs:
         run: bash setup.sh
       - name: Verify vendor integrity
         run: bash scripts/verify-vendor.sh
+
+  codex-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Vendor skills
+        run: bash setup.sh
+      - name: Build Codex plugin
+        run: npm run build:plugin:codex
+      - name: Validate plugin.json parses and has required fields
+        run: |
+          node -e "
+            const p = JSON.parse(require('fs').readFileSync('dist/codex-plugin/.codex-plugin/plugin.json','utf8'));
+            const required = ['name','version','description','skills','interface'];
+            for (const f of required) {
+              if (!p[f]) { process.stderr.write('Missing field: ' + f + '\n'); process.exit(1); }
+            }
+            if (typeof p.skills !== 'string') { process.stderr.write('skills must be a string path (Codex contract)\n'); process.exit(1); }
+            console.log('plugin.json OK: name=' + p.name + ' version=' + p.version);
+          "
+      - name: Validate bundled skill SKILL.md present
+        run: test -f dist/codex-plugin/skills/ai-catapult-init/SKILL.md
+      - name: Verify dist/ is not tracked by git
+        run: |
+          TRACKED=$(git ls-files dist/)
+          if [ -n "$TRACKED" ]; then
+            echo "ERROR: dist/ files are tracked by git:" >&2
+            echo "$TRACKED" >&2
+            exit 1
+          fi
+          echo "OK: dist/ is not tracked by git"
