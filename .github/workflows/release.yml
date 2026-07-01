@@ -1,0 +1,66 @@
+name: Release
+
+# Triggered on semver tag push (e.g. v0.1.0).
+# Publishes both ai-catapult (unscoped) and @r3dlex/ai-catapult (scoped).
+#
+# Prerequisites (set in GitHub repo secrets):
+#   NPM_TOKEN — npm access token with publish rights for both package names.
+#               ai-catapult (unscoped) must have been manually published once
+#               first to claim the name; @r3dlex/ai-catapult requires the
+#               @r3dlex scope to exist on npm.
+#
+# This workflow is inert until a tag matching v* is pushed.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write   # required for --provenance
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Vendor skills
+        run: bash setup.sh
+
+      - name: Verify vendor integrity
+        run: bash scripts/verify-vendor.sh
+
+      - name: Build both plugins
+        run: |
+          npm run build:plugin:claude
+          npm run build:plugin:codex
+
+      - name: Run tests
+        run: npm test
+
+      - name: Install smoke — dry-run against temp harness dirs
+        run: |
+          FAKE_HOME=$(mktemp -d)
+          FAKE_CODEX=$(mktemp -d)
+          mkdir -p "${FAKE_HOME}/.claude"
+          node bin/ai-catapult.js install --harness all --dry-run
+        env:
+          HOME: ${{ runner.temp }}/fake-home
+          CODEX_HOME: ${{ runner.temp }}/fake-codex
+
+      - name: Publish ai-catapult (unscoped) with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @r3dlex/ai-catapult (scoped mirror) with provenance
+        run: AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          AI_CATAPULT_PUBLISH: '1'

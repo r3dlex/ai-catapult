@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, basename } from 'node:path';
 import { scaffold } from '../src/scaffold.js';
+import { runInstall } from '../src/install.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -13,7 +14,7 @@ const HELP = `Usage: ai-catapult <command> [options]
 
 Commands:
   init [target]  Scaffold v3 .ai/ governance skeleton into <target> (default: cwd)
-  install        (coming in a later slice) Install Claude Code and Codex plugins
+  install        Install Claude Code and Codex plugins into detected harnesses
 
 Options:
   -v, --version  Print version
@@ -124,8 +125,7 @@ function buildFinishPrompt({ targetDir, pathDisplay, emittedPaths, judgmentLaden
     '',
     '── Next step: complete in-harness ─────────────────────────────',
     '',
-    '1. Install the ai-catapult plugin (install command lands in an upcoming release —',
-    '   for now, add the plugin manually or watch the repo):',
+    '1. Install the ai-catapult plugin:',
     '     npx ai-catapult install',
     '',
     '2. Open the scaffolded repo in Claude Code or Codex, then run:',
@@ -183,14 +183,7 @@ function runInit(argv) {
   writeFileSync(nextStepsPath, finishPromptFile, 'utf8');
 }
 
-// ---------------------------------------------------------------------------
-// Subcommand: install (stub)
-// ---------------------------------------------------------------------------
-
-function runInstall(_argv) {
-  process.stderr.write('install: coming in a later slice.\n');
-  process.exit(1);
-}
+// runInstall is imported from src/install.js
 
 // ---------------------------------------------------------------------------
 // Main dispatch
@@ -229,9 +222,7 @@ if (verb === 'init') {
 
 if (verb === 'install') {
   runInstall(rawArgv.slice(firstPositionalIdx + 1));
-  // runInstall always calls process.exit — unreachable, but process.exit here
-  // makes the fallthrough unreachable by construction (fix #7).
-  process.exit(1);
+  process.exit(0);
 }
 
 process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);
