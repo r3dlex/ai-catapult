@@ -49,6 +49,7 @@ jobs:
             for (const f of required) {
               if (!p[f]) { process.stderr.write('Missing field: ' + f + '\n'); process.exit(1); }
             }
+            if (typeof p.skills !== 'string') { process.stderr.write('skills must be a string path (Codex contract)\n'); process.exit(1); }
             console.log('plugin.json OK: name=' + p.name + ' version=' + p.version);
           "
       - name: Validate bundled skill SKILL.md present

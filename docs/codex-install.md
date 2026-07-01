@@ -1,6 +1,8 @@
 # Codex Native Install Target
 
-## Confirmed install target and registration mechanism
+## Install target and registration mechanism
+
+Confirmed against the **oh-my-codex plugin contract** (documented manifests + docs cited below); runtime verification against the live Codex CLI is deferred to Slice 7.
 
 The Codex plugin system places installed plugins under:
 
