@@ -113,7 +113,10 @@ test('ai-catapult init emits mechanical scaffold matching committed fixture', ()
       );
     }
 
-    // Byte-compare each fixture file
+    // Byte-compare each fixture file.
+    // NEXT-STEPS.md now uses relative paths in the file (pathDisplay='.') so it
+    // is machine-independent and byte-identical across environments — no
+    // normalisation needed.
     for (const relPath of fixtureFiles) {
       const expected = readFileSync(join(fixtureDir, relPath), 'utf8');
       const actual = readFileSync(join(tmpDir, relPath), 'utf8');
