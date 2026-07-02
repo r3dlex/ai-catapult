@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
   "ref": "main",
-  "sha": "45ceec0c4f59c1b81a497ab0952c0a832aba4989",
-  "_note": "Pin to skills main post-Slice-2b. This SHA includes the ai-catapult-init rename and v3 templates under ai-catapult-init/templates/ plus boundary-manifest.json."
+  "sha": "adbe46a25ffb5b72bcde3e288bf48aff9ab96baf",
+  "_note": "Pin to skills main post-Slice-4. This SHA includes graph-automation templates (wrapper, hook bodies, harness snippets, engine-knob config) — boundary manifest grows from 28 to 32 mechanical files."
 }

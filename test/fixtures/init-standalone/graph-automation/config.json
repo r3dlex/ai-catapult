@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0",
+  "description": "Graph automation engine knob. Controls which graph engine the wrapper and hooks invoke. Default is graphify; graphwiki is the opt-in alternative.",
+  "engine": "graphify",
+  "engine_options": ["graphify", "graphwiki"],
+  "notes": [
+    "engine=graphify: incremental AST-based knowledge-graph refresh, no LLM required.",
+    "engine=graphwiki: opt-in alternative; same wrapper contract, different binary.",
+    "Change this value, then re-run `ai-catapult graph-hooks install` to re-stamp the wrapper and hook bodies."
+  ]
+}

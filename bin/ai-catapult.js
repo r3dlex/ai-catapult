@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, basename } from 'node:path';
 import { scaffold } from '../src/scaffold.js';
 import { runInstall } from '../src/install.js';
+import { runGraphHooks } from '../src/graph-hooks.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -32,8 +33,9 @@ const TEMPLATES_DIR = resolveTemplatesDir();
 const HELP = `Usage: ai-catapult <command> [options]
 
 Commands:
-  init [target]  Scaffold v3 .ai/ governance skeleton into <target> (default: cwd)
-  install        Install Claude Code and Codex plugins into detected harnesses
+  init [target]                Scaffold v3 .ai/ governance skeleton into <target> (default: cwd)
+  install                      Install Claude Code and Codex plugins into detected harnesses
+  graph-hooks install <target> Wire graph-automation git hooks and wrapper into a target git repo
 
 Options:
   -v, --version  Print version
@@ -241,6 +243,11 @@ if (verb === 'init') {
 
 if (verb === 'install') {
   runInstall(rawArgv.slice(firstPositionalIdx + 1));
+  process.exit(0);
+}
+
+if (verb === 'graph-hooks') {
+  runGraphHooks(rawArgv.slice(firstPositionalIdx + 1), TEMPLATES_DIR);
   process.exit(0);
 }
 
