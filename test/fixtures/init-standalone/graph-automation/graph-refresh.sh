@@ -1,19 +1,8 @@
 #!/usr/bin/env bash
-# scripts/graph-refresh.sh — lock+coalesce wrapper for {{ENGINE}} --update
-#
-# Install location: scripts/graph-refresh.sh (umbrella or standalone repo root).
-# Called by: child-repo git hooks (hook-body.sh) and harness hooks (Stop event).
-#
-# Token: {{ENGINE}} — replaced by ai-catapult graph-hooks install.
-#        Default value: graphify
-#        Alternative:   graphwiki
-#
-# ENGINE_OUT_DIR: derived in shell as "${ENGINE}-out" (e.g. graphify-out,
-#        graphwiki-out). No separate template token needed; Slice 6 token
-#        normalization only needs to handle {{ENGINE}}.
+# scripts/graph-refresh.sh — lock+coalesce wrapper for knowledge-graph refresh
 #
 # CONTRACT (Slice 1, graph-hooks spec):
-#   - Engine-absent no-op: `command -v {{ENGINE}}` check; exits 0 silently.
+#   - Engine-absent no-op: `command -v graphify` check; exits 0 silently.
 #   - Never blocks the caller: actual work is detached into the background
 #     (subshell redirected to log + disown). The hook-facing call returns
 #     exit 0 immediately.
@@ -22,19 +11,29 @@
 #     AT MOST ONE pending rerun (a marker file). When the active run finishes,
 #     if the marker exists the wrapper runs once more (clearing the marker
 #     first). Bursts of N triggers → ≤2 engine runs total.
-#   - All output → ${ENGINE}-out/refresh.log; nothing reaches the terminal.
+#   - All output → graphify-out/refresh.log; nothing reaches the terminal.
 #   - Exits 0 always (hook callers must never see a non-zero from this script).
 #
-# --status flag (optional debug aid):
-#   Prints lock/pending/log-tail info; exits 0. Used by SessionStart hooks
-#   for validate-only checks (no engine run).
+# ENGINE DISPATCH (per-engine case block):
+#   graphify  — interpreter-detected python -c "_rebuild_code(Path('.'))" (no
+#               --update flag; graphify v0.4.x has no such flag; the correct
+#               incremental non-LLM refresh is the watch._rebuild_code hook).
+#               Interpreter detection mirrors graphify/graphify/hooks.py
+#               _PYTHON_DETECT: shebang of `command -v graphify` → test import
+#               → fallback python3/python. Falls through exit 0 if none work.
+#   graphwiki — `graphwiki build . --update`
+#   *         — `"$ENGINE" . --update`  (generic fallback)
 #
-# .git-dir PRECONDITION:
-#   The sentinel walk in hook-body.sh stops only at directories that contain
-#   both scripts/graph-refresh.sh AND a .git/ dir. This wrapper therefore
-#   assumes it is always invoked from a directory that is the root of a git
-#   repository (or a symlinked equivalent). Invocations outside a git repo
-#   are unsupported and may resolve REPO_ROOT incorrectly.
+# TEST SEAM: GRAPH_REFRESH_ENGINE_CMD
+#   When this env var is set the engine case block is bypassed and the value
+#   is executed verbatim as the engine command. Intended for tests that supply
+#   a PATH shim: set ENGINE=graphwiki (or any name) so the presence check
+#   finds it, then set GRAPH_REFRESH_ENGINE_CMD="graphwiki" to route through
+#   the generic fallback without any python interpreter logic.
+#   NEVER set this in production.
+#
+# --status flag (optional debug aid):
+#   Prints lock/pending/log-tail info; exits 0.
 #
 # DETACH APPROACH (non-blocking + fd isolation):
 #   We redirect the background subshell's stdin/stdout/stderr explicitly
@@ -49,8 +48,6 @@
 #   3.2+) and Linux.
 #
 # LOCK DESIGN (PID-annotated mkdir lock + foreground acquire):
-#   - The lock is stored at ${ENGINE}-out/graph-refresh-lock (repo-root,
-#     co-located with the log file — no TMPDIR).
 #   - The lock acquire/pending-mark decision is made in the FOREGROUND before
 #     spawning any background subshell. This is what makes coalescing work:
 #     only one background runner is ever spawned; subsequent callers that lose
@@ -72,13 +69,11 @@
 #   and lock release, we attempt one more lock acquire + run cycle. This is
 #   bounded (no loop) and handles the most common race without complexity.
 
-ENGINE="{{ENGINE}}"
-
 # ── Resolve repo root via BASH_SOURCE (works when called via symlink) ─────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-LOG_DIR="$REPO_ROOT/${ENGINE}-out"
+LOG_DIR="$REPO_ROOT/graphify-out"
 LOG_FILE="$LOG_DIR/refresh.log"
 LOCK_DIR="$LOG_DIR/graph-refresh-lock"
 PENDING_MARKER="$LOG_DIR/graph-refresh-pending"
@@ -86,7 +81,6 @@ PENDING_MARKER="$LOG_DIR/graph-refresh-pending"
 # ── --status flag ─────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--status" ]; then
   echo "=== graph-refresh status ==="
-  echo "engine    : $ENGINE"
   echo "repo root : $REPO_ROOT"
   echo "lock      : $([ -d "$LOCK_DIR" ] && echo LOCKED || echo unlocked)"
   echo "pending   : $([ -f "$PENDING_MARKER" ] && echo YES || echo no)"
@@ -97,6 +91,10 @@ if [ "${1:-}" = "--status" ]; then
   fi
   exit 0
 fi
+
+# ── Engine selection ─────────────────────────────────────────────────────────
+# ENGINE defaults to "graphify"; override via env for future multi-engine repos.
+ENGINE="${ENGINE:-{{ENGINE}}}"
 
 # ── Engine-absent no-op ───────────────────────────────────────────────────────
 command -v "$ENGINE" >/dev/null 2>&1 || exit 0
@@ -159,9 +157,73 @@ _run_engine() {
   # Ensure lock is released on any exit (normal or signalled).
   trap 'rm -rf "$LOCK_DIR"' EXIT
 
-  # cd to repo root so {{ENGINE}} . --update resolves correctly regardless of
-  # the caller's cwd (Slice 2 children may exec this from arbitrary directories).
+  # cd to repo root so engine resolves correctly regardless of the caller's cwd
+  # (Slice 2 children may exec this from arbitrary directories).
   cd "$REPO_ROOT" || return
+
+  # ── Per-engine interpreter detection (graphify branch) ───────────────────
+  # Mirrors graphify/graphify/hooks.py _PYTHON_DETECT: read the shebang of the
+  # installed graphify binary to find the venv python (handles pipx, uv, venv,
+  # system installs). Falls back to python3 / python. Sets GRAPHIFY_PYTHON or
+  # exits 0 (engine effectively absent when python can't import graphify).
+  # Only resolved when ENGINE=graphify and no GRAPH_REFRESH_ENGINE_CMD override.
+  if [ "$ENGINE" = "graphify" ] && [ -z "${GRAPH_REFRESH_ENGINE_CMD:-}" ]; then
+    GRAPHIFY_BIN="$(command -v graphify 2>/dev/null)"
+    GRAPHIFY_PYTHON=""
+    if [ -n "$GRAPHIFY_BIN" ]; then
+      case "$GRAPHIFY_BIN" in
+        *.exe) _SHEBANG="" ;;
+        *)     _SHEBANG="$(head -1 "$GRAPHIFY_BIN" | sed 's/^#![[:space:]]*//')" ;;
+      esac
+      case "$_SHEBANG" in
+        */env\ *) GRAPHIFY_PYTHON="${_SHEBANG#*/env }" ;;
+        *)        GRAPHIFY_PYTHON="$_SHEBANG" ;;
+      esac
+      # Allowlist: only characters valid in a filesystem path (injection guard)
+      case "$GRAPHIFY_PYTHON" in
+        *[!a-zA-Z0-9/_.@-]*) GRAPHIFY_PYTHON="" ;;
+      esac
+      if [ -n "$GRAPHIFY_PYTHON" ] && ! "$GRAPHIFY_PYTHON" -c "import graphify" 2>/dev/null; then
+        GRAPHIFY_PYTHON=""
+      fi
+    fi
+    # Fallback: try python3, then python
+    if [ -z "$GRAPHIFY_PYTHON" ]; then
+      if command -v python3 >/dev/null 2>&1 && python3 -c "import graphify" 2>/dev/null; then
+        GRAPHIFY_PYTHON="python3"
+      elif command -v python >/dev/null 2>&1 && python -c "import graphify" 2>/dev/null; then
+        GRAPHIFY_PYTHON="python"
+      else
+        # No usable python — treat as engine absent, release lock and exit cleanly
+        return 0
+      fi
+    fi
+  fi
+
+  # ── Engine dispatch helper ────────────────────────────────────────────────
+  # Called once per loop iteration. Runs the appropriate engine command.
+  _engine_run() {
+    # TEST SEAM: GRAPH_REFRESH_ENGINE_CMD bypasses all engine-specific logic.
+    if [ -n "${GRAPH_REFRESH_ENGINE_CMD:-}" ]; then
+      $GRAPH_REFRESH_ENGINE_CMD
+      return
+    fi
+    case "$ENGINE" in
+      graphify)
+        "$GRAPHIFY_PYTHON" -c "
+from graphify.watch import _rebuild_code
+from pathlib import Path
+_rebuild_code(Path('.'))
+"
+        ;;
+      graphwiki)
+        graphwiki build . --update
+        ;;
+      *)
+        "$ENGINE" . --update
+        ;;
+    esac
+  }
 
   # Loop: run engine, then check for pending marker.
   while true; do
@@ -170,7 +232,7 @@ _run_engine() {
 
     {
       echo "--- graph-refresh: $(date '+%Y-%m-%dT%H:%M:%S') ---"
-      "$ENGINE" . --update
+      _engine_run
     } >> "$LOG_FILE" 2>&1
 
     # After the run: if a NEW pending marker appeared during this run, loop
@@ -197,7 +259,7 @@ _run_engine() {
       rm -f "$PENDING_MARKER"
       {
         echo "--- graph-refresh (post-release recheck): $(date '+%Y-%m-%dT%H:%M:%S') ---"
-        "$ENGINE" . --update
+        _engine_run
       } >> "$LOG_FILE" 2>&1
     fi
   fi
