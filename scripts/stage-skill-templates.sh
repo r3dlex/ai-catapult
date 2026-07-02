@@ -2,7 +2,7 @@
 # stage-skill-templates.sh — copy vendored ai-catapult-init templates into
 # dist/skill-templates/ so they ship in the npm tarball.
 #
-# This is the packaged SSOT for `ai-catapult init` when vendor/ is absent
+# This is a packaged copy of the SSOT (vendor/skills/ai-catapult-init/templates) for `ai-catapult init` when vendor/ is absent
 # (i.e. when the package is installed via npx rather than cloned from source).
 #
 # Resolution order in bin/ai-catapult.js:

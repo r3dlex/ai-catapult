@@ -13,11 +13,11 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8
 //   2. dist/skill-templates/                      — staged by prepack; ships in the npm tarball
 // vendor/ is intentionally excluded from the published package so only (2) is available
 // when the CLI is installed via npx or npm install.
-const _VENDOR_TEMPLATES = join(__dirname, '..', 'vendor/skills/ai-catapult-init/templates');
+const _TEMPLATES_DIR = join(__dirname, '..', 'vendor/skills/ai-catapult-init/templates');
 const _DIST_TEMPLATES   = join(__dirname, '..', 'dist/skill-templates');
 
 function resolveTemplatesDir() {
-  if (existsSync(_VENDOR_TEMPLATES)) return _VENDOR_TEMPLATES;
+  if (existsSync(_TEMPLATES_DIR)) return _TEMPLATES_DIR;
   if (existsSync(_DIST_TEMPLATES))   return _DIST_TEMPLATES;
   process.stderr.write(
     'Error: template directory not found.\n' +
@@ -27,7 +27,7 @@ function resolveTemplatesDir() {
   process.exit(1);
 }
 
-const VENDOR_TEMPLATES = resolveTemplatesDir();
+const TEMPLATES_DIR = resolveTemplatesDir();
 
 const HELP = `Usage: ai-catapult <command> [options]
 
@@ -180,7 +180,7 @@ function runInit(argv) {
   const force = flags.has('force');
 
   const { emittedPaths, judgmentLadenPaths } = scaffold({
-    targetDir, templatesDir: VENDOR_TEMPLATES, repoId, date, upstreamUrl, upstreamRef, force,
+    targetDir, templatesDir: TEMPLATES_DIR, repoId, date, upstreamUrl, upstreamRef, force,
   });
 
   // Build finish prompt for stdout — uses absolute targetDir so the user sees
