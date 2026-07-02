@@ -150,3 +150,28 @@ test('npm pack: prepack script builds both plugins (ensures fresh dist/ on publi
     `package.json prepack script must invoke both build scripts so "npm publish" always embeds fresh payloads\nActual prepack: ${prepack}`,
   );
 });
+
+test('npm pack: prepack script stages skill-templates (ensures npx init works from published package)', () => {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const prepack = pkg.scripts?.prepack ?? '';
+  assert.ok(
+    prepack.includes('stage-skill-templates.sh'),
+    `package.json prepack script must invoke stage-skill-templates.sh so dist/skill-templates/ ships in the tarball\nActual prepack: ${prepack}`,
+  );
+});
+
+test('npm pack: dist/skill-templates/ is present in dist-snapshot (init fallback for published package)', () => {
+  const skillTemplatesDir = join(DIST_SNAPSHOT, 'skill-templates');
+  assert.ok(
+    existsSync(skillTemplatesDir),
+    `dist-snapshot/skill-templates/ must exist — pretest must stage skill templates\nChecked: ${skillTemplatesDir}`,
+  );
+});
+
+test('npm pack: dist/skill-templates/boundary-manifest.json exists (scaffold engine requires it)', () => {
+  const manifest = join(DIST_SNAPSHOT, 'skill-templates', 'boundary-manifest.json');
+  assert.ok(
+    existsSync(manifest),
+    `dist-snapshot/skill-templates/boundary-manifest.json must exist\nChecked: ${manifest}`,
+  );
+});

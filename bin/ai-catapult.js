@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve, basename } from 'node:path';
 import { scaffold } from '../src/scaffold.js';
@@ -8,7 +8,26 @@ import { runInstall } from '../src/install.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
 
-const VENDOR_TEMPLATES = join(__dirname, '..', 'vendor/skills/ai-catapult-init/templates');
+// Resolve the templates directory.
+//   1. vendor/skills/ai-catapult-init/templates/ — present in dev checkouts (after setup.sh)
+//   2. dist/skill-templates/                      — staged by prepack; ships in the npm tarball
+// vendor/ is intentionally excluded from the published package so only (2) is available
+// when the CLI is installed via npx or npm install.
+const _VENDOR_TEMPLATES = join(__dirname, '..', 'vendor/skills/ai-catapult-init/templates');
+const _DIST_TEMPLATES   = join(__dirname, '..', 'dist/skill-templates');
+
+function resolveTemplatesDir() {
+  if (existsSync(_VENDOR_TEMPLATES)) return _VENDOR_TEMPLATES;
+  if (existsSync(_DIST_TEMPLATES))   return _DIST_TEMPLATES;
+  process.stderr.write(
+    'Error: template directory not found.\n' +
+    '  For a dev checkout: run  bash setup.sh  to populate vendor/\n' +
+    '  For an npx install:  try  npm install -g ai-catapult  to reinstall the package\n',
+  );
+  process.exit(1);
+}
+
+const VENDOR_TEMPLATES = resolveTemplatesDir();
 
 const HELP = `Usage: ai-catapult <command> [options]
 

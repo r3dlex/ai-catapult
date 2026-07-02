@@ -185,13 +185,21 @@ function installClaude({ claudeDir, dryRun, force }) {
   // Read version from installed plugin.json
   const pluginJson = join(payloadPath, '.claude-plugin', 'plugin.json');
   const manifest = JSON.parse(readFileSync(pluginJson, 'utf8'));
-  const marketplaceName = manifest.name ?? PLUGIN_NAME;
+
+  // Read the marketplace name from marketplace.json — single source of truth.
+  // The marketplace name is the `name` field of the marketplace payload, which
+  // is what `/plugin install <plugin>@<marketplace>` expects as the marketplace
+  // half of the ref.
+  const marketplaceJson = join(payloadPath, '.claude-plugin', 'marketplace.json');
+  const marketplaceManifest = JSON.parse(readFileSync(marketplaceJson, 'utf8'));
+  const marketplaceRef = marketplaceManifest.name ?? PLUGIN_NAME;
+  const pluginRef = manifest.name ?? PLUGIN_NAME;
 
   process.stdout.write(`Installed Claude Code plugin ai-catapult@${manifest.version}\n`);
   process.stdout.write(`  payload: ${payloadPath}\n`);
   process.stdout.write(`\nTo register the plugin in Claude Code, run these two commands inside Claude Code:\n`);
   process.stdout.write(`\n  /plugin marketplace add ${payloadPath}\n`);
-  process.stdout.write(`  /plugin install ${marketplaceName}@${MARKETPLACE_NAME}\n`);
+  process.stdout.write(`  /plugin install ${pluginRef}@${marketplaceRef}\n`);
   process.stdout.write(`\nThen reload Claude Code for the plugin to take effect.\n`);
 }
 
