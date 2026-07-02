@@ -1,6 +1,6 @@
 {
   "name": "ai-catapult",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
   "type": "module",
   "bin": {
@@ -13,14 +13,15 @@
     "scripts/build-claude-plugin.sh",
     "scripts/build-codex-plugin.sh",
     "scripts/snapshot-dist.sh",
+    "scripts/stage-skill-templates.sh",
     "setup.sh",
     "skills.lock.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh",
-    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/snapshot-dist.sh",
+    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh",
+    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/snapshot-dist.sh",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
     "regen:fixture": "bash scripts/regen-fixture.sh",
     "build:plugin:codex": "bash scripts/build-codex-plugin.sh",

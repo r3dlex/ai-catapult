@@ -224,10 +224,12 @@ test('install: claude install prints /plugin marketplace add instruction', () =>
       `stdout must contain "/plugin marketplace add" instruction\nActual stdout:\n${r.stdout}`,
     );
 
+    // The marketplace name is read from marketplace.json `name` field — must be
+    // the exact ref that `/plugin install` accepts (ai-catapult@ai-catapult).
     assert.match(
       r.stdout,
-      /\/plugin install ai-catapult@/i,
-      `stdout must contain "/plugin install ai-catapult@<marketplace>" instruction\nActual stdout:\n${r.stdout}`,
+      /\/plugin install ai-catapult@ai-catapult\b/,
+      `stdout must contain "/plugin install ai-catapult@ai-catapult" (name from marketplace.json)\nActual stdout:\n${r.stdout}`,
     );
   } finally {
     rmSync(fakeHome, { recursive: true, force: true });
