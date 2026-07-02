@@ -4,11 +4,13 @@ name: Release
 # Publishes both ai-catapult (unscoped) and @r3dlex/ai-catapult (scoped)
 # via publish-both.sh — the single source of truth for both names.
 #
-# Prerequisites (set in GitHub repo secrets):
-#   NPM_TOKEN — npm access token with publish rights for both package names.
-#               ai-catapult (unscoped) must have been manually published once
-#               first to claim the name; @r3dlex/ai-catapult requires the
-#               @r3dlex scope to exist on npm.
+# Auth: npm TRUSTED PUBLISHING (OIDC) — no NPM_TOKEN secret needed.
+# Prerequisite (one-time, npmjs.com web UI, per package — both ai-catapult and
+# @r3dlex/ai-catapult): package Settings → Trusted Publisher → GitHub Actions
+# with organization/user `r3dlex`, repository `ai-catapult`, workflow filename
+# `release.yml`, environment empty. Both packages were first-published manually
+# on 2026-07-02 (npm requires the package to exist before this can be set).
+# Trusted publishing requires npm CLI >= 11.5.1 (upgraded in a step below).
 #
 # This workflow is inert until a tag matching v* is pushed.
 on:
@@ -30,6 +32,11 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for trusted publishing (requires >= 11.5.1)
+        run: |
+          npm install -g npm@latest
+          npm --version
 
       - name: Vendor skills
         run: bash setup.sh
@@ -54,8 +61,7 @@ jobs:
           export CODEX_HOME="${FAKE_CODEX}"
           node bin/ai-catapult.js install --harness all
 
-      - name: Publish both names with provenance
+      - name: Publish both names via OIDC trusted publishing (provenance automatic)
         run: AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           CI: 'true'

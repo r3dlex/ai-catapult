@@ -132,7 +132,7 @@ bash scripts/publish-both.sh
 AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
 ```
 
-Semver-tagged releases are automated via `.github/workflows/release.yml` (requires `NPM_TOKEN` in repo secrets).
+Semver-tagged releases are automated via `.github/workflows/release.yml` using npm **trusted publishing** (OIDC) — no `NPM_TOKEN` secret; the trusted publisher must be configured once per package on npmjs.com (see release.yml header).
 
 ## License
 
