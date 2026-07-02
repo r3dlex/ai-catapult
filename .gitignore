@@ -1,4 +1,5 @@
 node_modules/
 vendor/
 dist/
+dist-snapshot/
 .tmp-init*/

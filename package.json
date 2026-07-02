@@ -4,14 +4,37 @@
   "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
   "type": "module",
   "bin": {
-    "ai-catapult": "./bin/ai-catapult.js"
+    "ai-catapult": "bin/ai-catapult.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "dist/",
+    "scripts/build-claude-plugin.sh",
+    "scripts/build-codex-plugin.sh",
+    "scripts/snapshot-dist.sh",
+    "setup.sh",
+    "skills.lock.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "test": "node --test",
+    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh",
+    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/snapshot-dist.sh",
+    "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
     "regen:fixture": "bash scripts/regen-fixture.sh",
     "build:plugin:codex": "bash scripts/build-codex-plugin.sh",
     "build:plugin:claude": "bash scripts/build-claude-plugin.sh"
   },
+  "keywords": [
+    "ai-sdlc",
+    "governance",
+    "scaffold",
+    "init-ai-repo",
+    "claude-code",
+    "codex",
+    "claude"
+  ],
   "engines": {
     "node": ">=18"
   },
@@ -19,5 +42,12 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/r3dlex/ai-catapult.git"
+  },
+  "bugs": {
+    "url": "https://github.com/r3dlex/ai-catapult/issues"
+  },
+  "homepage": "https://github.com/r3dlex/ai-catapult#readme",
+  "publishConfig": {
+    "access": "public"
   }
 }
