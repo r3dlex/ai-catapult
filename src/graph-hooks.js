@@ -25,7 +25,8 @@ import {
   chmodSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { homedir } from 'node:os';
 
 // ---------------------------------------------------------------------------
 // Marker constants for idempotent hook block management
@@ -105,6 +106,49 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Walk the ancestors of `startDir` (exclusive — startDir itself is not checked)
+ * looking for a directory that contains both scripts/graph-refresh.sh and .git.
+ * Stops when reaching $HOME or the filesystem root.
+ *
+ * @param {string} startDir - directory whose PARENT is the first candidate
+ * @param {string} home     - path to stop at (exclusive)
+ * @returns {string|null}   ancestor path if found, null otherwise
+ */
+function findAncestorWrapper(startDir, home) {
+  let dir = dirname(startDir);
+  while (dir !== home && dir !== dirname(dir)) {
+    if (
+      existsSync(join(dir, 'scripts', 'graph-refresh.sh')) &&
+      existsSync(join(dir, '.git'))
+    ) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Strip a leading shebang line from a shell template string.
+ * Avoids embedding a duplicate shebang inside the marker block.
+ *
+ * @param {string} content - raw file content
+ * @returns {string}
+ */
+function stripLeadingShebang(content) {
+  if (content.startsWith('#!')) {
+    const firstNewline = content.indexOf('\n');
+    if (firstNewline !== -1) {
+      return content.slice(firstNewline + 1);
+    }
+    return '';
+  }
+  return content;
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -168,9 +212,22 @@ export function runGraphHooksInstall(argv, templatesDir) {
   }
 
   const dryRun = flags.has('dry-run');
-  const engine = String(flags.get('engine') ?? 'graphify');
+  const force = flags.has('force');
+  const engineRaw = flags.get('engine');
   const targetArg = positionals[0];
   const targetDir = targetArg ? resolve(targetArg) : process.cwd();
+
+  // Validate --engine: must be one of the allowed values.
+  // Allowed set mirrors config.json's engine_options field.
+  // If --engine was given without a value, engineRaw is `true` (boolean) — also invalid.
+  const ALLOWED_ENGINES = ['graphify', 'graphwiki']; // see graph-automation/config.json engine_options
+  const engine = engineRaw === undefined ? 'graphify' : String(engineRaw);
+  if (engineRaw !== undefined && !ALLOWED_ENGINES.includes(engine)) {
+    process.stderr.write(
+      `Error: invalid --engine value: "${engine}". Must be one of: ${ALLOWED_ENGINES.join(', ')}.\n`,
+    );
+    process.exit(1);
+  }
 
   // Validate: must be a git repo
   const gitCheck = spawnSync('git', ['-C', targetDir, 'rev-parse', '--git-dir'], {
@@ -179,6 +236,26 @@ export function runGraphHooksInstall(argv, templatesDir) {
   if (gitCheck.status !== 0 || !gitCheck.stdout.trim()) {
     process.stderr.write(`Error: ${targetDir} is not a git repo (no .git found).\n`);
     process.exit(1);
+  }
+
+  // Ancestor-wrapper guard: refuse to install if an ancestor repo already has a
+  // wrapper (scripts/graph-refresh.sh + .git), which would mean this target is a
+  // workspace child — silently forking the graph contradicts the one-root-graph
+  // contract. Walk from the TARGET's PARENT upward, stop at $HOME / root.
+  const home = process.env.HOME ?? homedir();
+  const ancestorWithWrapper = findAncestorWrapper(targetDir, home);
+  if (ancestorWithWrapper) {
+    process.stderr.write(
+      `Error: ancestor repo already has a graph-refresh wrapper at ${ancestorWithWrapper}.\n` +
+      `Installing here would fork the workspace graph (contradicts one-root-graph contract).\n` +
+      `Use --force to install anyway.\n`,
+    );
+    if (!force) {
+      process.exit(1);
+    }
+    process.stderr.write(
+      `Warning: proceeding despite ancestor wrapper at ${ancestorWithWrapper} (--force).\n`,
+    );
   }
 
   // Load templates from the graph-automation/ subdir
@@ -221,10 +298,14 @@ export function runGraphHooksInstall(argv, templatesDir) {
   const hooksDir = resolveHooksDir(targetDir);
   mkdirSync(hooksDir, { recursive: true });
 
+  // Strip leading shebang from hook-body template before embedding in the
+  // marker block — the hook file already has its own shebang at the top.
+  const hookBodyContent = stripLeadingShebang(hookBodyTemplate);
+
   // Install git hooks (marker-managed)
   for (const hookName of ['post-commit', 'post-checkout']) {
     const hookPath = join(hooksDir, hookName);
-    installMarkerBlock(hookPath, hookBodyTemplate);
+    installMarkerBlock(hookPath, hookBodyContent);
   }
 
   // Copy wrapper script with engine substituted

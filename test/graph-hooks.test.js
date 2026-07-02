@@ -340,7 +340,9 @@ test('graph-hooks install: does NOT write .claude/settings.json (print only)', (
   const fakeHome = makeTmpDir('ai-catapult-gh-home-');
   mkdirSync(join(fakeHome, '.claude'), { recursive: true });
   try {
-    runGraphHooksInstall([target], { home: fakeHome });
+    const r = runGraphHooksInstall([target], { home: fakeHome });
+    assert.equal(r.status, 0, `expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(r.stdout, /graph-hooks install|wired|engine/i, `stdout must show install completed\nstdout: ${r.stdout}`);
     // settings.json inside the target dir should not be created
     assert.ok(
       !existsSync(join(target, '.claude', 'settings.json')),
@@ -355,7 +357,9 @@ test('graph-hooks install: does NOT write .claude/settings.json (print only)', (
 test('graph-hooks install: does NOT write .codex/hooks.json (print only)', () => {
   const target = makeGitRepo();
   try {
-    runGraphHooksInstall([target]);
+    const r = runGraphHooksInstall([target]);
+    assert.equal(r.status, 0, `expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(r.stdout, /graph-hooks install|wired|engine/i, `stdout must show install completed\nstdout: ${r.stdout}`);
     assert.ok(
       !existsSync(join(target, '.codex', 'hooks.json')),
       '.codex/hooks.json must NOT be written into target (print-only)',
@@ -410,7 +414,9 @@ test('graph-hooks install --dry-run: exits 0', () => {
 test('graph-hooks install --dry-run: does not write hooks', () => {
   const target = makeGitRepo();
   try {
-    runGraphHooksInstall([target, '--dry-run']);
+    const r = runGraphHooksInstall([target, '--dry-run']);
+    assert.equal(r.status, 0, `expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(r.stdout, /dry.run/i, `stdout must mention dry-run\nstdout: ${r.stdout}`);
     assert.ok(!existsSync(join(target, '.git', 'hooks', 'post-commit')), 'post-commit must not exist in dry-run');
     assert.ok(!existsSync(join(target, '.git', 'hooks', 'post-checkout')), 'post-checkout must not exist in dry-run');
   } finally {
@@ -421,7 +427,9 @@ test('graph-hooks install --dry-run: does not write hooks', () => {
 test('graph-hooks install --dry-run: does not write wrapper', () => {
   const target = makeGitRepo();
   try {
-    runGraphHooksInstall([target, '--dry-run']);
+    const r = runGraphHooksInstall([target, '--dry-run']);
+    assert.equal(r.status, 0, `expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(r.stdout, /dry.run/i, `stdout must mention dry-run\nstdout: ${r.stdout}`);
     assert.ok(!existsSync(join(target, 'scripts', 'graph-refresh.sh')), 'wrapper must not exist in dry-run');
   } finally {
     rmSync(target, { recursive: true, force: true });
@@ -431,7 +439,9 @@ test('graph-hooks install --dry-run: does not write wrapper', () => {
 test('graph-hooks install --dry-run: does not write config.json', () => {
   const target = makeGitRepo();
   try {
-    runGraphHooksInstall([target, '--dry-run']);
+    const r = runGraphHooksInstall([target, '--dry-run']);
+    assert.equal(r.status, 0, `expected exit 0\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(r.stdout, /dry.run/i, `stdout must mention dry-run\nstdout: ${r.stdout}`);
     assert.ok(!existsSync(join(target, 'graph-automation', 'config.json')), 'config.json must not exist in dry-run');
   } finally {
     rmSync(target, { recursive: true, force: true });
@@ -562,6 +572,106 @@ test('graph-hooks install: exits 0 even when engine binary is not on PATH', () =
     assert.equal(r.status, 0, `expected exit 0 when engine absent\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
     // Wrapper is still written — the no-op is handled at runtime by the wrapper itself
     assert.ok(existsSync(join(target, 'scripts', 'graph-refresh.sh')), 'wrapper must still be written');
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// (m) ancestor-wrapper guard
+// ---------------------------------------------------------------------------
+
+test('graph-hooks install: refuses install when ancestor repo has a wrapper (exit 1, names ancestor)', () => {
+  // Create umbrella (ancestor) with wrapper + .git
+  const umbrella = makeGitRepo('ai-catapult-gh-umbrella-');
+  // Create a child repo nested inside the umbrella
+  const childDir = join(umbrella, 'packages', 'child');
+  mkdirSync(childDir, { recursive: true });
+  spawnSync('git', ['init', childDir], { encoding: 'utf8' });
+  // Plant a wrapper in the umbrella
+  mkdirSync(join(umbrella, 'scripts'), { recursive: true });
+  writeFileSync(join(umbrella, 'scripts', 'graph-refresh.sh'), '#!/usr/bin/env bash\necho wrapper\n');
+
+  try {
+    const r = runGraphHooksInstall([childDir], { home: '/nonexistent-no-home' });
+    assert.equal(r.status, 1, `expected exit 1 when ancestor has wrapper\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(
+      r.stderr,
+      new RegExp(umbrella.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+      `stderr must name the ancestor path\nstderr: ${r.stderr}`,
+    );
+    assert.match(
+      r.stderr,
+      /ancestor|wrapper|graph/i,
+      `stderr must mention ancestor wrapper\nstderr: ${r.stderr}`,
+    );
+  } finally {
+    rmSync(umbrella, { recursive: true, force: true });
+  }
+});
+
+test('graph-hooks install --force: proceeds despite ancestor wrapper', () => {
+  const umbrella = makeGitRepo('ai-catapult-gh-umbrella-force-');
+  const childDir = join(umbrella, 'packages', 'child');
+  mkdirSync(childDir, { recursive: true });
+  spawnSync('git', ['init', childDir], { encoding: 'utf8' });
+  mkdirSync(join(umbrella, 'scripts'), { recursive: true });
+  writeFileSync(join(umbrella, 'scripts', 'graph-refresh.sh'), '#!/usr/bin/env bash\necho wrapper\n');
+
+  try {
+    const r = runGraphHooksInstall([childDir, '--force'], { home: '/nonexistent-no-home' });
+    assert.equal(r.status, 0, `expected exit 0 with --force\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.ok(existsSync(join(childDir, '.git', 'hooks', 'post-commit')), 'post-commit must be written with --force');
+    assert.ok(existsSync(join(childDir, 'scripts', 'graph-refresh.sh')), 'wrapper must be written with --force');
+  } finally {
+    rmSync(umbrella, { recursive: true, force: true });
+  }
+});
+
+test('graph-hooks install: unaffected when no ancestor has a wrapper', () => {
+  // Repo with no ancestors containing a wrapper — plain standalone repo
+  const target = makeGitRepo('ai-catapult-gh-standalone-');
+  try {
+    const r = runGraphHooksInstall([target], { home: '/nonexistent-no-home' });
+    assert.equal(r.status, 0, `expected exit 0 with no ancestor wrapper\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.ok(existsSync(join(target, '.git', 'hooks', 'post-commit')), 'post-commit must be written');
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// (n) --engine allow-list validation
+// ---------------------------------------------------------------------------
+
+test('graph-hooks install --engine invalid: exits 1 with clean error', () => {
+  const target = makeGitRepo('ai-catapult-gh-engine-invalid-');
+  try {
+    const r = runGraphHooksInstall([target, '--engine', 'badengine']);
+    assert.equal(r.status, 1, `expected exit 1 for invalid engine\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(
+      r.stderr,
+      /invalid.*engine|engine.*invalid|must be one of/i,
+      `stderr must mention invalid engine\nstderr: ${r.stderr}`,
+    );
+    assert.match(r.stderr, /graphify/, `stderr must list valid engines\nstderr: ${r.stderr}`);
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+test('graph-hooks install --engine (bare flag): exits 1 with clean error', () => {
+  // Bare --engine without a value causes the parser to set engine=true (boolean),
+  // which must be caught as invalid rather than crashing with a JSON.parse stack trace.
+  const target = makeGitRepo('ai-catapult-gh-engine-bare-');
+  try {
+    const r = runGraphHooksInstall([target, '--engine']);
+    assert.equal(r.status, 1, `expected exit 1 for bare --engine\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.match(
+      r.stderr,
+      /invalid.*engine|engine.*invalid|must be one of/i,
+      `stderr must mention invalid engine\nstderr: ${r.stderr}`,
+    );
   } finally {
     rmSync(target, { recursive: true, force: true });
   }
