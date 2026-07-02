@@ -31,7 +31,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          # NOTE: no registry-url here. setup-node's registry-url writes an
+          # .npmrc _authToken=${NODE_AUTH_TOKEN} line with a placeholder value,
+          # which can shadow the OIDC trusted-publishing exchange. Trusted
+          # publishing needs no registry auth config at all.
 
       - name: Upgrade npm for trusted publishing (requires >= 11.5.1)
         run: |
