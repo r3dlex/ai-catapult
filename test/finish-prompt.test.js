@@ -16,11 +16,12 @@ import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { resolveVendorSkill } from '../src/skill-resolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const bin = join(root, 'bin/ai-catapult.js');
-const manifestPath = join(root, 'vendor/skills/ai-catapult-init/templates/boundary-manifest.json');
+const manifestPath = join(resolveVendorSkill(join(root, 'vendor/skills')), 'templates/boundary-manifest.json');
 
 // Fixed canonical inputs — same as init.test.js
 const FIXED_ARGS = [

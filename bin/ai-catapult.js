@@ -5,20 +5,28 @@ import { dirname, join, resolve, basename } from 'node:path';
 import { scaffold } from '../src/scaffold.js';
 import { runInstall } from '../src/install.js';
 import { runGraphHooks } from '../src/graph-hooks.js';
+import { resolveVendorSkill } from '../src/skill-resolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
 
 // Resolve the templates directory.
-//   1. vendor/skills/ai-catapult-init/templates/ — present in dev checkouts (after setup.sh)
+//   1. catalog-resolved vendored skill templates — present in dev checkouts (after setup.sh)
 //   2. dist/skill-templates/                      — staged by prepack; ships in the npm tarball
 // vendor/ is intentionally excluded from the published package so only (2) is available
 // when the CLI is installed via npx or npm install.
-const _TEMPLATES_DIR = join(__dirname, '..', 'vendor/skills/ai-catapult-init/templates');
+const _VENDOR_SKILLS = process.env.AI_CATAPULT_VENDOR_SKILLS || join(__dirname, '..', 'vendor/skills');
 const _DIST_TEMPLATES   = join(__dirname, '..', 'dist/skill-templates');
 
 function resolveTemplatesDir() {
-  if (existsSync(_TEMPLATES_DIR)) return _TEMPLATES_DIR;
+  if (existsSync(_VENDOR_SKILLS)) {
+    try {
+      return join(resolveVendorSkill(_VENDOR_SKILLS), 'templates');
+    } catch (error) {
+      process.stderr.write(`Error: ${error.message}\n`);
+      process.exit(1);
+    }
+  }
   if (existsSync(_DIST_TEMPLATES))   return _DIST_TEMPLATES;
   process.stderr.write(
     'Error: template directory not found.\n' +

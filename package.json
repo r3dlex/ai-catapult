@@ -14,6 +14,7 @@
     "scripts/build-codex-plugin.sh",
     "scripts/snapshot-dist.sh",
     "scripts/stage-skill-templates.sh",
+    "scripts/resolve-vendor-skill.js",
     "setup.sh",
     "skills.lock.json",
     "README.md",

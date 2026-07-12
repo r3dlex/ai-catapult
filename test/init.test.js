@@ -19,12 +19,13 @@ import { mkdirSync, rmSync, readFileSync, writeFileSync, existsSync, readdirSync
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
+import { resolveVendorSkill } from '../src/skill-resolver.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 const bin = join(root, 'bin/ai-catapult.js');
 const fixtureDir = join(__dirname, 'fixtures/init-standalone');
-const vendorTemplatesDir = join(root, 'vendor/skills/ai-catapult-init/templates');
+const vendorTemplatesDir = join(resolveVendorSkill(join(root, 'vendor/skills')), 'templates');
 
 // Fixed canonical inputs — must match regen-fixture.sh
 const FIXED_ARGS = [
