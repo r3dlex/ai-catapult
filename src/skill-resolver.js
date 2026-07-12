@@ -72,21 +72,21 @@ export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-ini
   if (!existsSync(vendorSkillsDir)) fail(`directory not found: ${vendorSkillsDir}`);
 
   const catalogPath = join(vendorSkillsDir, 'catalog.json');
-  let sourcePath = skillName;
-  if (existsSync(catalogPath)) {
-    let catalog;
-    try {
-      catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
-    } catch (error) {
-      fail(`catalog.json is malformed: ${error.message}`);
-    }
-    if (!Array.isArray(catalog.skills)) fail('catalog.json skills must be an array');
-    const matches = catalog.skills.filter((entry) => entry?.name === skillName);
-    if (matches.length !== 1) {
-      fail(`catalog.json must contain exactly one canonical ${skillName} entry (found ${matches.length})`);
-    }
-    sourcePath = safeRelativePath(matches[0].source_path, `${skillName} source_path`);
+  if (!existsSync(catalogPath)) {
+    fail(`catalog.json is missing from ${vendorSkillsDir}; refresh the vendored skills checkout from skills.lock.json`);
   }
+  let catalog;
+  try {
+    catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+  } catch (error) {
+    fail(`catalog.json is malformed: ${error.message}`);
+  }
+  if (!Array.isArray(catalog.skills)) fail('catalog.json skills must be an array');
+  const matches = catalog.skills.filter((entry) => entry?.name === skillName);
+  if (matches.length !== 1) {
+    fail(`catalog.json must contain exactly one canonical ${skillName} entry (found ${matches.length})`);
+  }
+  const sourcePath = safeRelativePath(matches[0].source_path, `${skillName} source_path`);
 
   const skillDir = join(vendorSkillsDir, sourcePath);
   const skillMd = join(skillDir, 'SKILL.md');
