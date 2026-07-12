@@ -14,6 +14,7 @@
     "scripts/build-codex-plugin.sh",
     "scripts/snapshot-dist.sh",
     "scripts/stage-skill-templates.sh",
+    "scripts/stage-matrix-runtime.sh",
     "scripts/resolve-vendor-skill.js",
     "setup.sh",
     "skills.lock.json",
@@ -21,8 +22,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh",
-    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/snapshot-dist.sh",
+    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-matrix-runtime.sh",
+    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/snapshot-dist.sh",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
     "regen:fixture": "bash scripts/regen-fixture.sh",
     "build:plugin:codex": "bash scripts/build-codex-plugin.sh",

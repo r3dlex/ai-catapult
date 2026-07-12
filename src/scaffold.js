@@ -48,6 +48,10 @@ function templatePathToRealPath(templatePath) {
   return templatePath;
 }
 
+function manifestPathToRealPath(manifestPath) {
+  return manifestPath;
+}
+
 /**
  * Substitute all {{TOKEN}} placeholders in content.
  * @param {string} content - raw template content
@@ -159,7 +163,7 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
     }
 
     const templateRelPath = entry.template; // e.g. "dot-ai/matrix.json"
-    const realRelPath = templatePathToRealPath(templateRelPath); // e.g. ".ai/matrix.json"
+    const realRelPath = manifestPathToRealPath(entry.path); // manifest destination is authoritative
 
     const srcPath = join(templatesDir, templateRelPath);
     const destPath = join(targetDir, realRelPath);
@@ -190,7 +194,7 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
     }
 
     const templateRelPath = entry.template;
-    const realRelPath = templatePathToRealPath(templateRelPath);
+    const realRelPath = manifestPathToRealPath(entry.path);
 
     const srcPath = join(templatesDir, templateRelPath);
     const destPath = join(targetDir, realRelPath);

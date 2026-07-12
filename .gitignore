@@ -3,3 +3,6 @@ vendor/
 dist/
 dist-snapshot/
 .tmp-init*/
+
+# Moon local runtime cache
+.moon/cache/
