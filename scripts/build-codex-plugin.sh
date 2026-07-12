@@ -19,8 +19,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VENDOR_ROOT="${VENDOR_ROOT:-${REPO_ROOT}/vendor}"
 VENDOR_SKILLS="${VENDOR_ROOT}/skills"
 SKILL_NAME="ai-catapult-init"
-SKILL_SRC="${VENDOR_SKILLS}/${SKILL_NAME}"
-DIST_DIR="${REPO_ROOT}/dist/codex-plugin"
+RESOLVER="${REPO_ROOT}/scripts/resolve-vendor-skill.js"
+DIST_ROOT="${DIST_ROOT:-${REPO_ROOT}/dist}"
+DIST_DIR="${DIST_ROOT}/codex-plugin"
 PLUGIN_JSON_DIR="${DIST_DIR}/.codex-plugin"
 SKILLS_DEST="${DIST_DIR}/skills"
 
@@ -31,11 +32,7 @@ if [[ ! -d "${VENDOR_SKILLS}" ]]; then
   exit 1
 fi
 
-if [[ ! -f "${SKILL_SRC}/SKILL.md" ]]; then
-  echo "ERROR: ${SKILL_SRC}/SKILL.md not found — vendor may be incomplete" >&2
-  echo "       Run setup.sh to re-vendor skills." >&2
-  exit 1
-fi
+SKILL_SRC="$(node "${RESOLVER}" "${VENDOR_SKILLS}" "${SKILL_NAME}")"
 
 # --- Read version from package.json (node already required by project) ---
 VERSION="$(PKG="${REPO_ROOT}/package.json" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.PKG,'utf8')).version)")"

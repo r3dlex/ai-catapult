@@ -3,7 +3,7 @@
  *
  * Wires git hooks (post-commit, post-checkout) and copies the graph-refresh
  * wrapper script into a target repo. Reads templates from the vendored
- * graph-automation/ directory (vendor/skills/ai-catapult-init/templates/
+ * graph-automation/ directory (catalog-resolved vendored templates/
  * graph-automation/ in dev; dist/skill-templates/graph-automation/ in the
  * published tarball).
  *

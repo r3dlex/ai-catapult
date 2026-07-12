@@ -7,7 +7,7 @@
 #       plugin.json        (manifest: name, version, description, author, skills)
 #       marketplace.json   (marketplace entry with $schema)
 #     skills/
-#       ai-catapult-init/  (copy of vendor/skills/ai-catapult-init/)
+#       ai-catapult-init/  (flat copy of the catalog-resolved vendored skill)
 #
 # .claude-plugin/ holds ONLY manifests. All skill paths in plugin.json are
 # relative to the plugin root (dist/claude-plugin/), NOT to .claude-plugin/.
@@ -28,23 +28,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 PACKAGE_JSON="${REPO_ROOT}/package.json"
-VENDOR_SKILL="${REPO_ROOT}/vendor/skills/ai-catapult-init"
-DIST_DIR="${REPO_ROOT}/dist/claude-plugin"
+VENDOR_ROOT="${VENDOR_ROOT:-${REPO_ROOT}/vendor}"
+VENDOR_SKILLS="${VENDOR_ROOT}/skills"
+RESOLVER="${REPO_ROOT}/scripts/resolve-vendor-skill.js"
+DIST_ROOT="${DIST_ROOT:-${REPO_ROOT}/dist}"
+DIST_DIR="${DIST_ROOT}/claude-plugin"
 PLUGIN_DIR="${DIST_DIR}/.claude-plugin"
 SKILLS_OUT="${DIST_DIR}/skills"
 
 # --- Fail closed if vendor/ is missing ---
-if [[ ! -d "${VENDOR_SKILL}" ]]; then
-  echo "ERROR: vendor/skills/ai-catapult-init not found at ${VENDOR_SKILL}" >&2
+if [[ ! -d "${VENDOR_SKILLS}" ]]; then
+  echo "ERROR: vendor/skills not found at ${VENDOR_SKILLS}" >&2
   echo "       Run bash setup.sh to populate vendor/ first." >&2
   exit 1
 fi
 
-if [[ ! -f "${VENDOR_SKILL}/SKILL.md" ]]; then
-  echo "ERROR: vendor/skills/ai-catapult-init/SKILL.md missing — vendor may be corrupt" >&2
-  echo "       Run bash setup.sh to re-vendor." >&2
-  exit 1
-fi
+VENDOR_SKILL="$(node "${RESOLVER}" "${VENDOR_SKILLS}" ai-catapult-init)"
 
 # --- Read version from package.json (node already required by project) ---
 VERSION="$(PACKAGE_JSON="${PACKAGE_JSON}" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.PACKAGE_JSON,'utf8')).version)")"
