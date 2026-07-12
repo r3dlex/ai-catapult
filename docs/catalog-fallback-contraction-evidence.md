@@ -14,8 +14,11 @@ The legacy `vendor/skills/ai-catapult-init` fallback can be removed because:
   passed 142 tests, and passed the real-install smoke test. Those steps exercise
   catalog resolution from `03-configure-generate/ai-catapult-init` while retaining
   flat packaged plugin paths.
-- `main` is the repository's only branch and therefore its only supported release
-  branch; no supported lock requires the legacy root layout.
+- `main` is the only supported release branch: the repository has no
+  `release/*` branches, the `v0.1.3` release targets the default branch, and
+  `.github/workflows/release.yml` publishes only version-tagged commits. Feature
+  and pull-request branches are not supported release branches. Therefore no
+  supported release-branch lock requires the legacy root layout.
 - The unscoped `ai-catapult@0.1.3` package was published successfully.
 
 The release workflow's overall conclusion is **failure**, not success: publishing
