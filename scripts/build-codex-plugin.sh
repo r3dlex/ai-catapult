@@ -65,6 +65,11 @@ PLUGIN_JSON
 
 # --- Copy vendored skill ---
 cp -r "${SKILL_SRC}" "${SKILLS_DEST}/${SKILL_NAME}"
+if [[ -f "${VENDOR_SKILLS}/scripts/matrix-contract.py" ]]; then
+  mkdir -p "${DIST_DIR}/scripts"
+  cp "${VENDOR_SKILLS}/scripts/matrix-contract.py" "${DIST_DIR}/scripts/matrix-contract.py"
+  chmod 755 "${DIST_DIR}/scripts/matrix-contract.py"
+fi
 
 # --- Validate output ---
 if [[ ! -f "${PLUGIN_JSON_DIR}/plugin.json" ]]; then

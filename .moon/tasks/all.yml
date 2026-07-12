@@ -1,0 +1,22 @@
+$schema: 'https://moonrepo.dev/schemas/tasks.json'
+tasks:
+  verify-vendor:
+    command: 'bash scripts/verify-vendor.sh'
+    inputs: ['skills.lock.json', 'scripts/verify-vendor.sh']
+  prepare-dist:
+    command: 'bash scripts/prepare-dist.sh'
+    inputs: ['scripts/**/*', 'src/**/*', 'package.json', 'skills.lock.json']
+    outputs: ['dist-snapshot']
+  test-matrix-distribution:
+    command: 'node --test test/dpua-distribution.test.js'
+    deps: ['ai-catapult:prepare-dist']
+    inputs: ['src/matrix-runtime.js', 'bin/ai-catapult.js', 'scripts/stage-matrix-runtime.sh', 'test/dpua-distribution.test.js', 'skills.lock.json']
+  test:
+    command: 'AI_CATAPULT_DIST_ROOT=dist-snapshot node --test'
+    deps: ['ai-catapult:prepare-dist']
+    inputs: ['bin/**/*', 'src/**/*', 'scripts/**/*', 'test/**/*', 'package.json', 'skills.lock.json']
+  lint-matrix-runtime:
+    command: 'python -m py_compile vendor/skills/scripts/matrix-contract.py'
+    inputs: ['vendor/skills/scripts/matrix-contract.py']
+  ci:
+    deps: ['ai-catapult:verify-vendor', 'ai-catapult:test-matrix-distribution', 'ai-catapult:test', 'ai-catapult:lint-matrix-runtime']

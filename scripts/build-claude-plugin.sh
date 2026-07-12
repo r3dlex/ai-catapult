@@ -63,6 +63,11 @@ mkdir -p "${SKILLS_OUT}"
 # --- Copy vendored skill (deterministic: rsync excludes .git, HEAD_SHA sentinel) ---
 # Use cp -R and then strip the git artefacts that setup.sh left.
 cp -R "${VENDOR_SKILL}" "${SKILLS_OUT}/ai-catapult-init"
+if [[ -f "${VENDOR_SKILLS}/scripts/matrix-contract.py" ]]; then
+  mkdir -p "${DIST_DIR}/scripts"
+  cp "${VENDOR_SKILLS}/scripts/matrix-contract.py" "${DIST_DIR}/scripts/matrix-contract.py"
+  chmod 755 "${DIST_DIR}/scripts/matrix-contract.py"
+fi
 
 # Remove the git directory and HEAD_SHA sentinel — they are setup.sh artefacts,
 # not part of the published skill payload. Do not fail if absent.

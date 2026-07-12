@@ -6,6 +6,7 @@ import { scaffold } from '../src/scaffold.js';
 import { runInstall } from '../src/install.js';
 import { runGraphHooks } from '../src/graph-hooks.js';
 import { resolveVendorSkill } from '../src/skill-resolver.js';
+import { runMatrixRuntime } from '../src/matrix-runtime.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -42,6 +43,7 @@ const HELP = `Usage: ai-catapult <command> [options]
 
 Commands:
   init [target]                Scaffold v3 .ai/ governance skeleton into <target> (default: cwd)
+  matrix <validate|project>    Run the pinned matrix v1.0/v1.1 contract runtime
   install                      Install Claude Code and Codex plugins into detected harnesses
   graph-hooks install <target> Wire graph-automation git hooks and wrapper into a target git repo
 
@@ -257,6 +259,10 @@ if (verb === 'install') {
 if (verb === 'graph-hooks') {
   runGraphHooks(rawArgv.slice(firstPositionalIdx + 1), TEMPLATES_DIR);
   process.exit(0);
+}
+
+if (verb === 'matrix') {
+  process.exit(runMatrixRuntime(rawArgv.slice(firstPositionalIdx + 1)));
 }
 
 process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);

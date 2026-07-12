@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "execution-profile.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_type", "profile_id", "version", "settings"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "profile_type": {"enum": ["checkout", "execution", "toolchain", "cas"]},
+    "profile_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
+    "settings": {"type": "object"}
+  },
+  "allOf": [
+    {"if": {"properties": {"profile_type": {"const": "checkout"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["history", "disposable"], "properties": {"history": {"enum": ["full", "shallow"]}, "disposable": {"type": "boolean"}}}}}},
+    {"if": {"properties": {"profile_type": {"const": "execution"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["runner_preference", "host_selection", "hosted_fallback"], "properties": {"runner_preference": {"enum": ["self-hosted", "hosted"]}, "host_selection": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["github", "ado", "gitlab"]}}, "hosted_fallback": {"type": "boolean"}}}}}},
+    {"if": {"properties": {"profile_type": {"const": "toolchain"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["tier"], "properties": {"tier": {"enum": ["managed", "system", "unsupported"]}}}}}},
+    {"if": {"properties": {"profile_type": {"const": "cas"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["mode"], "properties": {"mode": {"enum": ["disabled", "pull-only", "protected-write"]}}}}}}
+  ]
+}

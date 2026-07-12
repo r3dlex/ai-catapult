@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "matrix-v1.1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_id",
+    "topology_type",
+    "max_allowed_depth",
+    "current_depth",
+    "sync_strategy",
+    "upstream_authority",
+    "managed_repositories",
+    "inherited_assets",
+    "sync_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.1"
+    },
+    "repository_id": {
+      "$ref": "#/$defs/id"
+    },
+    "topology_type": {
+      "enum": [
+        "standalone",
+        "umbrella"
+      ]
+    },
+    "max_allowed_depth": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "current_depth": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "sync_strategy": {
+      "const": "physical-copy"
+    },
+    "upstream_authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "url",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "const": "git"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^(?:https://(?:github\\.com|gitlab\\.com)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?|git@(?:github\\.com|gitlab\\.com):[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\\.git|https://dev\\.azure\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/_git/[A-Za-z0-9_.-]+)$"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        }
+      }
+    },
+    "managed_repositories": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/binding"
+      }
+    },
+    "inherited_assets": {
+      "type": "array"
+    },
+    "sync_status": {
+      "type": "object"
+    },
+    "memory": {},
+    "migration": {
+      "type": "object"
+    },
+    "exclusions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))[^/]+(?:/[^/]+)*$"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+    },
+    "profileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id",
+        "version"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "checkout",
+            "execution",
+            "toolchain",
+            "cas"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+$"
+        }
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo_id",
+        "path",
+        "depth",
+        "inherits_assets_from",
+        "canonical_origin",
+        "canonical_upstream",
+        "default_ref",
+        "disposable",
+        "moon_project_id",
+        "dependencies",
+        "profile_refs"
+      ],
+      "properties": {
+        "repo_id": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))[^/]+(?:/[^/]+)*$"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "inherits_assets_from": {
+          "type": "string",
+          "pattern": "^(?:\\.|(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*(?:^|/)\\.(?:/|$))[^/]+(?:/[^/]+)*)$"
+        },
+        "canonical_origin": {
+          "type": "string",
+          "pattern": "^(?:https://(?:github\\.com|gitlab\\.com)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?|git@(?:github\\.com|gitlab\\.com):[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\\.git|https://dev\\.azure\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/_git/[A-Za-z0-9_.-]+)$"
+        },
+        "canonical_upstream": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^(?:https://(?:github\\.com|gitlab\\.com)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\\.git)?|git@(?:github\\.com|gitlab\\.com):[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\\.git|https://dev\\.azure\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/_git/[A-Za-z0-9_.-]+)$"
+            }
+          ]
+        },
+        "default_ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "disposable": {
+          "type": "boolean"
+        },
+        "moon_project_id": {
+          "$ref": "#/$defs/id"
+        },
+        "dependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "profile_refs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "checkout",
+            "execution",
+            "toolchain",
+            "cas"
+          ],
+          "properties": {
+            "checkout": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/profileRef"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "const": "checkout"
+                    }
+                  }
+                }
+              ]
+            },
+            "execution": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/profileRef"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "const": "execution"
+                    }
+                  }
+                }
+              ]
+            },
+            "toolchain": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/profileRef"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "const": "toolchain"
+                    }
+                  }
+                }
+              ]
+            },
+            "cas": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/profileRef"
+                },
+                {
+                  "properties": {
+                    "type": {
+                      "const": "cas"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "topology_type": {
+            "const": "standalone"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "max_allowed_depth": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "topology_type": {
+            "const": "umbrella"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "max_allowed_depth": {
+            "const": 3
+          }
+        }
+      }
+    }
+  ]
+}

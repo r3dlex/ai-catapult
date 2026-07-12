@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "child-binding.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "projection_type", "parent_repo_id", "binding", "profile_versions", "inheritance_digest", "local_overrides"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "projection_type": {"const": "parent-binding"},
+    "parent_repo_id": {"$ref": "#/$defs/id"},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo_id", "parent_path", "canonical_origin", "canonical_upstream", "default_ref", "disposable", "moon_project_id", "dependencies", "profile_refs"],
+      "properties": {
+        "repo_id": {"$ref": "#/$defs/id"}, "parent_path": {"type": "string", "minLength": 1},
+        "canonical_origin": {"type": "string", "minLength": 1}, "canonical_upstream": {"type": ["string", "null"]},
+        "default_ref": {"type": "string", "minLength": 1}, "disposable": {"type": "boolean"},
+        "moon_project_id": {"$ref": "#/$defs/id"}, "dependencies": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "profile_refs": {"type": "object", "additionalProperties": false, "required": ["checkout", "execution", "toolchain", "cas"], "properties": {"checkout": {"$ref": "#/$defs/profileRef"}, "execution": {"$ref": "#/$defs/profileRef"}, "toolchain": {"$ref": "#/$defs/profileRef"}, "cas": {"$ref": "#/$defs/profileRef"}}}
+      }
+    },
+    "profile_versions": {"type": "object", "additionalProperties": false, "required": ["checkout", "execution", "toolchain", "cas"], "properties": {"checkout": {"$ref": "#/$defs/version"}, "execution": {"$ref": "#/$defs/version"}, "toolchain": {"$ref": "#/$defs/version"}, "cas": {"$ref": "#/$defs/version"}}},
+    "inheritance_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "local_overrides": {"type": "object", "additionalProperties": false, "properties": {"runner_preference": {"enum": ["self-hosted", "hosted"]}, "host_selection": {"type": "array", "uniqueItems": true, "items": {"enum": ["github", "ado", "gitlab"]}}, "toolchain_tier": {"enum": ["managed", "system", "unsupported"]}}}
+  },
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
+    "profileRef": {"type": "object", "additionalProperties": false, "required": ["type", "id", "version"], "properties": {"type": {"enum": ["checkout", "execution", "toolchain", "cas"]}, "id": {"$ref": "#/$defs/id"}, "version": {"$ref": "#/$defs/version"}}}
+  }
+}

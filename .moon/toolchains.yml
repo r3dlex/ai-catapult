@@ -1,0 +1,3 @@
+$schema: 'https://moonrepo.dev/schemas/toolchain.json'
+proto:
+  version: '0.58.2'
