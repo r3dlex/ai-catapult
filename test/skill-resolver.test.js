@@ -35,10 +35,13 @@ test('resolver uses the future workflow-stage source_path', () => {
   } finally { cleanup(vendorSkills); }
 });
 
-test('resolver falls back to the legacy path only when catalog.json is absent', () => {
+test('resolver fails actionably when catalog.json is absent, even if the legacy path exists', () => {
   const vendorSkills = fixture({ catalog: false, sourcePath: 'ai-catapult-init' });
   try {
-    assert.equal(resolveVendorSkill(vendorSkills), realpathSync(join(vendorSkills, 'ai-catapult-init')));
+    assert.throws(
+      () => resolveVendorSkill(vendorSkills),
+      /catalog\.json is missing.*refresh the vendored skills checkout from skills\.lock\.json/,
+    );
   } finally { cleanup(vendorSkills); }
 });
 
