@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '619916ca7bd108047b94f95b3fceca30954cb06f';
+const sha = '0e0e123864b54b74ef86a189ebcccac42172b786';
 const vendor = join(root, 'vendor/skills');
 const canonicalRuntime = join(vendor, 'scripts/render-ci-adapters.py');
 const canonicalTemplates = join(vendor, '03-configure-generate/ai-catapult-init/templates/ci');
@@ -28,7 +28,7 @@ function initializeWorkspace(target) {
   writeFileSync(join(target, '.ai/matrix.json'), '{}\n');
 }
 
-test('distribution consumes the exact merged Skills Goal 7 SHA', () => {
+test('distribution consumes the exact Skills PR #45 head containing Goal 7', () => {
   assert.equal(JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha, sha);
   assert.equal(readFileSync(join(vendor, 'HEAD_SHA'), 'utf8').trim(), sha);
 });

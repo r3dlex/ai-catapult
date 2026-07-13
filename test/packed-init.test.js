@@ -226,6 +226,28 @@ test('packed-init: AGENTS.md exists after init', () => {
   }
 });
 
+test('packed-init: canonical README.md exists with observable generated-state verification', () => {
+  const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-readme-'));
+
+  try {
+    const r = runExtractedInit([
+      targetDir,
+      '--repo-id', 'packed-test-repo',
+      '--date', '2026-01-01',
+    ]);
+
+    assert.equal(r.status, 0, `init failed\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+
+    const readmePath = join(targetDir, 'README.md');
+    assert.ok(existsSync(readmePath), 'README.md must exist after packed init');
+    const readme = readFileSync(readmePath, 'utf8');
+    assert.match(readme, /test -f \.ai\/matrix\.json && test -f \.ai\/handoff\/NEXT-STEPS\.md/);
+    assert.match(readme, /\.ai\/matrix\.json` identifies `packed-test-repo`/);
+  } finally {
+    rmSync(targetDir, { recursive: true, force: true });
+  }
+});
+
 test('packed-init: .ai/handoff/NEXT-STEPS.md exists after init', () => {
   const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-nextsteps-'));
 
