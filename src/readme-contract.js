@@ -60,7 +60,15 @@ export function generateScaffoldReadme({ contract, targetDir, repoId, force, sou
 
   if (force && sourceSha) args.push('--force', '--source-sha', sourceSha);
 
-  const result = spawnSync('bash', args, { cwd: targetDir, encoding: 'utf8' });
+  // Bash 5 treats `&` specially in ${value//pattern/replacement} unless this
+  // option is disabled. The canonical generator uses that substitution and
+  // first-success commands commonly contain `&&`. Bash 3 does not expose the
+  // option, so ignore the expected unknown-option result there.
+  const driver = 'shopt -u patsub_replacement 2>/dev/null || true; source "$@"';
+  const result = spawnSync('bash', ['-c', driver, 'ai-catapult-readme', ...args], {
+    cwd: targetDir,
+    encoding: 'utf8',
+  });
   if (result.status !== 0) {
     throw new Error(
       `canonical README generator failed (exit ${result.status})\n${result.stderr || result.stdout}`,
