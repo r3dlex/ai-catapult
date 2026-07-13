@@ -1,0 +1,49 @@
+name: DPUA validation selector
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  actions: read
+  contents: read
+jobs:
+  select:
+    runs-on: @@HOSTED_IMAGE@@
+    outputs:
+      executor: ${{ steps.selector.outputs.executor }}
+      runs_on: ${{ steps.selector.outputs.runs_on }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0
+        with:
+          auto-install: true
+      - id: selector
+        run: >-
+          python3 tools/ci-engine/provider_selector.py resolve
+          --provider github --profile .ai/execution/profiles/execution/default.json
+          --task-class validation --preference @@RUNNER_PREFERENCE@@
+  primary:
+    needs: select
+    runs-on: ${{ fromJSON(needs.select.outputs.runs_on) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0
+        with:
+          auto-install: true
+      - run: python3 tools/ci-engine/provider_selector.py execute --provider github --attempt 0 -- moon ci
+  retry:
+    needs: [select, primary]
+    if: failure()
+    runs-on: ${{ fromJSON(needs.select.outputs.runs_on) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0
+        with:
+          auto-install: true
+      - run: python3 tools/ci-engine/provider_selector.py retry-transient --provider github --max-retries 1 -- moon ci

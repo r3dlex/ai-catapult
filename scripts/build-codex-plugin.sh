@@ -70,6 +70,13 @@ if [[ -f "${VENDOR_SKILLS}/scripts/matrix-contract.py" ]]; then
   cp "${VENDOR_SKILLS}/scripts/matrix-contract.py" "${DIST_DIR}/scripts/matrix-contract.py"
   chmod 755 "${DIST_DIR}/scripts/matrix-contract.py"
 fi
+if [[ -f "${VENDOR_SKILLS}/scripts/render-ci-adapters.py" ]]; then
+  mkdir -p "${DIST_DIR}/scripts" "${DIST_DIR}/03-configure-generate/ai-catapult-init/templates"
+  cp "${VENDOR_SKILLS}/scripts/render-ci-adapters.py" "${DIST_DIR}/scripts/render-ci-adapters.py"
+  cp -R "${VENDOR_SKILLS}/03-configure-generate/ai-catapult-init/templates/ci" \
+    "${DIST_DIR}/03-configure-generate/ai-catapult-init/templates/ci"
+  chmod 755 "${DIST_DIR}/scripts/render-ci-adapters.py"
+fi
 
 # --- Validate output ---
 if [[ ! -f "${PLUGIN_JSON_DIR}/plugin.json" ]]; then

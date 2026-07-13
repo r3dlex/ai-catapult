@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "profile_type": "execution",
+  "profile_id": "default",
+  "version": "1.4",
+  "settings": {
+    "runner_preference": "self-hosted",
+    "host_selection": [
+      "github"
+    ],
+    "hosted_fallback": true,
+    "github": {
+      "self_hosted_labels": [
+        "self-hosted",
+        "Linux",
+        "x64"
+      ],
+      "hosted_image": "ubuntu-24.04",
+      "fallback_eligible_tasks": [
+        "validation",
+        "test"
+      ],
+      "fallback_excluded_tasks": [
+        "release",
+        "publish",
+        "deployment",
+        "cas-write"
+      ],
+      "runner_scope": "repository",
+      "required_read_permission": "administration:read",
+      "minimum_healthy_runners": 1,
+      "queue_age_threshold_seconds": 300,
+      "max_redispatch_count": 0,
+      "adapter_status": "experimental"
+    },
+    "ado": {
+      "self_hosted_pool": "dpua-self-hosted",
+      "self_hosted_demands": [
+        "Agent.OS -equals Linux",
+        "dpua-validation -equals true"
+      ],
+      "hosted_vm_image": "ubuntu-24.04",
+      "fallback_eligible_tasks": [
+        "validation",
+        "test"
+      ],
+      "fallback_excluded_tasks": [
+        "release",
+        "publish",
+        "deployment",
+        "cas-write"
+      ],
+      "required_read_permission": "agent-pools:read",
+      "minimum_healthy_agents": 1,
+      "queue_age_threshold_seconds": 300,
+      "max_redispatch_count": 0,
+      "adapter_status": "experimental"
+    },
+    "gitlab": {
+      "self_hosted_tags": [
+        "self-hosted",
+        "linux",
+        "dpua-validation"
+      ],
+      "hosted_tags": [
+        "saas-linux-small-amd64"
+      ],
+      "child_pipeline_file": ".gitlab/dpua-child.yml",
+      "fallback_eligible_tasks": [
+        "validation",
+        "test"
+      ],
+      "fallback_excluded_tasks": [
+        "release",
+        "publish",
+        "deployment",
+        "cas-write"
+      ],
+      "required_read_permission": "read_api",
+      "minimum_healthy_runners": 1,
+      "queue_age_threshold_seconds": 300,
+      "max_redispatch_count": 0,
+      "adapter_status": "experimental"
+    },
+    "transient_retry": {
+      "max_retries": 1,
+      "classes": [
+        "provider-timed-out",
+        "executor-incomplete-after-heartbeat"
+      ]
+    }
+  }
+}

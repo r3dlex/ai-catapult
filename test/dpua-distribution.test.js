@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = 'a6d9b1315e50c1465987b36afd37240b66413aa4';
+const sha = '619916ca7bd108047b94f95b3fceca30954cb06f';
 const run = (command, args, options = {}) => spawnSync(command, args, { cwd: root, encoding: 'utf8', ...options });
 
-test('distribution is pinned to exact merged Skills Goal 1 SHA', () => {
+test('matrix distribution remains pinned through the exact merged Skills Goal 7 SHA', () => {
   assert.equal(JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha, sha);
   assert.equal(readFileSync(join(root, 'vendor/skills/HEAD_SHA'), 'utf8').trim(), sha);
 });

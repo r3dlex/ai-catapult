@@ -6,4 +6,5 @@ bash scripts/build-claude-plugin.sh
 bash scripts/build-codex-plugin.sh
 bash scripts/stage-skill-templates.sh
 bash scripts/stage-matrix-runtime.sh
+bash scripts/stage-ci-adapters-runtime.sh
 bash scripts/snapshot-dist.sh

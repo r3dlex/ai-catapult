@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
   "ref": "main",
-  "sha": "a6d9b1315e50c1465987b36afd37240b66413aa4",
-  "_note": "Pin to the exact merged Skills DPUA Goal 1 commit: matrix v1.1 dual-reader, child-safe projections, and Moon self-adoption."
+  "sha": "619916ca7bd108047b94f95b3fceca30954cb06f",
+  "_note": "Pin to the exact merged Skills DPUA Goal 7 commit: provider-neutral GitHub, ADO, and GitLab CI adapters with transactional recovery."
 }
