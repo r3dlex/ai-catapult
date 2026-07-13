@@ -11,10 +11,191 @@
     "version": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
     "settings": {"type": "object"}
   },
+  "$defs": {
+    "taskClasses": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {"enum": ["validation", "test"]},
+      "allOf": [
+        {"contains": {"const": "validation"}},
+        {"contains": {"const": "test"}}
+      ]
+    },
+    "protectedClasses": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {"enum": ["release", "publish", "deployment", "cas-write"]},
+      "allOf": [
+        {"contains": {"const": "release"}},
+        {"contains": {"const": "publish"}},
+        {"contains": {"const": "deployment"}},
+        {"contains": {"const": "cas-write"}}
+      ]
+    },
+    "commonAdapter": {
+      "type": "object",
+      "properties": {
+        "fallback_eligible_tasks": {"$ref": "#/$defs/taskClasses"},
+        "fallback_excluded_tasks": {"$ref": "#/$defs/protectedClasses"},
+        "queue_age_threshold_seconds": {"type": "integer", "minimum": 1},
+        "max_redispatch_count": {"const": 0},
+        "adapter_status": {"enum": ["experimental", "blocked", "supported"]}
+      }
+    }
+  },
   "allOf": [
-    {"if": {"properties": {"profile_type": {"const": "checkout"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["history", "disposable"], "properties": {"history": {"enum": ["full", "shallow"]}, "disposable": {"type": "boolean"}}}}}},
-    {"if": {"properties": {"profile_type": {"const": "execution"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["runner_preference", "host_selection", "hosted_fallback"], "properties": {"runner_preference": {"enum": ["self-hosted", "hosted"]}, "host_selection": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["github", "ado", "gitlab"]}}, "hosted_fallback": {"type": "boolean"}}}}}},
-    {"if": {"properties": {"profile_type": {"const": "toolchain"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["tier"], "properties": {"tier": {"enum": ["managed", "system", "unsupported"]}}}}}},
-    {"if": {"properties": {"profile_type": {"const": "cas"}}}, "then": {"properties": {"settings": {"additionalProperties": false, "required": ["mode"], "properties": {"mode": {"enum": ["disabled", "pull-only", "protected-write"]}}}}}}
+    {
+      "if": {"properties": {"profile_type": {"const": "checkout"}}},
+      "then": {
+        "properties": {
+          "settings": {
+            "additionalProperties": false,
+            "required": ["history", "disposable"],
+            "properties": {
+              "history": {"enum": ["full", "shallow"]},
+              "disposable": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"profile_type": {"const": "execution"}}},
+      "then": {
+        "properties": {
+          "settings": {
+            "additionalProperties": false,
+            "required": ["runner_preference", "host_selection", "hosted_fallback"],
+            "properties": {
+              "runner_preference": {"enum": ["self-hosted", "hosted"]},
+              "host_selection": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {"enum": ["github", "ado", "gitlab"]}
+              },
+              "hosted_fallback": {"type": "boolean"},
+              "transient_retry": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["max_retries", "classes"],
+                "properties": {
+                  "max_retries": {"const": 1},
+                  "classes": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "uniqueItems": true,
+                    "items": {"enum": ["provider-timed-out", "executor-incomplete-after-heartbeat"]},
+                    "allOf": [
+                      {"contains": {"const": "provider-timed-out"}},
+                      {"contains": {"const": "executor-incomplete-after-heartbeat"}}
+                    ]
+                  }
+                }
+              },
+              "github": {
+                "allOf": [
+                  {"$ref": "#/$defs/commonAdapter"},
+                  {
+                    "additionalProperties": false,
+                    "required": ["self_hosted_labels", "hosted_image", "fallback_eligible_tasks", "fallback_excluded_tasks", "runner_scope", "required_read_permission", "minimum_healthy_runners", "queue_age_threshold_seconds", "max_redispatch_count", "adapter_status"],
+                    "properties": {
+                      "self_hosted_labels": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+                      "hosted_image": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+                      "fallback_eligible_tasks": {"$ref": "#/$defs/taskClasses"},
+                      "fallback_excluded_tasks": {"$ref": "#/$defs/protectedClasses"},
+                      "runner_scope": {"enum": ["organization", "repository"]},
+                      "required_read_permission": {"enum": ["self-hosted-runners:read", "administration:read"]},
+                      "minimum_healthy_runners": {"type": "integer", "minimum": 1},
+                      "queue_age_threshold_seconds": {"type": "integer", "minimum": 1},
+                      "max_redispatch_count": {"const": 0},
+                      "adapter_status": {"enum": ["experimental", "blocked", "supported"]},
+                      "runner_organization": {"type": ["string", "null"]},
+                      "runner_group_id": {"type": ["integer", "null"], "minimum": 1}
+                    }
+                  }
+                ]
+              },
+              "ado": {
+                "allOf": [
+                  {"$ref": "#/$defs/commonAdapter"},
+                  {
+                    "additionalProperties": false,
+                    "required": ["self_hosted_pool", "self_hosted_demands", "hosted_vm_image", "fallback_eligible_tasks", "fallback_excluded_tasks", "required_read_permission", "minimum_healthy_agents", "queue_age_threshold_seconds", "max_redispatch_count", "adapter_status"],
+                    "properties": {
+                      "self_hosted_pool": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+                      "self_hosted_demands": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63} -(equals|notEquals) [A-Za-z0-9][A-Za-z0-9._-]{0,127}$"}},
+                      "hosted_vm_image": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+                      "fallback_eligible_tasks": {"$ref": "#/$defs/taskClasses"},
+                      "fallback_excluded_tasks": {"$ref": "#/$defs/protectedClasses"},
+                      "required_read_permission": {"const": "agent-pools:read"},
+                      "minimum_healthy_agents": {"type": "integer", "minimum": 1},
+                      "queue_age_threshold_seconds": {"type": "integer", "minimum": 1},
+                      "max_redispatch_count": {"const": 0},
+                      "adapter_status": {"enum": ["experimental", "blocked", "supported"]}
+                    }
+                  }
+                ]
+              },
+              "gitlab": {
+                "allOf": [
+                  {"$ref": "#/$defs/commonAdapter"},
+                  {
+                    "additionalProperties": false,
+                    "required": ["self_hosted_tags", "hosted_tags", "child_pipeline_file", "fallback_eligible_tasks", "fallback_excluded_tasks", "required_read_permission", "minimum_healthy_runners", "queue_age_threshold_seconds", "max_redispatch_count", "adapter_status"],
+                    "properties": {
+                      "self_hosted_tags": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"}},
+                      "hosted_tags": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"}},
+                      "child_pipeline_file": {"const": ".gitlab/dpua-child.yml"},
+                      "fallback_eligible_tasks": {"$ref": "#/$defs/taskClasses"},
+                      "fallback_excluded_tasks": {"$ref": "#/$defs/protectedClasses"},
+                      "required_read_permission": {"const": "read_api"},
+                      "minimum_healthy_runners": {"type": "integer", "minimum": 1},
+                      "queue_age_threshold_seconds": {"type": "integer", "minimum": 1},
+                      "max_redispatch_count": {"const": 0},
+                      "adapter_status": {"enum": ["experimental", "blocked", "supported"]}
+                    }
+                  }
+                ]
+              }
+            },
+            "allOf": [
+              {"if": {"properties": {"host_selection": {"contains": {"const": "github"}}}}, "then": {"required": ["github", "transient_retry"]}},
+              {"if": {"properties": {"host_selection": {"contains": {"const": "ado"}}}}, "then": {"required": ["ado", "transient_retry"]}},
+              {"if": {"properties": {"host_selection": {"contains": {"const": "gitlab"}}}}, "then": {"required": ["gitlab", "transient_retry"]}}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"profile_type": {"const": "toolchain"}}},
+      "then": {
+        "properties": {
+          "settings": {
+            "additionalProperties": false,
+            "required": ["tier"],
+            "properties": {"tier": {"enum": ["managed", "system", "unsupported"]}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"profile_type": {"const": "cas"}}},
+      "then": {
+        "properties": {
+          "settings": {
+            "additionalProperties": false,
+            "required": ["mode"],
+            "properties": {"mode": {"enum": ["disabled", "pull-only", "protected-write"]}}
+          }
+        }
+      }
+    }
   ]
 }

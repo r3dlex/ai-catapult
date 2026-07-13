@@ -1,0 +1,14 @@
+stages: [select]
+
+dpua-selector:
+  stage: select
+  tags: [@@HOSTED_TAGS@@]
+  script:
+    - >-
+      python3 tools/ci-engine/provider_selector.py resolve-and-dispatch
+      --provider gitlab --profile .ai/execution/profiles/execution/default.json
+      --child-pipeline '@@CHILD_PIPELINE@@' --task-class validation
+      --preference '@@RUNNER_PREFERENCE@@'
+  artifacts:
+    when: always
+    paths: [dpua-selector-audit.json]

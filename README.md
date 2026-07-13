@@ -60,6 +60,25 @@ Options:
 
 After install, reload Claude Code and run `/ai-catapult-init` to complete the in-harness judgment-laden phases.
 
+### `ai-catapult ci-adapters`
+
+Render or check the CI providers selected by an execution profile. GitHub, Azure
+DevOps, and GitLab share one policy contract; unselected provider workflows are
+removed only when they are renderer-owned. Lore is reserved and rejected.
+
+```sh
+ai-catapult ci-adapters \
+  --profile .ai/execution/profiles/execution/default.json \
+  --output .
+
+ai-catapult ci-adapters \
+  --profile .ai/execution/profiles/execution/default.json \
+  --output . --check
+```
+
+ADO and GitLab remain `experimental` until their disposable-host smoke and
+audit readback gates are complete.
+
 ## Claude Code plugin
 
 `ai-catapult` ships as a Claude Code plugin bundling the `ai-catapult-init` skill.

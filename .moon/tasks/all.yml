@@ -11,6 +11,10 @@ tasks:
     command: 'node --test test/dpua-distribution.test.js'
     deps: ['ai-catapult:prepare-dist']
     inputs: ['src/matrix-runtime.js', 'bin/ai-catapult.js', 'scripts/stage-matrix-runtime.sh', 'test/dpua-distribution.test.js', 'skills.lock.json']
+  test-ci-adapters-distribution:
+    command: 'node --test test/ci-adapters-distribution.test.js'
+    deps: ['ai-catapult:prepare-dist']
+    inputs: ['src/ci-adapters-runtime.js', 'bin/ai-catapult.js', 'scripts/stage-ci-adapters-runtime.sh', 'test/ci-adapters-distribution.test.js', 'skills.lock.json']
   test:
     command: 'AI_CATAPULT_DIST_ROOT=dist-snapshot node --test'
     deps: ['ai-catapult:prepare-dist']
@@ -18,5 +22,8 @@ tasks:
   lint-matrix-runtime:
     command: 'python -m py_compile vendor/skills/scripts/matrix-contract.py'
     inputs: ['vendor/skills/scripts/matrix-contract.py']
+  lint-ci-adapters-runtime:
+    command: 'python -m py_compile vendor/skills/scripts/render-ci-adapters.py'
+    inputs: ['vendor/skills/scripts/render-ci-adapters.py']
   ci:
-    deps: ['ai-catapult:verify-vendor', 'ai-catapult:test-matrix-distribution', 'ai-catapult:test', 'ai-catapult:lint-matrix-runtime']
+    deps: ['ai-catapult:verify-vendor', 'ai-catapult:test-matrix-distribution', 'ai-catapult:test-ci-adapters-distribution', 'ai-catapult:test', 'ai-catapult:lint-matrix-runtime', 'ai-catapult:lint-ci-adapters-runtime']
