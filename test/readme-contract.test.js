@@ -9,8 +9,8 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const canonicalHead = '0e0e123864b54b74ef86a189ebcccac42172b786';
-const canonicalGeneratorSha256 = 'b8df33209e9b34c00f5ca0a18b6a57e6f5a56e9448b1509e774eee8162be19b4';
+const canonicalHead = '362676687ac6cf266b145f459d4dee91d4fc8e45';
+const canonicalGeneratorSha256 = 'f760d841149b729889211ac6946a803c331664f98b4840d4dbfed77768e27382';
 const canonicalTemplateSha256 = '449a0d74f7150e8558a3884d5bd09c031f00dd4885d8690fef53c00a2ae9a358';
 const stableDist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist');
 let pluginDist;
@@ -67,7 +67,7 @@ test('packaged CLI payload contains the byte-identical canonical README contract
   );
 });
 
-test('CLI scaffold invokes the canonical generator and emits concrete onboarding', () => {
+test('CLI scaffold preserves the first-success command containing && byte-for-byte', () => {
   const target = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-contract-'));
   try {
     const result = spawnSync(process.execPath, [
@@ -84,7 +84,14 @@ test('CLI scaffold invokes the canonical generator and emits concrete onboarding
     const readme = readFileSync(readmePath, 'utf8');
     assert.match(readme, /^# contract-test-repo$/m);
     assert.match(readme, /^## Quick Start$/m);
-    assert.match(readme, /test -f \.ai\/matrix\.json && test -f \.ai\/handoff\/NEXT-STEPS\.md/);
+    const firstSuccessCommand = 'test -f .ai/matrix.json && test -f .ai/handoff/NEXT-STEPS.md';
+    const quickStartBlock = readme.match(/## Quick Start\n\n```sh\n([^`]+)```/);
+    assert.ok(quickStartBlock, 'generated README must contain a shell quick-start command block');
+    assert.equal(
+      quickStartBlock[1],
+      `npx ai-catapult install\n${firstSuccessCommand}\n`,
+      'quick-start commands must preserve the first-success command and && byte-for-byte',
+    );
     assert.match(readme, /\.ai\/matrix\.json` identifies `contract-test-repo`/);
     assert.doesNotMatch(readme, /@@[A-Z_]+@@|\{\{[^}]+\}\}/);
   } finally {
