@@ -120,6 +120,24 @@ for (const repoId of ['downloads', 'TODO']) {
   });
 }
 
+test('CLI rejects unresolved template syntax in a repository id before writing scaffold files', () => {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-invalid-repo-id-'));
+  try {
+    const result = spawnSync(process.execPath, [
+      join(root, 'bin', 'ai-catapult.js'),
+      'init', target,
+      '--repo-id', '@@UNRESOLVED@@',
+      '--date', '2026-01-01',
+    ], { cwd: root, encoding: 'utf8' });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /repository identifier contains unresolved template content/);
+    assert.deepEqual(readdirSync(target), [], 'invalid repository id must fail before the first scaffold write');
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
 test('CLI leaves no partial scaffold when canonical README preflight fails', () => {
   const target = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-failure-target-'));
   const vendorSkills = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-failure-vendor-'));

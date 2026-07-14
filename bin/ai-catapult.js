@@ -205,7 +205,7 @@ function runInit(argv) {
   try {
     readmeContract = resolveReadmeContract({ vendorSkillsDir: _VENDOR_SKILLS, distDir: _DIST_DIR });
     assertReadmeWriteAllowed(targetDir, force);
-    preflightScaffoldReadme({ contract: readmeContract, targetDir });
+    preflightScaffoldReadme({ contract: readmeContract, targetDir, repoId });
   } catch (error) {
     process.stderr.write(`Error: ${error.message}\n`);
     process.exit(1);

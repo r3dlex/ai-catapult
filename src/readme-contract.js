@@ -9,6 +9,7 @@ import { resolveVendorSkill } from './skill-resolver.js';
 // repository identifier opaque during that validation so names such as TODO or
 // downloads are not mistaken for unresolved content or public proof signals.
 const REPO_ID_MARKER = 'ai-catapult-repository-id';
+const UNRESOLVED_TEMPLATE_PATTERN = /@@[A-Z_]+@@|\{\{[^}]+\}\}|\[\[[^\]]+\]\]|<(?:your|insert|replace)[^>]*>|<(?:project[_ -]?name|tagline|install[_ -]?command|first[_ -]?success|success[_ -]?evidence)>/i;
 
 function contractPaths(root) {
   return {
@@ -89,13 +90,24 @@ function injectRepoId(generated, repoId) {
   return generated.replaceAll(REPO_ID_MARKER, () => repoId);
 }
 
-export function preflightScaffoldReadme({ contract, targetDir }) {
+function assertSafeRepoId(repoId) {
+  if (!repoId.trim()) throw new Error('repository identifier must not be empty');
+  if (/[\0\r\n]/.test(repoId)) {
+    throw new Error('repository identifier must be a single line');
+  }
+  if (UNRESOLVED_TEMPLATE_PATTERN.test(repoId)) {
+    throw new Error('repository identifier contains unresolved template content');
+  }
+}
+
+export function preflightScaffoldReadme({ contract, targetDir, repoId }) {
   // Run the immutable contract before scaffold() performs its first write. The
   // candidate is intentionally discarded; the real render still owns guarded
   // replacement, backup, and audit behavior after the scaffold succeeds.
   const stagingDir = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-preflight-'));
   const candidatePath = join(stagingDir, 'README.md');
   try {
+    assertSafeRepoId(repoId);
     runGenerator(generatorArgs({
       contract,
       targetDir,
@@ -104,13 +116,14 @@ export function preflightScaffoldReadme({ contract, targetDir }) {
       sourceSha: '',
       out: candidatePath,
     }), targetDir);
-    injectRepoId(readFileSync(candidatePath, 'utf8'), REPO_ID_MARKER);
+    injectRepoId(readFileSync(candidatePath, 'utf8'), repoId);
   } finally {
     rmSync(stagingDir, { recursive: true, force: true });
   }
 }
 
 export function generateScaffoldReadme({ contract, targetDir, repoId, force, sourceSha }) {
+  assertSafeRepoId(repoId);
   runGenerator(generatorArgs({
     contract,
     targetDir,
