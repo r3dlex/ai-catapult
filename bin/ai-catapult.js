@@ -11,6 +11,7 @@ import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.js';
 import {
   assertReadmeWriteAllowed,
   generateScaffoldReadme,
+  preflightScaffoldReadme,
   resolveReadmeContract,
   reviewedReadmeSha,
 } from '../src/readme-contract.js';
@@ -204,6 +205,7 @@ function runInit(argv) {
   try {
     readmeContract = resolveReadmeContract({ vendorSkillsDir: _VENDOR_SKILLS, distDir: _DIST_DIR });
     assertReadmeWriteAllowed(targetDir, force);
+    preflightScaffoldReadme({ contract: readmeContract, targetDir });
   } catch (error) {
     process.stderr.write(`Error: ${error.message}\n`);
     process.exit(1);

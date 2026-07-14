@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, mkdtempSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, mkdtempSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -96,6 +96,61 @@ test('CLI scaffold preserves the first-success command containing && byte-for-by
     assert.doesNotMatch(readme, /@@[A-Z_]+@@|\{\{[^}]+\}\}/);
   } finally {
     rmSync(target, { recursive: true, force: true });
+  }
+});
+
+for (const repoId of ['downloads', 'TODO']) {
+  test(`CLI scaffold treats guard-like repository id ${repoId} as data`, () => {
+    const target = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-repo-id-'));
+    try {
+      const result = spawnSync(process.execPath, [
+        join(root, 'bin', 'ai-catapult.js'),
+        'init', target,
+        '--repo-id', repoId,
+        '--date', '2026-01-01',
+      ], { cwd: root, encoding: 'utf8' });
+
+      assert.equal(result.status, 0, `init failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+      const readme = readFileSync(join(target, 'README.md'), 'utf8');
+      assert.match(readme, new RegExp(`^# ${repoId}$`, 'm'));
+      assert.ok(readme.includes(`identifies \`${repoId}\``));
+    } finally {
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+}
+
+test('CLI leaves no partial scaffold when canonical README preflight fails', () => {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-failure-target-'));
+  const vendorSkills = mkdtempSync(join(tmpdir(), 'ai-catapult-readme-failure-vendor-'));
+  try {
+    cpSync(join(root, 'vendor', 'skills'), vendorSkills, { recursive: true });
+    const generator = join(
+      vendorSkills,
+      '03-configure-generate',
+      'ai-catapult-init',
+      'scripts',
+      'readme-generate.sh',
+    );
+    writeFileSync(generator, '#!/bin/bash\necho forced generator failure >&2\nexit 47\n', 'utf8');
+
+    const result = spawnSync(process.execPath, [
+      join(root, 'bin', 'ai-catapult.js'),
+      'init', target,
+      '--repo-id', 'preflight-failure',
+      '--date', '2026-01-01',
+    ], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, AI_CATAPULT_VENDOR_SKILLS: vendorSkills },
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /canonical README generator failed \(exit 47\)/);
+    assert.deepEqual(readdirSync(target), [], 'README failure must occur before the first scaffold write');
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+    rmSync(vendorSkills, { recursive: true, force: true });
   }
 });
 
