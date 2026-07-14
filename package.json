@@ -23,8 +23,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
-    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
+    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
+    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
     "regen:fixture": "bash scripts/regen-fixture.sh",
     "build:plugin:codex": "bash scripts/build-codex-plugin.sh",

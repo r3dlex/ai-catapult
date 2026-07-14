@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
   "ref": "main",
-  "sha": "619916ca7bd108047b94f95b3fceca30954cb06f",
-  "_note": "Pin to the exact merged Skills DPUA Goal 7 commit: provider-neutral GitHub, ADO, and GitLab CI adapters with transactional recovery."
+  "sha": "b67740f2bb9ffd509389f664104fce6de49e1a48",
+  "_note": "Pin to the exact r3dlex/skills PR #45 merge commit: canonical README generator and template contract."
 }

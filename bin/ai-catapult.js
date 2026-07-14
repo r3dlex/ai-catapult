@@ -8,6 +8,13 @@ import { runGraphHooks } from '../src/graph-hooks.js';
 import { resolveVendorSkill } from '../src/skill-resolver.js';
 import { runMatrixRuntime } from '../src/matrix-runtime.js';
 import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.js';
+import {
+  assertReadmeWriteAllowed,
+  generateScaffoldReadme,
+  preflightScaffoldReadme,
+  resolveReadmeContract,
+  reviewedReadmeSha,
+} from '../src/readme-contract.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
@@ -19,6 +26,7 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8
 // when the CLI is installed via npx or npm install.
 const _VENDOR_SKILLS = process.env.AI_CATAPULT_VENDOR_SKILLS || join(__dirname, '..', 'vendor/skills');
 const _DIST_TEMPLATES   = join(__dirname, '..', 'dist/skill-templates');
+const _DIST_DIR = join(__dirname, '..', 'dist');
 
 function resolveTemplatesDir() {
   if (existsSync(_VENDOR_SKILLS)) {
@@ -193,9 +201,28 @@ function runInit(argv) {
   const upstreamRef = String(flags.get('upstream-ref') || 'main');
   const force = flags.has('force');
 
+  let readmeContract;
+  try {
+    readmeContract = resolveReadmeContract({ vendorSkillsDir: _VENDOR_SKILLS, distDir: _DIST_DIR });
+    assertReadmeWriteAllowed(targetDir, force);
+    preflightScaffoldReadme({ contract: readmeContract, targetDir, repoId });
+  } catch (error) {
+    process.stderr.write(`Error: ${error.message}\n`);
+    process.exit(1);
+  }
+  const sourceSha = reviewedReadmeSha(targetDir);
+
   const { emittedPaths, judgmentLadenPaths } = scaffold({
     targetDir, templatesDir: TEMPLATES_DIR, repoId, date, upstreamUrl, upstreamRef, force,
   });
+
+  try {
+    generateScaffoldReadme({ contract: readmeContract, targetDir, repoId, force, sourceSha });
+    emittedPaths.push('README.md');
+  } catch (error) {
+    process.stderr.write(`Error: ${error.message}\n`);
+    process.exit(1);
+  }
 
   // Build finish prompt for stdout — uses absolute targetDir so the user sees
   // real paths they can open directly.

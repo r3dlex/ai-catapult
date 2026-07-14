@@ -160,6 +160,15 @@ test('npm pack: prepack script stages skill-templates (ensures npx init works fr
   );
 });
 
+test('npm pack: prepack script stages the canonical README contract', () => {
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const prepack = pkg.scripts?.prepack ?? '';
+  assert.ok(
+    prepack.includes('stage-readme-contract.sh'),
+    `package.json prepack script must invoke stage-readme-contract.sh\nActual prepack: ${prepack}`,
+  );
+});
+
 test('npm pack: dist/skill-templates/ is present in dist-snapshot (init fallback for published package)', () => {
   const skillTemplatesDir = join(DIST_SNAPSHOT, 'skill-templates');
   assert.ok(
@@ -174,4 +183,9 @@ test('npm pack: dist/skill-templates/boundary-manifest.json exists (scaffold eng
     existsSync(manifest),
     `dist-snapshot/skill-templates/boundary-manifest.json must exist\nChecked: ${manifest}`,
   );
+});
+
+test('npm pack: dist/readme-contract contains the canonical generator and template', () => {
+  assert.ok(existsSync(join(DIST_SNAPSHOT, 'readme-contract', 'scripts', 'readme-generate.sh')));
+  assert.ok(existsSync(join(DIST_SNAPSHOT, 'readme-contract', 'assets', 'readme', 'template.md')));
 });

@@ -1,158 +1,100 @@
 # ai-catapult
 
-Scaffold [init-ai-repo v3 AI-SDLC governance](https://github.com/r3dlex/init-ai-repo) into any repository — no LLM required, no config needed, one command.
+Deterministic AI-SDLC scaffolding for repositories and AI coding agents.
 
-## What it does
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-`ai-catapult` is a deterministic CLI that writes a complete v3 `.ai/` governance skeleton into your repo: directory structure, matrix, system prompts, rules, workflows, traceability wiring, and agent contracts. It also ships as a **Claude Code plugin** and a **Codex plugin** so the scaffold runs from inside your AI coding agent without leaving your editor.
-
-It repackages the `init-ai-repo`/`ai-catapult-init` skill as a standalone tool — same output, zero dependency on a running LLM session.
-
-## Quick start
+## Quick Start
 
 ```sh
-# Scaffold governance skeleton into the current directory
-npx ai-catapult init
+npx ai-catapult init .
+test -f .ai/matrix.json && test -f .ai/handoff/NEXT-STEPS.md
+```
 
-# Then install the plugin into detected harnesses (Claude Code and/or Codex)
+**Expected result:** the command exits 0 and both generated files exist; `.ai/matrix.json` identifies the repository and `.ai/handoff/NEXT-STEPS.md` names the in-harness completion step.
+
+## Requirements
+
+- Node.js 18 or newer and Bash.
+
+## Why
+
+Use one pinned contract to create reviewable governance files from the CLI and complete repository-specific decisions in Claude Code or Codex.
+
+## Choose the CLI or a plugin
+
+Use the CLI for deterministic, no-LLM setup:
+
+```sh
+npx ai-catapult init [target]
+```
+
+Use a plugin when the mechanical scaffold exists and an agent needs to complete topology, ADR, cascade, or traceability decisions:
+
+```sh
 npx ai-catapult install
 ```
 
-Or install globally:
+- Claude Code: reload the host, then run `/ai-catapult-init`.
+- Codex: enable the installed local plugin, then invoke the `ai-catapult-init` skill.
+
+The installer detects Claude Code and Codex by default. Pass `--harness claude`, `--harness codex`, or `--harness all` to choose explicitly. It prints registration instructions and does not mutate Claude Code internal state or Codex `config.toml`.
+
+## How it works
+
+**Primary command surface:** `ai-catapult init` creates deterministic mechanical state; the Claude Code and Codex plugins run the same pinned `ai-catapult-init` skill for judgment-laden work.
+
+**Mental model:** Generated files are reviewable outputs, not hidden runtime state. The CLI copies pinned templates and invokes the canonical README generator; plugins bundle that same source contract.
+
+- `.ai/matrix.json` records repository identity and topology inputs.
+- `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` expose the agent-facing contract.
+- `.ai/handoff/NEXT-STEPS.md` records what was generated and what still needs the plugin.
+- `.ai/`, `.github/`, `ci/`, and `graph-automation/` contain deterministic governance and automation artifacts selected by the pinned boundary manifest.
+
+The same inputs, including `--date`, produce byte-identical output. No runtime LLM or npm dependency is used to render the scaffold.
+
+## Safe repeat runs
+
+- A second `init` refuses before writing when generated files or `README.md` already exist.
+- Pass `--force` only when replacing generated state is intentional. Existing `README.md` content is SHA-checked, backed up under `.ai/drift/readme-backups/`, and recorded in an audit manifest before replacement.
+- Plugin builds and packaged CLI artifacts copy the generator and template from the SHA pinned in `skills.lock.json`; they do not maintain a second README generator.
+- `install` refuses to replace a foreign plugin directory unless `--force` is supplied. Use `--dry-run` to inspect installation paths without writing.
+
+Run `npx ai-catapult init --help` or `npx ai-catapult install --help` for the full option lists.
+
+## Update
+
+`npx` resolves the requested package when it runs. For a global installation, update explicitly:
 
 ```sh
-npm install -g ai-catapult
-ai-catapult init
-ai-catapult install
+npm install -g ai-catapult@latest
 ```
 
-## Commands
-
-### `ai-catapult init [target]`
-
-Scaffold the mechanical v3 `.ai/` governance skeleton into `<target>` (default: current directory).
-
-```
-Options:
-  --repo-id <id>         Repository identifier          (default: basename of target)
-  --date <YYYY-MM-DD>    Scaffold date token             (default: today)
-  --upstream-url <url>   Upstream git URL for matrix.json
-  --upstream-ref <ref>   Upstream git ref                (default: main)
-  --force                Overwrite existing files without error
-  -h, --help             Show help
-```
-
-### `ai-catapult install`
-
-Install the ai-catapult plugin into detected AI coding harnesses.
-
-Harnesses detected automatically:
-- **Claude Code** — `~/.claude/` present
-- **Codex** — `${CODEX_HOME:-~/.codex}/` present
-
-```
-Options:
-  --harness <claude|codex|all>   Select harness(es) (default: auto-detect)
-  --dry-run                      Print what would happen without writing
-  --force                        Overwrite even if dir contains a foreign plugin
-  -h, --help                     Show help
-```
-
-After install, reload Claude Code and run `/ai-catapult-init` to complete the in-harness judgment-laden phases.
-
-### `ai-catapult ci-adapters`
-
-Render or check the CI providers selected by an execution profile. GitHub, Azure
-DevOps, and GitLab share one policy contract; unselected provider workflows are
-removed only when they are renderer-owned. Lore is reserved and rejected.
+Source checkouts refresh the pinned skill and rebuild artifacts with:
 
 ```sh
-ai-catapult ci-adapters \
-  --profile .ai/execution/profiles/execution/default.json \
-  --output .
-
-ai-catapult ci-adapters \
-  --profile .ai/execution/profiles/execution/default.json \
-  --output . --check
+bash setup.sh
+bash scripts/prepare-dist.sh
 ```
 
-ADO and GitLab remain `experimental` until their disposable-host smoke and
-audit readback gates are complete.
+## Troubleshooting
 
-## Claude Code plugin
+- **`init would overwrite existing file`** — inspect the existing scaffold first; rerun with `--force` only when replacement is intended.
+- **`canonical README contract not found`** — in a source checkout, run `bash setup.sh` and `bash scripts/stage-readme-contract.sh`. Reinstall the npm package if the error comes from `npx`.
+- **Plugin installed but not visible** — reload the host and complete its printed registration steps. Codex registration details are in [docs/codex-install.md](docs/codex-install.md).
+- **Vendor SHA mismatch** — run `bash setup.sh`, then `bash scripts/verify-vendor.sh`. The checkout must match `skills.lock.json` exactly.
 
-`ai-catapult` ships as a Claude Code plugin bundling the `ai-catapult-init` skill.
+## Documentation
 
-### Install path
-
-Running `npx ai-catapult install` copies the plugin payload to:
-```
-~/.claude/plugins/ai-catapult/
-```
-
-Then follow the printed two-step registration inside Claude Code:
-```
-/plugin marketplace add ~/.claude/plugins/ai-catapult
-/plugin install ai-catapult@ai-catapult-local
-```
-
-The installer does **not** write `installed_plugins.json` — that is a Claude Code internal file. Use the `/plugin` commands above to register the plugin.
-
-### Build the plugin locally
-
-```sh
-bash setup.sh                  # vendor the pinned skill source
-npm run build:plugin:claude    # assemble into dist/claude-plugin/
-```
-
-## Codex plugin
-
-`ai-catapult` ships as a Codex plugin bundling the `ai-catapult-init` skill.
-
-### Install path
-
-Running `npx ai-catapult install` copies the plugin payload to:
-```
-${CODEX_HOME:-~/.codex}/plugins/cache/ai-catapult-local/ai-catapult/local/
-```
-
-Then add the printed TOML block to your `${CODEX_HOME:-~/.codex}/config.toml`:
-```toml
-[marketplaces.ai-catapult-local]
-source_type = "local"
-source = "<printed payload path>"
-
-[plugins."ai-catapult@ai-catapult-local"]
-enabled = true
-```
-
-The installer does **not** auto-mutate `config.toml` — you add the block manually. See [docs/codex-install.md](docs/codex-install.md) for details.
-
-### Build the plugin locally
-
-```sh
-bash setup.sh                  # vendor the pinned skill source
-npm run build:plugin:codex     # assemble into dist/codex-plugin/
-```
-
-## Publishing
-
-Both `ai-catapult` (unscoped) and `@r3dlex/ai-catapult` (scoped mirror) are published to npm.
-
-### Dry-run (safe, default)
-
-```sh
-bash scripts/publish-both.sh
-```
-
-### Real publish (double-gated)
-
-```sh
-AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
-```
-
-Semver-tagged releases are automated via `.github/workflows/release.yml` using npm **trusted publishing** (OIDC) — no `NPM_TOKEN` secret; the trusted publisher must be configured once per package on npmjs.com (see release.yml header).
+- [Codex installation and registration](docs/codex-install.md)
+- [Agent operating contract](AGENTS.md)
+- [Pinned upstream skill source](skills.lock.json)
+- Run `npx ai-catapult --help` for CLI commands and `npx ai-catapult <command> --help` for command-specific options.
 
 ## License
 
-MIT © Andre Burgstahler (r3dlex)
+MIT — see [LICENSE](LICENSE).
+
+<!-- AI-SDLC:start -->
+Repository governance and traceability: see [AGENTS.md](AGENTS.md), [.ai/traceability/](.ai/traceability/).
+<!-- AI-SDLC:end -->

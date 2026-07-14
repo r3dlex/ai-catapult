@@ -38,19 +38,15 @@ fi
 
 mkdir -p "$(dirname "${VENDOR_DIR}")"
 
-# --- Clone or fetch at exact SHA ---
-# Use a shallow clone of the ref, then checkout the exact SHA.
-echo "Cloning ${SKILLS_REPO} (ref: ${LOCKED_REF})..."
-git clone --depth=1 --branch "${LOCKED_REF}" "${SKILLS_REPO}" "${VENDOR_DIR}"
+# --- Fetch and check out the exact immutable SHA ---
+# The informational ref may disappear after its PR merges, so never require it.
+echo "Fetching ${SKILLS_REPO} at locked SHA ${LOCKED_SHA} (ref: ${LOCKED_REF}, informational only)..."
+git init -q "${VENDOR_DIR}"
+git -C "${VENDOR_DIR}" remote add origin "${SKILLS_REPO}"
+git -C "${VENDOR_DIR}" fetch --depth=1 origin "${LOCKED_SHA}"
+git -C "${VENDOR_DIR}" checkout -q --detach FETCH_HEAD
 
-# Deepen/fetch the exact commit in case shallow tip differs (should match for main)
 ACTUAL_SHA="$(git -C "${VENDOR_DIR}" rev-parse HEAD)"
-if [[ "${ACTUAL_SHA}" != "${LOCKED_SHA}" ]]; then
-  echo "Shallow tip is ${ACTUAL_SHA}, fetching exact locked SHA ${LOCKED_SHA}..."
-  git -C "${VENDOR_DIR}" fetch --depth=1 origin "${LOCKED_SHA}"
-  git -C "${VENDOR_DIR}" checkout "${LOCKED_SHA}"
-  ACTUAL_SHA="$(git -C "${VENDOR_DIR}" rev-parse HEAD)"
-fi
 
 if [[ "${ACTUAL_SHA}" != "${LOCKED_SHA}" ]]; then
   echo "ERROR: checked out SHA ${ACTUAL_SHA} does not match locked SHA ${LOCKED_SHA}" >&2
