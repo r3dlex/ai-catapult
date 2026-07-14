@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
   "ref": "docs/canonical-readme-generator",
-  "sha": "362676687ac6cf266b145f459d4dee91d4fc8e45",
+  "sha": "d732566c8bebaaad209b3fdbe291bf27dbf74829",
   "_note": "Pin to the exact r3dlex/skills PR #45 head: canonical README generator and template contract."
 }

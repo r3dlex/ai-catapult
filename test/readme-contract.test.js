@@ -9,8 +9,8 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const canonicalHead = '362676687ac6cf266b145f459d4dee91d4fc8e45';
-const canonicalGeneratorSha256 = 'f760d841149b729889211ac6946a803c331664f98b4840d4dbfed77768e27382';
+const canonicalHead = 'd732566c8bebaaad209b3fdbe291bf27dbf74829';
+const canonicalGeneratorSha256 = 'a238014cee66320744b72f3c71466fbfaa9dcd383bf01c43018b841116986247';
 const canonicalTemplateSha256 = '449a0d74f7150e8558a3884d5bd09c031f00dd4885d8690fef53c00a2ae9a358';
 const stableDist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist');
 let pluginDist;

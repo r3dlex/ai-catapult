@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '362676687ac6cf266b145f459d4dee91d4fc8e45';
+const sha = 'd732566c8bebaaad209b3fdbe291bf27dbf74829';
 const run = (command, args, options = {}) => spawnSync(command, args, { cwd: root, encoding: 'utf8', ...options });
 
 test('matrix distribution remains pinned through the exact Skills PR #45 head', () => {

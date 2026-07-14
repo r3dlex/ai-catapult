@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '362676687ac6cf266b145f459d4dee91d4fc8e45';
+const sha = 'd732566c8bebaaad209b3fdbe291bf27dbf74829';
 const vendor = join(root, 'vendor/skills');
 const canonicalRuntime = join(vendor, 'scripts/render-ci-adapters.py');
 const canonicalTemplates = join(vendor, '03-configure-generate/ai-catapult-init/templates/ci');
