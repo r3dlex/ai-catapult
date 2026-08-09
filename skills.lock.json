@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
   "ref": "main",
-  "sha": "b67740f2bb9ffd509389f664104fce6de49e1a48",
-  "_note": "Pin to the exact r3dlex/skills PR #45 merge commit: canonical README generator and template contract."
+  "sha": "a4754d7bc2f2d4595b072a274e920f6b6b90dfc4",
+  "_note": "Pin to the r3dlex/skills PR #52 merge commit: the 37-skill catalog including the ask-ai-catapult router."
 }
