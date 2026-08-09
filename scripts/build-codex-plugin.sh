@@ -4,7 +4,10 @@
 # Output layout:
 #   dist/codex-plugin/
 #     .codex-plugin/plugin.json   — plugin manifest
-#     skills/ai-catapult-init/    — bundled skill copied from vendor/
+#     skills/<name>/              — one dir per bundled skill copied from vendor/
+#
+# The bundled set is every skill in the vendored catalog that supports Codex —
+# derived, not listed here. See resolveBundledSkills in src/skill-resolver.js.
 #
 # Deterministic: always wipes and rebuilds dist/codex-plugin/ for idempotence.
 # Fail-closed: exits non-zero if vendor/skills is absent or incomplete.
@@ -18,8 +21,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 VENDOR_ROOT="${VENDOR_ROOT:-${REPO_ROOT}/vendor}"
 VENDOR_SKILLS="${VENDOR_ROOT}/skills"
-SKILL_NAME="ai-catapult-init"
-RESOLVER="${REPO_ROOT}/scripts/resolve-vendor-skill.js"
+LISTER="${REPO_ROOT}/scripts/list-bundled-skills.js"
 DIST_ROOT="${DIST_ROOT:-${REPO_ROOT}/dist}"
 DIST_DIR="${DIST_ROOT}/codex-plugin"
 PLUGIN_JSON_DIR="${DIST_DIR}/.codex-plugin"
@@ -32,7 +34,21 @@ if [[ ! -d "${VENDOR_SKILLS}" ]]; then
   exit 1
 fi
 
-SKILL_SRC="$(node "${RESOLVER}" "${VENDOR_SKILLS}" "${SKILL_NAME}")"
+# Fail-closed: a failing lister aborts the build rather than shipping a plugin
+# with a silently truncated skill set.
+BUNDLED="$(node "${LISTER}" "${VENDOR_SKILLS}" codex)"
+if [[ -z "${BUNDLED}" ]]; then
+  echo "ERROR: no bundled skills resolved from ${VENDOR_SKILLS}" >&2
+  exit 1
+fi
+
+BUNDLED_NAMES=()
+BUNDLED_DIRS=()
+while IFS=$'\t' read -r NAME DIR; do
+  [[ -n "${NAME}" ]] || continue
+  BUNDLED_NAMES+=("${NAME}")
+  BUNDLED_DIRS+=("${DIR}")
+done <<< "${BUNDLED}"
 
 # --- Read version from package.json (node already required by project) ---
 VERSION="$(PKG="${REPO_ROOT}/package.json" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.PKG,'utf8')).version)")"
@@ -63,8 +79,12 @@ cat > "${PLUGIN_JSON_DIR}/plugin.json" <<PLUGIN_JSON
 }
 PLUGIN_JSON
 
-# --- Copy vendored skill ---
-cp -r "${SKILL_SRC}" "${SKILLS_DEST}/${SKILL_NAME}"
+# --- Copy vendored skills ---
+for i in "${!BUNDLED_NAMES[@]}"; do
+  cp -R "${BUNDLED_DIRS[$i]}" "${SKILLS_DEST}/${BUNDLED_NAMES[$i]}"
+  rm -rf "${SKILLS_DEST}/${BUNDLED_NAMES[$i]}/.git"
+  rm -f  "${SKILLS_DEST}/${BUNDLED_NAMES[$i]}/HEAD_SHA"
+done
 if [[ -f "${VENDOR_SKILLS}/scripts/matrix-contract.py" ]]; then
   mkdir -p "${DIST_DIR}/scripts"
   cp "${VENDOR_SKILLS}/scripts/matrix-contract.py" "${DIST_DIR}/scripts/matrix-contract.py"
@@ -98,16 +118,13 @@ node -e "
   if (!p.interface.displayName) { process.stderr.write('ERROR: plugin.json interface.displayName missing\n'); process.exit(1); }
 "
 
-if [[ ! -d "${SKILLS_DEST}/${SKILL_NAME}" ]]; then
-  echo "ERROR: skills/${SKILL_NAME} directory not present in output" >&2
-  exit 1
-fi
-
-if [[ ! -f "${SKILLS_DEST}/${SKILL_NAME}/SKILL.md" ]]; then
-  echo "ERROR: skills/${SKILL_NAME}/SKILL.md not present in output" >&2
-  exit 1
-fi
+for NAME in "${BUNDLED_NAMES[@]}"; do
+  if [[ ! -f "${SKILLS_DEST}/${NAME}/SKILL.md" ]]; then
+    echo "ERROR: skills/${NAME}/SKILL.md not present in output" >&2
+    exit 1
+  fi
+done
 
 echo "OK: dist/codex-plugin assembled"
 echo "  .codex-plugin/plugin.json"
-echo "  skills/${SKILL_NAME}/SKILL.md"
+echo "  skills/ (${#BUNDLED_NAMES[@]} skills)"

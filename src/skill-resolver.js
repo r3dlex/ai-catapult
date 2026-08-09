@@ -67,8 +67,7 @@ function validateTemplates(skillDir) {
   }
 }
 
-/** Resolve and validate a canonical skill from a vendored skills checkout. */
-export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-init') {
+function readCatalog(vendorSkillsDir) {
   if (!existsSync(vendorSkillsDir)) fail(`directory not found: ${vendorSkillsDir}`);
 
   const catalogPath = join(vendorSkillsDir, 'catalog.json');
@@ -82,6 +81,12 @@ export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-ini
     fail(`catalog.json is malformed: ${error.message}`);
   }
   if (!Array.isArray(catalog.skills)) fail('catalog.json skills must be an array');
+  return catalog;
+}
+
+/** Resolve and validate a canonical skill from a vendored skills checkout. */
+export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-init') {
+  const catalog = readCatalog(vendorSkillsDir);
   const matches = catalog.skills.filter((entry) => entry?.name === skillName);
   if (matches.length !== 1) {
     fail(`catalog.json must contain exactly one canonical ${skillName} entry (found ${matches.length})`);
@@ -97,4 +102,33 @@ export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-ini
   }
   if (skillName === 'ai-catapult-init') validateTemplates(resolvedSkillDir);
   return resolvedSkillDir;
+}
+
+/**
+ * Resolve every skill the plugin bundles for `host`, as `{ name, dir }` sorted
+ * by name.
+ *
+ * The set is derived from the vendored catalog rather than declared here: a
+ * hand-maintained roster in this repo would silently lag the skills repo, which
+ * is the SSOT. A skill is bundled unless it is deprecated or declares
+ * `supported_hosts` without `host`; an entry that omits `supported_hosts`
+ * predates the field and is treated as host-agnostic.
+ *
+ * Fails closed if ai-catapult-init is absent — it is the scaffolding skill the
+ * CLI, the README contract, and the template staging all resolve against, so a
+ * catalog without it means the vendored checkout is wrong, not that the plugin
+ * should ship without it.
+ */
+export function resolveBundledSkills(vendorSkillsDir, { host = 'claude-code' } = {}) {
+  const catalog = readCatalog(vendorSkillsDir);
+  const names = catalog.skills
+    .filter((entry) => entry?.lifecycle !== 'deprecated')
+    .filter((entry) => !Array.isArray(entry?.supported_hosts) || entry.supported_hosts.includes(host))
+    .map((entry) => entry?.name)
+    .sort();
+
+  if (!names.includes('ai-catapult-init')) {
+    fail(`catalog.json has no ai-catapult-init entry bundled for host ${host}`);
+  }
+  return names.map((name) => ({ name, dir: resolveVendorSkill(vendorSkillsDir, name) }));
 }
