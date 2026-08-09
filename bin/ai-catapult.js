@@ -176,6 +176,9 @@ function buildFinishPrompt({ targetDir, pathDisplay, emittedPaths, judgmentLaden
     'The ai-catapult-init skill will guide you through topology decisions,',
     'ADRs, cascade configuration, and traceability — the judgment-laden',
     'phases that require knowledge of your specific repository.',
+    '',
+    'The plugin also ships the rest of the ai-catapult skill catalog for the',
+    'discover, plan, generate, and validate phases that follow.',
     '────────────────────────────────────────────────────────────────',
   ].join('\n');
 }

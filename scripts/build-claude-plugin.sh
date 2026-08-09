@@ -7,7 +7,11 @@
 #       plugin.json        (manifest: name, version, description, author, skills)
 #       marketplace.json   (marketplace entry with $schema)
 #     skills/
-#       ai-catapult-init/  (flat copy of the catalog-resolved vendored skill)
+#       <name>/            (one flat copy per catalog-resolved vendored skill)
+#
+# The bundled set is every skill in the vendored catalog that supports Claude
+# Code — derived, not listed here, so upstream additions ship on the next lock
+# bump. See resolveBundledSkills in src/skill-resolver.js.
 #
 # .claude-plugin/ holds ONLY manifests. All skill paths in plugin.json are
 # relative to the plugin root (dist/claude-plugin/), NOT to .claude-plugin/.
@@ -30,7 +34,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PACKAGE_JSON="${REPO_ROOT}/package.json"
 VENDOR_ROOT="${VENDOR_ROOT:-${REPO_ROOT}/vendor}"
 VENDOR_SKILLS="${VENDOR_ROOT}/skills"
-RESOLVER="${REPO_ROOT}/scripts/resolve-vendor-skill.js"
+LISTER="${REPO_ROOT}/scripts/list-bundled-skills.js"
 DIST_ROOT="${DIST_ROOT:-${REPO_ROOT}/dist}"
 DIST_DIR="${DIST_ROOT}/claude-plugin"
 PLUGIN_DIR="${DIST_DIR}/.claude-plugin"
@@ -43,7 +47,21 @@ if [[ ! -d "${VENDOR_SKILLS}" ]]; then
   exit 1
 fi
 
-VENDOR_SKILL="$(node "${RESOLVER}" "${VENDOR_SKILLS}" ai-catapult-init)"
+# Fail-closed: a failing lister aborts the build rather than shipping a plugin
+# with a silently truncated skill set.
+BUNDLED="$(node "${LISTER}" "${VENDOR_SKILLS}" claude-code)"
+if [[ -z "${BUNDLED}" ]]; then
+  echo "ERROR: no bundled skills resolved from ${VENDOR_SKILLS}" >&2
+  exit 1
+fi
+
+BUNDLED_NAMES=()
+BUNDLED_DIRS=()
+while IFS=$'\t' read -r NAME DIR; do
+  [[ -n "${NAME}" ]] || continue
+  BUNDLED_NAMES+=("${NAME}")
+  BUNDLED_DIRS+=("${DIR}")
+done <<< "${BUNDLED}"
 
 # --- Read version from package.json (node already required by project) ---
 VERSION="$(PACKAGE_JSON="${PACKAGE_JSON}" node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(process.env.PACKAGE_JSON,'utf8')).version)")"
@@ -60,9 +78,10 @@ rm -rf "${DIST_DIR}"
 mkdir -p "${PLUGIN_DIR}"
 mkdir -p "${SKILLS_OUT}"
 
-# --- Copy vendored skill (deterministic: rsync excludes .git, HEAD_SHA sentinel) ---
-# Use cp -R and then strip the git artefacts that setup.sh left.
-cp -R "${VENDOR_SKILL}" "${SKILLS_OUT}/ai-catapult-init"
+# --- Copy vendored skills (deterministic: strip .git and the HEAD_SHA sentinel) ---
+for i in "${!BUNDLED_NAMES[@]}"; do
+  cp -R "${BUNDLED_DIRS[$i]}" "${SKILLS_OUT}/${BUNDLED_NAMES[$i]}"
+done
 if [[ -f "${VENDOR_SKILLS}/scripts/matrix-contract.py" ]]; then
   mkdir -p "${DIST_DIR}/scripts"
   cp "${VENDOR_SKILLS}/scripts/matrix-contract.py" "${DIST_DIR}/scripts/matrix-contract.py"
@@ -78,15 +97,23 @@ fi
 
 # Remove the git directory and HEAD_SHA sentinel — they are setup.sh artefacts,
 # not part of the published skill payload. Do not fail if absent.
-rm -rf "${SKILLS_OUT}/ai-catapult-init/.git"
-rm -f  "${SKILLS_OUT}/ai-catapult-init/HEAD_SHA"
+for NAME in "${BUNDLED_NAMES[@]}"; do
+  rm -rf "${SKILLS_OUT}/${NAME}/.git"
+  rm -f  "${SKILLS_OUT}/${NAME}/HEAD_SHA"
+done
+
+# --- Render the plugin.json skills array from the bundled set ---
+SKILLS_JSON="$(SKILL_NAMES="${BUNDLED_NAMES[*]}" node -e "
+  const names = process.env.SKILL_NAMES.split(' ').filter(Boolean);
+  process.stdout.write(names.map(n => '    \"./skills/' + n + '/\"').join(',\n'));
+")"
 
 # --- Write plugin.json ---
 cat > "${PLUGIN_DIR}/plugin.json" <<EOF
 {
   "name": "ai-catapult",
   "version": "${VERSION}",
-  "description": "Scaffold init-ai-repo v3 AI-SDLC governance into any repository — no LLM required, one command. Ships as a Claude Code skill.",
+  "description": "Scaffold init-ai-repo v3 AI-SDLC governance into any repository — no LLM required, one command. Ships the ai-catapult skill catalog for Claude Code.",
   "author": {
     "name": "r3dlex"
   },
@@ -101,7 +128,7 @@ cat > "${PLUGIN_DIR}/plugin.json" <<EOF
     "claude-code"
   ],
   "skills": [
-    "./skills/ai-catapult-init/"
+${SKILLS_JSON}
   ]
 }
 EOF
@@ -118,7 +145,7 @@ cat > "${PLUGIN_DIR}/marketplace.json" <<EOF
   "plugins": [
     {
       "name": "ai-catapult",
-      "description": "Scaffold init-ai-repo v3 AI-SDLC governance into any repository. One command, zero config, no LLM required. Provides the ai-catapult-init skill for Claude Code.",
+      "description": "Scaffold init-ai-repo v3 AI-SDLC governance into any repository. One command, zero config, no LLM required. Ships the ai-catapult skill catalog for Claude Code.",
       "version": "${VERSION}",
       "author": {
         "name": "r3dlex"
@@ -187,4 +214,4 @@ done
 echo "OK: dist/claude-plugin assembled and validated (ai-catapult@${VERSION})"
 echo "    ${PLUGIN_DIR}/plugin.json"
 echo "    ${PLUGIN_DIR}/marketplace.json"
-echo "    ${SKILLS_OUT}/ai-catapult-init/ ($(find "${SKILLS_OUT}/ai-catapult-init" -type f | wc -l | tr -d ' ') files)"
+echo "    ${SKILLS_OUT}/ (${#BUNDLED_NAMES[@]} skills, $(find "${SKILLS_OUT}" -type f | wc -l | tr -d ' ') files)"

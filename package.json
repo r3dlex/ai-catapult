@@ -17,6 +17,7 @@
     "scripts/stage-matrix-runtime.sh",
     "scripts/stage-ci-adapters-runtime.sh",
     "scripts/resolve-vendor-skill.js",
+    "scripts/list-bundled-skills.js",
     "setup.sh",
     "skills.lock.json",
     "README.md",
