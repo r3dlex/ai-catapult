@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = 'a4754d7bc2f2d4595b072a274e920f6b6b90dfc4';
+const sha = '9232ddb8f0bfa3dd3c4906327269ec7244273052';
 const run = (command, args, options = {}) => spawnSync(command, args, { cwd: root, encoding: 'utf8', ...options });
 
 test('matrix distribution remains pinned through the exact skills commit in skills.lock.json', () => {
