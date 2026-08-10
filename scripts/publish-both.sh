@@ -100,8 +100,13 @@ for (const rel of files) {
   try {
     mkdirSync(dirname(dst), { recursive: true });
     cpSync(src, dst, { recursive: true });
-  } catch {
-    // skip missing entries (e.g. optional files not present in every build)
+  } catch (error) {
+    // Missing entries are skipped so an optional build artifact does not abort a
+    // release — but report them. A bare `catch {}` here hid a `files[]` gap for a
+    // month: scripts/stage-readme-contract.sh was never staged, so the scoped
+    // mirror's prepack exited 127 on the first release that reached this path,
+    // with no earlier warning anywhere.
+    process.stderr.write(`publish-both: WARNING not staged: ${rel} (${error.code ?? error.message})\n`);
   }
 }
 

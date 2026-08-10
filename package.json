@@ -1,6 +1,6 @@
 {
   "name": "ai-catapult",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
   "type": "module",
   "bin": {
@@ -14,6 +14,7 @@
     "scripts/build-codex-plugin.sh",
     "scripts/snapshot-dist.sh",
     "scripts/stage-skill-templates.sh",
+    "scripts/stage-readme-contract.sh",
     "scripts/stage-matrix-runtime.sh",
     "scripts/stage-ci-adapters-runtime.sh",
     "scripts/resolve-vendor-skill.js",
