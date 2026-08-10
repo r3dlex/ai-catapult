@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const canonicalHead = 'a4754d7bc2f2d4595b072a274e920f6b6b90dfc4';
+const canonicalHead = '9232ddb8f0bfa3dd3c4906327269ec7244273052';
 const canonicalGeneratorSha256 = 'aa2a51dc5227ff0f35852b0028ebee69d479573c67bc32a931d34c7332e6447e';
 const canonicalTemplateSha256 = '449a0d74f7150e8558a3884d5bd09c031f00dd4885d8690fef53c00a2ae9a358';
 const stableDist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist');
