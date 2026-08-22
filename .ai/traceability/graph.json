@@ -1,0 +1,36 @@
+{
+  "edges": [
+    {
+      "source": "plan:ai-catapult:v3-init-artifacts",
+      "target": "handoff:ai-catapult:v3-init-artifacts",
+      "relation": "summarized-by",
+      "created_by": "northstar",
+      "evidence_path": ".ai/work-intake/v3-init-artifacts.md"
+    }
+  ],
+  "generated_at": "2026-08-22T00:00:00Z",
+  "nodes": [
+    {
+      "id": "plan:ai-catapult:v3-init-artifacts",
+      "type": "plan",
+      "title": "v3 init artifacts completion plan (opencode-omo slice A4)",
+      "status": "active",
+      "repo_id": "ai-catapult",
+      "path": ".ai/work-intake/v3-init-artifacts.md",
+      "backlinks": []
+    },
+    {
+      "id": "handoff:ai-catapult:v3-init-artifacts",
+      "type": "handoff",
+      "title": "v3 init artifacts handoff record",
+      "status": "active",
+      "repo_id": "ai-catapult",
+      "path": ".ai/work-intake/v3-init-artifacts.md",
+      "backlinks": [
+        "plan:ai-catapult:v3-init-artifacts"
+      ]
+    }
+  ],
+  "root_repo_id": "ai-catapult",
+  "schema_version": "1.1"
+}

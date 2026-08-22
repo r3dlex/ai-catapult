@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "init-ai-repo",
+  "phase_id": "03-configure-generate",
+  "title": "Configure & Generate",
+  "required": true,
+  "status": "pending",
+  "inputs": [
+    ".ai/matrix.json",
+    ".ai/policies/model-routing.json",
+    "docs/architecture/adr/"
+  ],
+  "outputs": [
+    ".ai/traceability/graph.json",
+    ".ai/workflows/repo-workflow.json",
+    "AGENTS.md",
+    ".rules.ts",
+    "prek.toml"
+  ],
+  "evidence": null,
+  "next_actions": ["Complete phases 01 and 02 first."]
+}
