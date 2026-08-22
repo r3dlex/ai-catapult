@@ -64,16 +64,19 @@ function ensureBuilt(script, distDir, dryRun) {
     );
   }
 
-  // Check for either harness manifest to determine if already built
+  // Check for any harness manifest to determine if already built
   const claudeManifest = join(distDir, '.claude-plugin', 'plugin.json');
   const codexManifest = join(distDir, '.codex-plugin', 'plugin.json');
-  if (existsSync(claudeManifest) || existsSync(codexManifest)) return;
+  const opencodeManifest = join(distDir, '.opencode-plugin', 'plugin.json');
+  if (existsSync(claudeManifest) || existsSync(codexManifest) || existsSync(opencodeManifest)) return;
 
-  // dist absent or empty — build now
+  // dist absent or empty — build now; pin DIST_ROOT so the script writes the
+  // same root this caller reads from (module DIST_ROOT may be overridden)
   const r = spawnSync('bash', [join(REPO_ROOT, 'scripts', script)], {
     encoding: 'utf8',
     cwd: REPO_ROOT,
     timeout: 60000,
+    env: { ...process.env, DIST_ROOT },
   });
   if (r.status !== 0) {
     throw new Error(

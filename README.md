@@ -37,8 +37,9 @@ npx ai-catapult install
 
 - Claude Code: reload the host, then run `/ai-catapult-init`.
 - Codex: enable the installed local plugin, then invoke the `ai-catapult-init` skill.
+- OpenCode: quit and restart OpenCode after installing; skills land in `~/.config/opencode/skills/` and slash commands in `~/.config/opencode/command/`.
 
-The installer detects Claude Code and Codex by default. Pass `--harness claude`, `--harness codex`, or `--harness all` to choose explicitly. It prints registration instructions and does not mutate Claude Code internal state or Codex `config.toml`.
+The installer detects Claude Code, Codex, and OpenCode by default. Pass `--harness claude`, `--harness codex`, `--harness opencode`, or `--harness all` to choose explicitly. It prints registration instructions and does not mutate Claude Code internal state, Codex `config.toml`, or OpenCode `opencode.jsonc`.
 
 ## How it works
 
