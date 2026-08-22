@@ -271,6 +271,63 @@ function installCodex({ codexHome, dryRun, force }) {
 }
 
 // ---------------------------------------------------------------------------
+// OpenCode install
+// ---------------------------------------------------------------------------
+
+/**
+ * Install the OpenCode payload.
+ *
+ * OpenCode has no plugin registry file: it scans well-known directories under
+ * its config root. The installer therefore MERGES owned entries additively:
+ *   skills/<name>/    ← dist/opencode-plugin/skills/<name>/     (verbatim dirs)
+ *   command/<name>.md ← dist/opencode-plugin/command/<name>.md
+ *
+ * Only entries named in the payload manifest are touched — foreign content is
+ * preserved byte-for-byte, and opencode.jsonc is NEVER read or written
+ * (user-owned, strict schema validation on OpenCode's side).
+ *
+ * @param {object} opts
+ * @param {string} opts.opencodeDir - ${XDG_CONFIG_HOME:-~/.config}/opencode/
+ * @param {boolean} opts.dryRun
+ */
+function installOpenCode({ opencodeDir, dryRun }) {
+  const payloadRoot = join(DIST_ROOT, 'opencode-plugin');
+
+  if (dryRun) {
+    process.stdout.write(`[dry-run] opencode: would merge owned skills+commands into ${opencodeDir}\n`);
+    process.stdout.write(`[dry-run] opencode: would print restart instructions\n`);
+    return;
+  }
+
+  // Build the payload if dist is not already assembled
+  ensureBuilt('build-opencode-plugin.sh', payloadRoot, dryRun);
+
+  // Read version + owned-entry names from the payload manifest
+  const manifestPath = join(payloadRoot, '.opencode-plugin', 'plugin.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+
+  let entries = 0;
+  for (const name of manifest.skills ?? []) {
+    const dest = join(opencodeDir, 'skills', name);
+    rmSync(dest, { recursive: true, force: true });
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(join(payloadRoot, 'skills', name), dest, { recursive: true });
+    entries += 1;
+  }
+  for (const name of manifest.commands ?? []) {
+    const dest = join(opencodeDir, 'command', `${name}.md`);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(join(payloadRoot, 'command', `${name}.md`), dest);
+    entries += 1;
+  }
+
+  process.stdout.write(`Installed OpenCode payload ai-catapult@${manifest.version} (${entries} entries)\n`);
+  process.stdout.write(`  skills:  ${join(opencodeDir, 'skills')}\n`);
+  process.stdout.write(`  command: ${join(opencodeDir, 'command')}\n`);
+  process.stdout.write(`\nQuit and restart OpenCode for the changes to take effect.\n`);
+}
+
+// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -281,9 +338,10 @@ Install the ai-catapult plugin into detected AI coding harnesses.
 Detected harnesses:
   Claude Code   ~/.claude/ present
   Codex         \${CODEX_HOME:-~/.codex}/ present
+  OpenCode      \${XDG_CONFIG_HOME:-~/.config}/opencode/ present
 
 Options:
-  --harness <claude|codex|all>   Select harness(es) to install into (default: auto-detect)
+  --harness <claude|codex|opencode|all>   Select harness(es) to install into (default: auto-detect)
   --dry-run                      Print what would happen without writing
   --force                        Overwrite existing dirs even if not a prior ai-catapult install
   -h, --help                     Show this help`;
@@ -334,34 +392,45 @@ export function runInstall(argv, envOverride = {}) {
   const codexHome = envOverride.CODEX_HOME
     ?? process.env.CODEX_HOME
     ?? join(home, '.codex');
+  const xdgConfig = envOverride.XDG_CONFIG_HOME
+    ?? process.env.XDG_CONFIG_HOME
+    ?? join(home, '.config');
+  const opencodeDir = join(xdgConfig, 'opencode');
 
   const claudeDir = join(home, '.claude');
   const claudeDetected = existsSync(claudeDir);
   const codexDetected = existsSync(codexHome);
+  const opencodeDetected = existsSync(opencodeDir);
 
   // Determine which harnesses to run
   let runClaude = false;
   let runCodex = false;
+  let runOpenCode = false;
 
   if (harnessFlag === 'claude') {
     runClaude = true;
   } else if (harnessFlag === 'codex') {
     runCodex = true;
+  } else if (harnessFlag === 'opencode') {
+    runOpenCode = true;
   } else if (harnessFlag === 'all') {
     runClaude = true;
     runCodex = true;
+    runOpenCode = true;
   } else {
     // Auto-detect
     runClaude = claudeDetected;
     runCodex = codexDetected;
+    runOpenCode = opencodeDetected;
   }
 
-  if (!runClaude && !runCodex) {
+  if (!runClaude && !runCodex && !runOpenCode) {
     process.stdout.write(
       'No supported harness detected.\n' +
       '  Claude Code: ~/.claude/ not found\n' +
       `  Codex:       ${codexHome} not found\n` +
-      '\nUse --harness claude|codex|all to force a harness.\n',
+      `  OpenCode:    ${opencodeDir} not found\n` +
+      '\nUse --harness claude|codex|opencode|all to force a harness.\n',
     );
     process.exit(0);
   }
@@ -383,6 +452,14 @@ export function runInstall(argv, envOverride = {}) {
       process.stdout.write(`Skipping Codex: ${codexHome} not found\n`);
     } else {
       installCodex({ codexHome, dryRun, force });
+    }
+  }
+
+  if (runOpenCode) {
+    if (!opencodeDetected && !dryRun) {
+      process.stdout.write(`Skipping OpenCode: ${opencodeDir} not found\n`);
+    } else {
+      installOpenCode({ opencodeDir, dryRun });
     }
   }
 }

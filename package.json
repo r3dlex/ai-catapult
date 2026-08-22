@@ -12,6 +12,7 @@
     "dist/",
     "scripts/build-claude-plugin.sh",
     "scripts/build-codex-plugin.sh",
+    "scripts/build-opencode-plugin.sh",
     "scripts/snapshot-dist.sh",
     "scripts/stage-skill-templates.sh",
     "scripts/stage-readme-contract.sh",
@@ -19,18 +20,21 @@
     "scripts/stage-ci-adapters-runtime.sh",
     "scripts/resolve-vendor-skill.js",
     "scripts/list-bundled-skills.js",
+    "scripts/opencode-commands/northstar.json",
+    "scripts/opencode-commands/autobahn.json",
     "setup.sh",
     "skills.lock.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
-    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
+    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
+    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
     "regen:fixture": "bash scripts/regen-fixture.sh",
     "build:plugin:codex": "bash scripts/build-codex-plugin.sh",
-    "build:plugin:claude": "bash scripts/build-claude-plugin.sh"
+    "build:plugin:claude": "bash scripts/build-claude-plugin.sh",
+    "build:plugin:opencode": "bash scripts/build-opencode-plugin.sh"
   },
   "keywords": [
     "ai-sdlc",
