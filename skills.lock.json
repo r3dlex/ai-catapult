@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
   "ref": "main",
-  "sha": "9232ddb8f0bfa3dd3c4906327269ec7244273052",
+  "sha": "705b88b562198b225dfc26dfe624aca49470b664",
   "_note": "Pin to r3dlex/skills main after northstar-autobahn-hardening: the interview decomposition, autobahn gate scripts, and the gate driver."
 }
