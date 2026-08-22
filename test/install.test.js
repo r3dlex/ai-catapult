@@ -46,10 +46,11 @@ function makeTmpDir(prefix) {
 function runInstall(args, { home, codexHome } = {}) {
   const env = {
     ...process.env,
-    // Always override these two — callers pass synthetic dirs or 'MISSING'
+    // Always override these three — callers pass synthetic dirs or 'MISSING'
     // (a path that doesn't exist) to control detection.
     HOME: home ?? '/nonexistent-no-home',
     CODEX_HOME: codexHome ?? '/nonexistent-no-codex',
+    XDG_CONFIG_HOME: '/nonexistent-no-xdg',
   };
 
   return spawnSync(process.execPath, [bin, 'install', ...args], {
