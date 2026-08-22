@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0",
+  "workflow_id": "init-ai-repo",
+  "phase_id": "04-validate-handoff",
+  "title": "Validate & Handoff",
+  "required": true,
+  "status": "pending",
+  "inputs": [
+    ".ai/traceability/graph.json",
+    ".ai/workflows/repo-workflow.json"
+  ],
+  "outputs": [
+    ".ai/handoff/init-ai-repo-handoff.md",
+    ".ai/traceability/validation-report.md"
+  ],
+  "evidence": null,
+  "next_actions": ["Complete phases 01, 02, and 03 first."]
+}
