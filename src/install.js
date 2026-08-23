@@ -93,29 +93,17 @@ function ensureBuilt(script, distDir, dryRun) {
  * Rules:
  *   - Dir does not exist → safe
  *   - Dir exists and is empty → safe
- *   - Dir exists and carries our plugin.json name → safe
+ *   - Dir exists and carries our plugin.json name (any known harness) → safe
  *   - Dir exists and is non-empty without our plugin.json → NOT safe
  */
 function isSafeToOverwrite(dir) {
   if (!existsSync(dir)) return true;
 
-  // Check for .claude-plugin/plugin.json
-  const claudeManifest = join(dir, '.claude-plugin', 'plugin.json');
-  if (existsSync(claudeManifest)) {
+  for (const manifestDir of ['.claude-plugin', '.codex-plugin', '.opencode-plugin']) {
+    const manifestPath = join(dir, manifestDir, 'plugin.json');
+    if (!existsSync(manifestPath)) continue;
     try {
-      const p = JSON.parse(readFileSync(claudeManifest, 'utf8'));
-      return p.name === PLUGIN_NAME;
-    } catch {
-      return false;
-    }
-  }
-
-  // Check for .codex-plugin/plugin.json
-  const codexManifest = join(dir, '.codex-plugin', 'plugin.json');
-  if (existsSync(codexManifest)) {
-    try {
-      const p = JSON.parse(readFileSync(codexManifest, 'utf8'));
-      return p.name === PLUGIN_NAME;
+      return JSON.parse(readFileSync(manifestPath, 'utf8')).name === PLUGIN_NAME;
     } catch {
       return false;
     }
@@ -127,6 +115,25 @@ function isSafeToOverwrite(dir) {
   } catch {
     return false;
   }
+}
+
+/**
+ * Enforce the prior-install ownership rule at one target path.
+ *
+ * Exits(1) on a foreign non-empty target without --force; warns when
+ * --force overrides. One home for the invariant README documents as
+ * "install refuses to replace a foreign plugin directory".
+ */
+function assertOwnInstallTarget(targetPath, { force }) {
+  if (isSafeToOverwrite(targetPath)) return;
+  if (!force) {
+    process.stderr.write(
+      `Error: ${targetPath} exists and is not a prior ai-catapult install.\n` +
+      `Use --force to overwrite.\n`,
+    );
+    process.exit(1);
+  }
+  process.stdout.write(`Warning: overwriting foreign plugin dir (--force)\n`);
 }
 
 /**
@@ -165,17 +172,7 @@ function installClaude({ claudeDir, dryRun, force }) {
     return;
   }
 
-  // Safety check
-  if (!isSafeToOverwrite(payloadPath)) {
-    if (!force) {
-      process.stderr.write(
-        `Error: ${payloadPath} exists and is not a prior ai-catapult install.\n` +
-        `Use --force to overwrite.\n`,
-      );
-      process.exit(1);
-    }
-    process.stdout.write(`Warning: overwriting foreign plugin dir (--force)\n`);
-  }
+  assertOwnInstallTarget(payloadPath, { force });
 
   // Build the plugin if dist is not already assembled
   const distDir = join(DIST_ROOT, 'claude-plugin');
@@ -235,17 +232,7 @@ function installCodex({ codexHome, dryRun, force }) {
     return;
   }
 
-  // Safety check
-  if (!isSafeToOverwrite(pluginRoot)) {
-    if (!force) {
-      process.stderr.write(
-        `Error: ${pluginRoot} exists and is not a prior ai-catapult install.\n` +
-        `Use --force to overwrite.\n`,
-      );
-      process.exit(1);
-    }
-    process.stdout.write(`Warning: overwriting foreign plugin dir (--force)\n`);
-  }
+  assertOwnInstallTarget(pluginRoot, { force });
 
   // Build the plugin if dist is not already assembled
   const distDir = join(DIST_ROOT, 'codex-plugin');
