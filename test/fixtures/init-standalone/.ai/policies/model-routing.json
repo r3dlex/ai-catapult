@@ -1,6 +1,6 @@
 {
-  "schema_version": "1.0",
-  "description": "Provider-neutral model-routing policy (ADR-0003). Task classes map to portable tiers; host_aliases bind tiers to host model names per provider. Host model names are illustrative examples — replace them with the model IDs your provider/CLI exposes at deployment time.",
+  "schema_version": "1.1",
+  "description": "Provider-neutral model-routing policy (ADR-0003, binding contract refined by ADR-0013). Task classes map to portable tiers; host_aliases bind tiers to host model names per provider with strictly tier keys. alias_supported=true hosts (native aliases) resolve the latest available version on the fly at runtime; alias_supported=false hosts carry concrete pins whose staleness is auditable via pinned_at. Fallback chains live in the top-level `fallbacks` namespace, never inside host_aliases. Host model names are illustrative examples — replace them with the model IDs your provider/CLI exposes at deployment time.",
   "tiers": ["frontier", "mid", "cheap"],
   "task_classes": {
     "requirements": "frontier",
@@ -18,12 +18,28 @@
     "claude": {
       "frontier": "opus",
       "mid": "sonnet",
-      "cheap": "haiku"
+      "cheap": "haiku",
+      "alias_supported": true
     },
     "codex": {
-      "frontier": "o3",
-      "mid": "o4-mini",
-      "cheap": "gpt-4o-mini"
+      "frontier": "gpt-5-codex",
+      "mid": "gpt-5",
+      "cheap": "gpt-5-mini",
+      "alias_supported": false,
+      "pinned_at": "2026-09-06"
+    },
+    "ollama": {
+      "frontier": "glm-5.3:cloud",
+      "mid": "glm-5.3-flash:cloud",
+      "cheap": "glm-5.3-flash:cloud",
+      "alias_supported": false,
+      "pinned_at": "2026-09-06"
+    }
+  },
+  "fallbacks": {
+    "ollama": {
+      "sonnet_or_lower": "opencode/mimo-v2.5-free",
+      "everything_else": "opencode/spark-muse-1.3-free"
     }
   }
 }
