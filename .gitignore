@@ -9,3 +9,7 @@ dist-snapshot/
 
 # OMC session/operational state
 .omc/
+
+# graphify cache (regenerable; never commit)
+graphify-out/
+.graphify_detect.json
