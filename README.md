@@ -86,6 +86,45 @@ build-source hashes. Autobahn uses this explicit contract rather than translatin
 GitHub triggers or release jobs. Local success does **not** prove hosted Node 20
 CI, publication, harness registration, or merge authority; those remain separate.
 
+## Release recovery
+
+Publishing the two npm names is sequential, not atomic. If the primary name
+succeeds and the scoped mirror fails, fix the scoped package's publishing
+authority first. Verify the exact release checkout/version and the primary
+package's registry contents/provenance; do not rebuild a different release or
+claim both packages succeeded. Dry-run the missing package only:
+
+```sh
+bash scripts/publish-both.sh --package @r3dlex/ai-catapult
+```
+
+In the authorized publishing environment, retry that same selection with
+`AI_CATAPULT_PUBLISH=1` and `--yes`. CI provenance handling and npm's immutable
+version checks remain unchanged. The default still publishes both names; no
+existing version is automatically skipped or trusted. This selector does not
+repair credentials or npm trusted-publisher policy. Verify both registry
+versions/provenance after recovery before installing the release.
+
+For **future tags containing this recovery workflow**, dispatch the same tag
+explicitly (after correcting the failed package's publishing authority):
+
+```sh
+gh workflow run release.yml --ref v<VERSION> -f package=@r3dlex/ai-catapult
+```
+
+Manual runs accept only `both`, `ai-catapult`, or `@r3dlex/ai-catapult` and reject
+branches, version-mismatched tags, or a checkout that differs from that tag's
+commit. Tag pushes still publish both by default. Both triggers share ref-based
+concurrency and run the full vendor/build/test/install checks before publication;
+manual recovery neither skips existing versions nor bypasses provenance. Release
+jobs use Node 22 (at least 22.14) and npm 11.5.1 for trusted publishing.
+
+Legacy `v0.2.1` does **not** contain this recovery workflow and cannot use this
+entrypoint. Do not dispatch a newer workflow and check out an old tag as a
+workaround, retag an existing version, or blindly retry packages already present
+on npm. This procedure does not prove or change either package's current npm
+trusted-publisher policy, credentials, or staged-publication settings.
+
 ## Troubleshooting
 
 - **`init would overwrite existing file`** — inspect the existing scaffold first; rerun with `--force` only when replacement is intended.

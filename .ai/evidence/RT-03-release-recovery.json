@@ -1,0 +1,111 @@
+{
+  "goal_id": "RT-03-release-recovery",
+  "defect": "Sequential two-name publication cannot retry only failed scoped package after primary succeeds",
+  "prior_failure_evidence": "https://github.com/r3dlex/ai-catapult/actions/runs/31399297256",
+  "red": {
+    "command": "node --test test/publish-recovery.test.js",
+    "exit_code": 1,
+    "passed": 0,
+    "tests": 3
+  },
+  "green": {
+    "command": "node --test test/publish-recovery.test.js",
+    "exit_code": 0,
+    "passed": 3,
+    "tests": 3
+  },
+  "full_local_ci": {
+    "command": "bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root .",
+    "exit_code": 0,
+    "passed": 191,
+    "tests": 191
+  },
+  "checks": [
+    "bash -n scripts/publish-both.sh",
+    "git diff --check"
+  ],
+  "test_boundary": "Disposable npm command stub exercises actual shell script; no registry publication or credentials used",
+  "preserved": [
+    "default both packages",
+    "default dry run even if environment gate alone enabled",
+    "real publication requires both explicit --yes and AI_CATAPULT_PUBLISH=1",
+    "existing CI provenance flag",
+    "npm immutable-version enforcement",
+    "nonzero npm/auth failure propagation"
+  ],
+  "changed": [
+    "explicit exact-name --package selection",
+    "reject missing unknown duplicate and extraneous flags before build or publish writes",
+    "success summary names only selected package"
+  ],
+  "limitations": [
+    "No automatic skip or attestation trust shortcut",
+    "Selector does not repair npm authentication or trusted-publisher policy",
+    "Source pin remains development-only pending actual merged skills commit",
+    "Manual recovery is available only on future tags containing the dispatch workflow and guard; legacy v0.2.1 is unsupported",
+    "Local validation does not prove hosted Node22/OIDC execution or npm trusted publisher/staged release configuration"
+  ],
+  "logs": {
+    "red": {
+      "path": "/tmp/rt03-release-recovery-red.log",
+      "sha256": "0c45620e564c78f070c5c25cbdac520578ff371d5f0ec16108c5bd2e3400b12e"
+    },
+    "green": {
+      "path": "/tmp/rt03-release-recovery-green.log",
+      "sha256": "da5ab08486ec945d713b06efaa2da5c537d331dacd8284c20c943e37c04a6248"
+    },
+    "local-ci": {
+      "path": "/tmp/rt03-release-recovery-local-ci.log",
+      "sha256": "e0bd08b751a5a3a8fb2fde298bc8dbe91884204a58ece67bcd86abcbe7971a2e"
+    }
+  },
+  "dispatch": {
+    "red": {
+      "command": "node --test test/release-dispatch.test.js",
+      "exit_code": 1,
+      "passed": 0,
+      "tests": 3
+    },
+    "green": {
+      "command": "node --test test/release-dispatch.test.js test/publish-recovery.test.js",
+      "exit_code": 0,
+      "passed": 6,
+      "tests": 6
+    },
+    "full_local_ci": {
+      "command": "bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root .",
+      "exit_code": 0,
+      "passed": 194,
+      "tests": 194,
+      "local_node": "v26.10.0"
+    },
+    "verified": [
+      "three exact manual choices",
+      "push always both",
+      "branch and wrong-version tag rejection",
+      "tag-versus-checkout commit mismatch rejection",
+      "empty/foreign/injected package rejection",
+      "unsupported event rejection",
+      "no output written on rejection",
+      "shared ref concurrency cancel-in-progress false",
+      "all vendor/build/test/install publication guards retained",
+      "OIDC permission retained",
+      "release runtime Node22 and npm11.5.1"
+    ],
+    "workflow_yaml_parser": "Not available locally; focused workflow wiring assertions and executable guard regressions pass; hosted acceptance unverified",
+    "logs": {
+      "red": {
+        "path": "/tmp/rt03-release-dispatch-red.log",
+        "sha256": "04b2da0ea5dd1f264391da04ee750fcaa023ee54b3aee21cbf0f82c4f28f873e"
+      },
+      "green": {
+        "path": "/tmp/rt03-release-dispatch-green.log",
+        "sha256": "dc3acb687a7586d554bfeea72108f3f549f66b05e8c7c3a56167120996f3c003"
+      },
+      "local-ci": {
+        "path": "/tmp/rt03-release-dispatch-local-ci.log",
+        "sha256": "155b732c7588933d6cd44968092e476d80a5ab786323b9a8bdc76b0af90382c8"
+      }
+    }
+  }
+}

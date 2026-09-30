@@ -10,7 +10,8 @@
 #
 # Usage:
 #   bash scripts/publish-both.sh                               # dry-run
-#   AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes   # real publish
+#   AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes   # real publish both
+#   AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes --package @r3dlex/ai-catapult  # scoped retry
 
 set -euo pipefail
 
@@ -21,10 +22,25 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Parse args
 # ---------------------------------------------------------------------------
 REAL_PUBLISH=false
-for arg in "$@"; do
-  case "${arg}" in
-    --yes) REAL_PUBLISH=true ;;
-    *) echo "Unknown argument: ${arg}" >&2; exit 1 ;;
+PACKAGE=both
+PACKAGE_SET=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --yes)
+      [[ "$REAL_PUBLISH" == false ]] || { echo "ERROR: duplicate --yes" >&2; exit 1; }
+      REAL_PUBLISH=true
+      shift
+      ;;
+    --package)
+      [[ "$PACKAGE_SET" == false && $# -ge 2 ]] || { echo "ERROR: --package requires one exact package name and may appear only once" >&2; exit 1; }
+      case "$2" in
+        ai-catapult|@r3dlex/ai-catapult) PACKAGE="$2" ;;
+        *) echo "ERROR: unsupported package: $2" >&2; exit 1 ;;
+      esac
+      PACKAGE_SET=true
+      shift 2
+      ;;
+    *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
@@ -71,14 +87,17 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Publish unscoped: ai-catapult (from repo root)
 # ---------------------------------------------------------------------------
+if [[ "$PACKAGE" == both || "$PACKAGE" == ai-catapult ]]; then
 echo "--- [1/2] Publishing ai-catapult (unscoped) ---"
 # shellcheck disable=SC2086
 (cd "${REPO_ROOT}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
 echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Publish scoped: @r3dlex/ai-catapult (stage in tmp dir with patched name)
 # ---------------------------------------------------------------------------
+if [[ "$PACKAGE" == both || "$PACKAGE" == @r3dlex/ai-catapult ]]; then
 echo "--- [2/2] Publishing @r3dlex/ai-catapult (scoped mirror) ---"
 
 TMPDIR_SCOPED="$(mktemp -d)"
@@ -132,13 +151,18 @@ STAGE_EOF
 # shellcheck disable=SC2086
 (cd "${TMPDIR_SCOPED}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
 echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 if [[ "${REAL_PUBLISH}" == "true" ]]; then
-  echo "Published ai-catapult@${VERSION} and @r3dlex/ai-catapult@${VERSION} to npm."
+  if [[ "$PACKAGE" == both ]]; then
+    echo "Published ai-catapult@${VERSION} and @r3dlex/ai-catapult@${VERSION} to npm."
+  else
+    echo "Published ${PACKAGE}@${VERSION} to npm."
+  fi
 else
-  echo "Dry-run complete — both packages validated successfully."
-  echo "To publish for real: AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes"
+  echo "Dry-run complete — selected packages validated successfully."
+  echo "Publishing requires AI_CATAPULT_PUBLISH=1 and --yes; preserve any --package selection."
 fi
