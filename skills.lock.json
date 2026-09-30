@@ -1,6 +1,6 @@
 {
   "repo": "https://github.com/r3dlex/skills.git",
-  "ref": "main",
-  "sha": "95d86610c4e5d6337ffc4c4b39ae3bc553224e81",
-  "_note": "Pin to r3dlex/skills main after northstar-autobahn-hardening: the interview decomposition, autobahn gate scripts, and the gate driver. Bumped 2026-09-06 for the ADR-0013 model-binding contract (mfr-01/mfr-02 merged)."
+  "ref": "fix/readiness-transfer-RT-02",
+  "sha": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+  "_note": "Development-only readiness-transfer pin: verified local RT-02 commit, not yet merged or a hosted release. Canonical source URL retained; local verification uses process-only transport rewrite. Release requires merged/hosted source and independent release authority."
 }

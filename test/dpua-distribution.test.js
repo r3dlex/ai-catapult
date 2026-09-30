@@ -8,11 +8,14 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '95d86610c4e5d6337ffc4c4b39ae3bc553224e81';
+const sha = JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha;
 const run = (command, args, options = {}) => spawnSync(command, args, { cwd: root, encoding: 'utf8', ...options });
 
-test('matrix distribution remains pinned through the exact skills commit in skills.lock.json', () => {
-  assert.equal(JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha, sha);
+test('matrix distribution remains pinned through the current immutable skills commit', () => {
+  assert.match(sha, /^[a-f0-9]{40}$/);
+  const head = run('git', ['-C', 'vendor/skills', 'rev-parse', 'HEAD']);
+  assert.equal(head.status, 0, head.stderr);
+  assert.equal(head.stdout.trim(), sha);
   assert.equal(readFileSync(join(root, 'vendor/skills/HEAD_SHA'), 'utf8').trim(), sha);
 });
 

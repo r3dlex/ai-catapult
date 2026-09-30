@@ -1,0 +1,111 @@
+{
+  "goal_id": "RT-03",
+  "status": "local-verification-complete",
+  "source": {
+    "repository": "https://github.com/r3dlex/skills.git",
+    "sha": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+    "actual_vendor_head": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+    "merged": false,
+    "hosted_availability_verified": false,
+    "transport": "process-only Git URL rewrite to isolated skills-rt02 checkout; canonical lock URL unchanged"
+  },
+  "red": {
+    "command": "node --test test/readiness-delivery.test.js",
+    "exit_code": 1,
+    "source_sha": "95d86610c4e5d6337ffc4c4b39ae3bc553224e81",
+    "environment": "isolated temporary baseline checkout with final test bytes",
+    "tests": 2,
+    "passed": 0,
+    "reason": "locked source must contain shared readiness contract"
+  },
+  "green": {
+    "command": "node --test test/readiness-delivery.test.js",
+    "exit_code": 0,
+    "tests": 2,
+    "passed": 2
+  },
+  "local_ci": {
+    "command": "bash <verified-skills>/04-validate-handoff/autobahn/local-ci.sh --root .",
+    "contract": ".ai/ci/local-ci.json",
+    "verification": [
+      "npm test"
+    ],
+    "exit_code": 0,
+    "tests": 188,
+    "passed": 188,
+    "hosted_equivalence": false
+  },
+  "delivery": {
+    "initially_absent": [
+      "vendor",
+      "dist",
+      "dist-snapshot"
+    ],
+    "verified_resources": "All tracked Northstar/Autobahn bytes and canonical fixture checked against git show locked SHA; actual HEAD checked independently from sentinel",
+    "negative_integrity": [
+      "forged sentinel without Git checkout",
+      "changed tracked helper bytes",
+      "different actual HEAD with matching sentinel"
+    ],
+    "surfaces": [
+      "canonical",
+      "Claude build",
+      "Codex build",
+      "extracted npm pack Claude",
+      "extracted npm pack Codex",
+      "temporary installed Claude",
+      "temporary installed Codex"
+    ],
+    "public_comparison": "Entire parsed producer/admission JSON, exact identities, findings, freshness, provenance and recovery compared across all seven layouts using one owned reset temporary repository",
+    "cases": [
+      "publish",
+      "exact",
+      "planning-without-context",
+      "no-selection",
+      "unrelated-selection",
+      "exact-with-unrelated",
+      "legacy-direct-no-fallback",
+      "blocked-direct",
+      "missing-fixture",
+      "missing-autobahn",
+      "missing-northstar",
+      "mixed-producer",
+      "mixed-consumer"
+    ],
+    "negative_peer_comparison": "Both missing-peer directions and mixed peers must reject with dependency_failed; transport-specific missing paths are not equated",
+    "deterministic_builds": [
+      "Claude",
+      "Codex"
+    ],
+    "global_installs_changed": false,
+    "host_registration_performed": false
+  },
+  "static_checks": {
+    "git_diff_check": 0,
+    "javascript_syntax": 0,
+    "python_ast": 0,
+    "vendor_verify_script": 0
+  },
+  "logs": {
+    "red": {
+      "path": "/tmp/rt03-final-red.log",
+      "sha256": "c216478d427e1b82ad3185915becf968d6daf3422e9367da11977ce8657e95dc"
+    },
+    "target": {
+      "path": "/tmp/rt03-final-target.log",
+      "sha256": "fb1f01ce79402efa2845f07e2de9ceda87636369ecd9d13ce4bb62bb5a902d2b"
+    },
+    "local-ci": {
+      "path": "/tmp/rt03-final-local-ci.log",
+      "sha256": "ffa15ca5ba8e683f610098b304d13e3e20f8bb60e5392522567d5501973e904f"
+    },
+    "setup": {
+      "path": "/tmp/rt03-final-setup.log",
+      "sha256": "3d1ad1fbed64f1219e00972c41ba4a487936f892d75f05b03a2f04ca8988e4b8"
+    }
+  },
+  "remaining": [
+    "Source is a reviewed local commit, not a merged or published revision",
+    "Hosted CI, release, real harness registration/reload and merge authority not performed or inferred"
+  ]
+}

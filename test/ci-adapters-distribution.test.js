@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '95d86610c4e5d6337ffc4c4b39ae3bc553224e81';
+const sha = JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha;
 const vendor = join(root, 'vendor/skills');
 const canonicalRuntime = join(vendor, 'scripts/render-ci-adapters.py');
 const canonicalTemplates = join(vendor, '03-configure-generate/ai-catapult-init/templates/ci');
@@ -29,7 +29,9 @@ function initializeWorkspace(target) {
 }
 
 test('distribution consumes the exact skills commit pinned by skills.lock.json', () => {
-  assert.equal(JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha, sha);
+  const head = run('git', ['-C', vendor, 'rev-parse', 'HEAD']);
+  assert.equal(head.status, 0, head.stderr);
+  assert.equal(head.stdout.trim(), sha);
   assert.equal(readFileSync(join(vendor, 'HEAD_SHA'), 'utf8').trim(), sha);
 });
 

@@ -78,6 +78,14 @@ bash setup.sh
 bash scripts/prepare-dist.sh
 ```
 
+## Local verification
+
+After `bash setup.sh`, run `npm test` for the complete plugin builds and test suite.
+`.ai/ci/local-ci.json` binds that supporting check to the current workflow and
+build-source hashes. Autobahn uses this explicit contract rather than translating
+GitHub triggers or release jobs. Local success does **not** prove hosted Node 20
+CI, publication, harness registration, or merge authority; those remain separate.
+
 ## Troubleshooting
 
 - **`init would overwrite existing file`** — inspect the existing scaffold first; rerun with `--force` only when replacement is intended.

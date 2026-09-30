@@ -1,0 +1,29 @@
+{
+  "schema": "local-ci/1",
+  "workflows": {
+    ".github/workflows/ci.yml": "0a29e2711bd98db48a6be24d51d24c98b926fb077a745ab8121d5e4e076f28c6",
+    ".github/workflows/release.yml": "0de99a23c221094d9af70f70a71f945041418dd13ef256bed42779d02b9f9854"
+  },
+  "sources": {
+    "package.json": "7322ed717716b9ff7a4904b43617607060b8dd1ac8d81bce753df80b71b1b217",
+    "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
+    "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
+    "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
+    "scripts/list-bundled-skills.js": "388a4b3377057b5e992283ac474042eefec6dff0b5cb6fc6a1da9294edde29ae",
+    "scripts/resolve-vendor-skill.js": "2a7993eedf2dad5a9d98d70e72e9cc5612910f227f0cbeedbd1d20b50540e28d",
+    "scripts/snapshot-dist.sh": "b0cada040efb3333796728e82cc87d08bf8918c1dfdbd8634aeac23604266ca8",
+    "scripts/stage-ci-adapters-runtime.sh": "af04a051042bbaafa104877a5d182fc7e69662fcbf0c6b7239a64a6f411cd8c1",
+    "scripts/stage-matrix-runtime.sh": "ac77e80d140e4d1510f1907c2a6c106ea0d86195bffc88c886c02ff2d8222a96",
+    "scripts/stage-readme-contract.sh": "50cc86490416e12694193e68be537c6eca877073f1ac8e01a846e8d795858e81",
+    "scripts/stage-skill-templates.sh": "63d5eb33ed757eb6ac9dad6c0d524d81c4fff37673135370fa043bad9131ffc0",
+    "scripts/verify-vendor.sh": "5be8789cab3c08f7e4576644292821c9ca0af1fdee109f8b10011d7bef797f6a",
+    "setup.sh": "c301958e5a894a9dee22205a6f2858a48acd23dda6444a35fe0d2891afb4809e",
+    "skills.lock.json": "b7cd215e6921d9757160f71ec8f27861e65d25687a30331873fe87d0e37819e3",
+    "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
+    "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
+    "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302"
+  },
+  "verification": [
+    "npm test"
+  ]
+}
