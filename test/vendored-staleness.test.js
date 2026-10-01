@@ -34,6 +34,8 @@ test('vendored real lock: fresh after first live refresh — ok + exit 0 (assert
   // The vendored lock describes the vendored skills tree: its repo-root IS vendor/skills.
   // Post-skills-#83 the lock was refreshed live (d81f3a1, updated 2026-10-01), so the
   // advisory warning no longer fires; the gate reports fresh and exits 0.
+  // NOTE: this test fails loudly once the lock age crosses the 49d threshold
+  // (~2026-11-19) — fail-loud by design, pinning the snapshot to a live re-vendor.
   const out = runGate(['--lock', vendoredLock, '--mode', 'advisory', '--repo-root', join(root, 'vendor/skills')]);
   assert.equal(out.status, 0, `gate should exit 0 in advisory mode, got ${out.status}: ${out.stderr}`);
   const output = out.stdout + out.stderr;

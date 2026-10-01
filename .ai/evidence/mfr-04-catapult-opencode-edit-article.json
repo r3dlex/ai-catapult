@@ -17,9 +17,8 @@
   },
   "changes": {
     "AC-7": [
-      "skills.lock.json: sha b87fdc20 -> 3c2b43905de7f0bbd0b8edda750c20e41a87153d (merged G-03 skills squash)",
-      "vendor/skills re-vendored at 3c2b439; verify-vendor.sh OK; vendored catalog edit-article supported_hosts ['opencode']",
-      "_note dropped on rewrite of skills.lock.json (see repo history for prior bump notes)"
+      "skills.lock.json: sha b87fdc20 -> 3c2b43905de7f0bbd0b8edda750c20e41a87153d (merged G-03 skills squash); one-line SHA swap — the _note field was already absent on main before this PR (dropped before the 21d2df8 release commit)",
+      "vendor/skills re-vendored at 3c2b439; verify-vendor.sh OK; vendored catalog edit-article supported_hosts ['opencode']"
     ],
     "AC-8": [
       "scripts/check-dead-refs.sh NAMES drops edit-article (restored as live opencode host identity, no longer removed/deprecated)",
@@ -37,7 +36,7 @@
     "parity_evidence": [
       "bash ../skills/scripts/check-opencode-parity.sh ../skills/03-configure-generate/edit-article/SKILL.md -> PASS rc=0",
       "same against vendored copy vendor/skills/03-configure-generate/edit-article/SKILL.md -> PASS rc=0",
-      "npm test green subsumes opencode_parity_test.sh over the full catalog (37 skills for opencode, was 36)"
+      "npm test green subsumes set parity (catalog -> payload -> install tree via opencode-host/opencode-e2e/opencode-install, 37 skills); body-construct parity (opencode:optional markers / denylisted constructs) evidenced by the direct rc=0 runs above and by the vendored sweep opencode_parity_test.sh PASS=42 FAIL=0 (not executed by npm test)"
     ]
   },
   "build_outputs": [

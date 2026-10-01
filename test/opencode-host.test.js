@@ -32,11 +32,14 @@ test('opencode bundled set is the full parity set with claude-code+codex', () =>
   const expected = catalogNames('claude-code').filter((n) => catalogNames('codex').includes(n));
   // SSCM edit-article amendment: opencode is no longer identical to the
   // claude-code∩codex intersection — edit-article ships opencode-only, so the
-  // bundled set may strictly contain the intersection (subsumption).
+  // bundled set may strictly contain the intersection (subsumption), and the
+  // opencode-only extras are pinned to the current set.
   assert.ok(
     expected.every((n) => names.includes(n)),
     `opencode set must contain every claude-code∩codex skill; missing: ${expected.filter((n) => !names.includes(n)).join(', ')}`,
   );
+  const extras = names.filter((n) => !expected.includes(n));
+  assert.deepEqual(extras, ['edit-article'], 'opencode-only extras beyond the parity intersection must be pinned');
   assert.ok(names.length >= expected.length, 'opencode bundled set must not lag the parity set');
   assert.ok(names.length > 1, `expected the full parity set, got ${names.length} skill(s)`);
 });
