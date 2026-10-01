@@ -1,0 +1,43 @@
+{
+  "release": "0.4.0",
+  "base_commit": "67ed15e8b0af859ad2cdb079467f27b9916cbada",
+  "validated_source_tree": "0c2e183a8a5596cf7e54cc6111417fc672fa4175",
+  "scope": "Version-only package bump and local-CI package hash; existing readiness source and publisher recovery unchanged",
+  "skills_sha": "28633f0bdb88d406568a170d6095c4bb638810fa",
+  "setup": {
+    "command": "bash setup.sh && bash scripts/verify-vendor.sh",
+    "actual_vendor_head": "28633f0bdb88d406568a170d6095c4bb638810fa",
+    "exit_code": 0,
+    "log_sha256": "0cfa0fa48694619789d5d5ba311b465bb9fcb540ad63670932d9affc11d8a17e"
+  },
+  "tests": {
+    "command": "npm test",
+    "exit_code": 0,
+    "tests": 216,
+    "passed": 216,
+    "skipped": 0,
+    "log_sha256": "99d51a92418c393dbbc24d5775db9027f2991588871a427e37a95640d8bad30e"
+  },
+  "artifacts": {
+    "surfaces": [
+      "claude",
+      "codex",
+      "opencode"
+    ],
+    "roots": [
+      "dist",
+      "dist-snapshot"
+    ],
+    "version": "0.4.0",
+    "readiness_files_compared_per_surface": 40,
+    "comparison": "Every Northstar/Autobahn tracked resource byte compared against immutable Git source; CLI and all plugin/Claude marketplace version fields checked",
+    "local_ci_manifest": "All source/workflow hashes match",
+    "log_sha256": "3dd5517008bd248e24165b98a418e7f57ff90bf7ff3c1effaf57469002678c18"
+  },
+  "limits": [
+    "Version preparation is not publishing, installation, merge admission or live host authority",
+    "No new implementation dispatch and no readiness context fabricated",
+    "Parent owns exact committed-head hosted CI, review and release authorization",
+    "Evidence validates source tree before addition of this receipt"
+  ]
+}
