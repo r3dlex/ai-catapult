@@ -5,7 +5,7 @@
     ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
   },
   "sources": {
-    "package.json": "f88ae613693647d6146072c185073b81dbe4ffe4e3dd7948f09edc0976dabf9d",
+    "package.json": "d478e34f0d2789d122a3c0130922e158f37871509a5438816a928b1a879d3567",
     "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
     "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
     "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
@@ -20,7 +20,7 @@
     "scripts/stage-skill-templates.sh": "63d5eb33ed757eb6ac9dad6c0d524d81c4fff37673135370fa043bad9131ffc0",
     "scripts/verify-vendor.sh": "5be8789cab3c08f7e4576644292821c9ca0af1fdee109f8b10011d7bef797f6a",
     "setup.sh": "c301958e5a894a9dee22205a6f2858a48acd23dda6444a35fe0d2891afb4809e",
-    "skills.lock.json": "135ac1b2dc5a94ad759dc4ae2a90f05f1538addc32680876a6afa351c44b35ea",
+    "skills.lock.json": "c487c1987fcf60f09a24a1caae502c411ac9a68163f82d45f5f338199b7a80e4",
     "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
     "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
     "test/publish-recovery.test.js": "8e0db95f657e295bc48864cfb42d42afd81801ecf3253cdabb0a3aca6f6d8b9c",
