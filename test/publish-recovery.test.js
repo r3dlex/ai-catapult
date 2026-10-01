@@ -17,7 +17,7 @@ function fixture(callback) {
     const log = join(dir, 'calls.jsonl');
     writeFileSync(log, '');
     const npm = join(dir, 'bin/npm');
-    writeFileSync(npm, `#!${process.execPath}\nconst fs = require('node:fs');\nconst pkg = JSON.parse(fs.readFileSync('package.json'));\nfs.appendFileSync(process.env.PUBLISH_TEST_LOG, JSON.stringify({ name: pkg.name, args: process.argv.slice(2) }) + '\\n');\nif (process.env.PUBLISH_TEST_FAIL === pkg.name) { console.error('ENEEDAUTH'); process.exit(1); }\n`);
+    writeFileSync(npm, `#!${process.execPath}\nconst fs = require('node:fs');\nconst pkg = JSON.parse(fs.readFileSync('package.json'));\nif (process.argv[2] === 'pack') { const path = require('node:path'); const dest = process.argv[process.argv.indexOf('--pack-destination') + 1]; fs.mkdirSync(path.join(dest, 'package')); fs.writeFileSync(path.join(dest, 'package/package.json'), JSON.stringify(pkg)); require('node:child_process').execFileSync('tar', ['-czf', path.join(dest, 'package.tgz'), '-C', dest, 'package']); const integrity = 'sha512-' + require('node:crypto').createHash('sha512').update(fs.readFileSync(path.join(dest, 'package.tgz'))).digest('base64'); console.log(JSON.stringify([{name:pkg.name, version:pkg.version, filename:'package.tgz', integrity}])); process.exit(0); }\nif (process.argv[2] === 'view') { console.log(JSON.stringify({error:{code:'E404'}})); process.exit(1); }\nfs.appendFileSync(process.env.PUBLISH_TEST_LOG, JSON.stringify({ name: pkg.name, args: process.argv.slice(2) }) + '\\n');\nif (process.env.PUBLISH_TEST_FAIL === pkg.name) { console.error('ENEEDAUTH'); process.exit(1); }\n`);
     chmodSync(npm, 0o755);
     const run = (args = [], extra = {}) => spawnSync('bash', ['scripts/publish-both.sh', ...args], {
       cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: `${join(dir, 'bin')}:${process.env.PATH}`, AI_CATAPULT_PUBLISH: '', CI: '', NPM_PROVENANCE: '', PUBLISH_TEST_LOG: log, ...extra },
@@ -36,8 +36,8 @@ test('partial scoped failure can retry only that exact package without republish
   assert.equal(recovered.status, 0, recovered.stderr);
   assert.deepEqual(calls().map((c) => c.name), ['ai-catapult', '@r3dlex/ai-catapult', '@r3dlex/ai-catapult']);
   assert.ok(calls().every((c) => c.args.includes('--provenance')));
-  assert.match(recovered.stdout, /Published @r3dlex\/ai-catapult@1\.2\.3/);
-  assert.doesNotMatch(recovered.stdout, /Published ai-catapult@/);
+  assert.match(recovered.stdout, /Publication complete: @r3dlex\/ai-catapult@1\.2\.3/);
+  assert.doesNotMatch(recovered.stdout, /Publication complete: ai-catapult@/);
 }));
 
 test('package selection stays dry-run by default and preserves both default', () => fixture(({ run, calls }) => {
@@ -58,5 +58,5 @@ test('recovery cannot bypass authorization, invalid selectors or publisher failu
   const failed = run(['--yes', '--package', '@r3dlex/ai-catapult'], { AI_CATAPULT_PUBLISH: '1', CI: 'true', PUBLISH_TEST_FAIL: '@r3dlex/ai-catapult' });
   assert.notEqual(failed.status, 0);
   assert.match(failed.stderr, /ENEEDAUTH/);
-  assert.doesNotMatch(failed.stdout, /Published/);
+  assert.doesNotMatch(failed.stdout, /Publication complete/);
 }));

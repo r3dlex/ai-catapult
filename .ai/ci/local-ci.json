@@ -5,12 +5,12 @@
     ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
   },
   "sources": {
-    "package.json": "7322ed717716b9ff7a4904b43617607060b8dd1ac8d81bce753df80b71b1b217",
+    "package.json": "7d83c9ac17e68ffbafbb21cc095a60089b855b2c0cf85ffbcf5b2e9c7a017d08",
     "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
     "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
     "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
     "scripts/list-bundled-skills.js": "388a4b3377057b5e992283ac474042eefec6dff0b5cb6fc6a1da9294edde29ae",
-    "scripts/publish-both.sh": "dd2576841ede2f307456b8a14864c293788107c548a262054780b81bdcb8a76e",
+    "scripts/publish-both.sh": "12ffbed36316e37ce789338aff9dfee779e9f293e15ab72722e788cc221ee274",
     "scripts/release-context.sh": "b13f8d874910cc346b7c59f771c352470dec2af3535741b01d72f4db372b2be8",
     "scripts/resolve-vendor-skill.js": "2a7993eedf2dad5a9d98d70e72e9cc5612910f227f0cbeedbd1d20b50540e28d",
     "scripts/snapshot-dist.sh": "b0cada040efb3333796728e82cc87d08bf8918c1dfdbd8634aeac23604266ca8",
@@ -23,7 +23,7 @@
     "skills.lock.json": "fbdf2ccdd245c6f1d628defe59597cac019b04db5f4026965f643ce34794b804",
     "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
     "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
-    "test/publish-recovery.test.js": "219bee83e8ca547486131490c1110f14c683b87c4effb0632d34a35d1b7d9afd",
+    "test/publish-recovery.test.js": "8e0db95f657e295bc48864cfb42d42afd81801ecf3253cdabb0a3aca6f6d8b9c",
     "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302",
     "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b"
   },
