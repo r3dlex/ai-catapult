@@ -1,0 +1,5 @@
+{
+  "encoding": "utf-8",
+  "raw_sha256": "9468fff42b4eaa1568be8d6c3081be6a769eaf584bce7383eda2ff17ad5e9461",
+  "output": "\u2714 claude: shipped engine picker matches canonical source (3.724917ms)\n\u2714 claude: missing option values fail promptly without selecting an engine (402.919959ms)\n\u2714 claude: invalid supplied goals cannot be rescued by an engine override (820.490333ms)\n\u2714 codex: shipped engine picker matches canonical source (0.404041ms)\n\u2714 codex: missing option values fail promptly without selecting an engine (116.985125ms)\n\u2714 codex: invalid supplied goals cannot be rescued by an engine override (762.821792ms)\n\u2714 opencode: shipped engine picker matches canonical source (0.586166ms)\n\u2714 opencode: missing option values fail promptly without selecting an engine (157.868667ms)\n\u2714 opencode: invalid supplied goals cannot be rescued by an engine override (653.264792ms)\n\u2139 tests 9\n\u2139 suites 0\n\u2139 pass 9\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 3075.220875\n"
+}
