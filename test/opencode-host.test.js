@@ -30,8 +30,27 @@ test('opencode bundled set is the full parity set with claude-code+codex', () =>
   const names = bundled.map((s) => s.name);
 
   const expected = catalogNames('claude-code').filter((n) => catalogNames('codex').includes(n));
-  assert.deepEqual(names.sort(), expected.sort());
+  // SSCM edit-article amendment: opencode is no longer identical to the
+  // claude-code∩codex intersection — edit-article ships opencode-only, so the
+  // bundled set may strictly contain the intersection (subsumption), and the
+  // opencode-only extras are pinned to the current set.
+  assert.ok(
+    expected.every((n) => names.includes(n)),
+    `opencode set must contain every claude-code∩codex skill; missing: ${expected.filter((n) => !names.includes(n)).join(', ')}`,
+  );
+  const extras = names.filter((n) => !expected.includes(n));
+  assert.deepEqual(extras, ['edit-article'], 'opencode-only extras beyond the parity intersection must be pinned');
+  assert.ok(names.length >= expected.length, 'opencode bundled set must not lag the parity set');
   assert.ok(names.length > 1, `expected the full parity set, got ${names.length} skill(s)`);
+});
+
+test('edit-article ships to opencode after the G-03 catalog restore', () => {
+  const bundled = resolveBundledSkills(vendorSkills, { host: 'opencode' });
+  const names = bundled.map((s) => s.name);
+  assert.ok(names.includes('edit-article'), 'edit-article must be bundled for opencode (skills G-03 restore)');
+  assert.deepEqual(catalogNames('opencode').filter((n) => n === 'edit-article'), ['edit-article']);
+  const bundledEdit = bundled.find((s) => s.name === 'edit-article');
+  assert.ok(existsSync(join(bundledEdit.dir, 'SKILL.md')), 'edit-article resolved to a dir without SKILL.md');
 });
 
 test('opencode resolution includes ai-catapult-init and valid skill dirs', () => {

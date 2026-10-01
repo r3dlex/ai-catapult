@@ -163,3 +163,28 @@ test('auto-detection installs into opencode when only <xdg>/opencode exists', ()
     rmSync(xdg, { recursive: true, force: true });
   }
 });
+
+test('edit-article installs with the opencode payload (AC-9 proxy)', () => {
+  // Subprocess-grade proxy for the installed-surface acceptance check that
+  // rides G-05: the freshly built payload must carry edit-article (skills G-03
+  // restore) and `ai-catapult install --harness opencode` must land its
+  // SKILL.md under <xdg>/opencode/skills/.
+  assert.ok(
+    payloadManifest.skills.includes('edit-article'),
+    `payload manifest must include edit-article; got ${payloadManifest.skills.length} skills`,
+  );
+  const home = makeTmpDir('ai-catapult-oc-home5-');
+  const xdg = makeTmpDir('ai-catapult-oc-xdg5-');
+  try {
+    mkdirSync(join(xdg, 'opencode'), { recursive: true });
+    const result = runInstallCli(['--harness', 'opencode'], { home, xdg });
+    assert.equal(result.status, 0, `install failed: ${result.stderr}`);
+    const installed = join(xdg, 'opencode', 'skills', 'edit-article', 'SKILL.md');
+    assert.ok(existsSync(installed), 'edit-article/SKILL.md missing after install');
+    const body = readFileSync(installed, 'utf8');
+    assert.match(body, /^name:\s*edit-article\s*$/m, 'installed SKILL.md frontmatter must name edit-article');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+    rmSync(xdg, { recursive: true, force: true });
+  }
+});
