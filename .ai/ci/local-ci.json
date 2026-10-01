@@ -5,7 +5,7 @@
     ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
   },
   "sources": {
-    "package.json": "d478e34f0d2789d122a3c0130922e158f37871509a5438816a928b1a879d3567",
+    "package.json": "ce9ab5b72158885463dd1cede3849fce3b2ff9e8f90cee4dda87e83e926f9534",
     "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
     "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
     "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
@@ -20,13 +20,15 @@
     "scripts/stage-skill-templates.sh": "63d5eb33ed757eb6ac9dad6c0d524d81c4fff37673135370fa043bad9131ffc0",
     "scripts/verify-vendor.sh": "5be8789cab3c08f7e4576644292821c9ca0af1fdee109f8b10011d7bef797f6a",
     "setup.sh": "c301958e5a894a9dee22205a6f2858a48acd23dda6444a35fe0d2891afb4809e",
-    "skills.lock.json": "c487c1987fcf60f09a24a1caae502c411ac9a68163f82d45f5f338199b7a80e4",
+    "skills.lock.json": "15e7949ecf08adb5edde261e4d1008feee0e3fa6dd08e0c242618436b1379054",
     "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
     "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
     "test/publish-recovery.test.js": "8e0db95f657e295bc48864cfb42d42afd81801ecf3253cdabb0a3aca6f6d8b9c",
     "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302",
     "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b",
-    "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498"
+    "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498",
+    "test/autobahn-startup.test.js": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5",
+    "test/release-0.4.3.test.js": "74259efa7602dc051640918eab6d16af7783ea72131398dd7046cbdf2cb500d3"
   },
   "verification": [
     "npm test"

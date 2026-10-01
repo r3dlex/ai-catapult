@@ -1,0 +1,17 @@
+✔ startup repair is delivered under a version newer than published 0.4.2 (1.835542ms)
+✔ dist claude manifest matches package version (0.819792ms)
+✔ dist codex manifest matches package version (0.200333ms)
+✔ dist opencode manifest matches package version (0.299083ms)
+✔ dist Claude marketplace versions match package version (0.425625ms)
+✔ dist-snapshot claude manifest matches package version (0.128209ms)
+✔ dist-snapshot codex manifest matches package version (0.094334ms)
+✔ dist-snapshot opencode manifest matches package version (0.234041ms)
+✔ dist-snapshot Claude marketplace versions match package version (0.115917ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 146.053583
