@@ -20,13 +20,14 @@
     "scripts/stage-skill-templates.sh": "63d5eb33ed757eb6ac9dad6c0d524d81c4fff37673135370fa043bad9131ffc0",
     "scripts/verify-vendor.sh": "5be8789cab3c08f7e4576644292821c9ca0af1fdee109f8b10011d7bef797f6a",
     "setup.sh": "c301958e5a894a9dee22205a6f2858a48acd23dda6444a35fe0d2891afb4809e",
-    "skills.lock.json": "c487c1987fcf60f09a24a1caae502c411ac9a68163f82d45f5f338199b7a80e4",
+    "skills.lock.json": "15e7949ecf08adb5edde261e4d1008feee0e3fa6dd08e0c242618436b1379054",
     "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
     "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
     "test/publish-recovery.test.js": "8e0db95f657e295bc48864cfb42d42afd81801ecf3253cdabb0a3aca6f6d8b9c",
     "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302",
     "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b",
-    "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498"
+    "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498",
+    "test/autobahn-startup.test.js": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5"
   },
   "verification": [
     "npm test"

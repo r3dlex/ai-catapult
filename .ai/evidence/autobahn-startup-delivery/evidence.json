@@ -1,0 +1,37 @@
+{
+  "schema_version": "autobahn-startup-delivery-evidence/1",
+  "goal": "autobahn-startup-delivery",
+  "command": "node --test test/autobahn-startup.test.js",
+  "base_packaging_commit": "455a00b9f668a12f8319dcbf1088c59d63301856",
+  "base_skills_commit": "b87fdc2029dad16389cf2501e0faf7934b33b71c",
+  "final_skills_commit": "032df6b11cabf0567cbd132c4ac6c60fc37bff06",
+  "red_exit": 1,
+  "green_exit": 0,
+  "red_reason": "The real before-build selects an engine from invalid goals and hangs on missing values; 6 public behavior cases fail, 3 source-byte checks pass.",
+  "green_result": "Final narrow build: all 9 public byte/behavior checks pass across Claude, Codex and OpenCode.",
+  "test_sha256": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5",
+  "validation": {
+    "npm_test": {
+      "exit_code": 0,
+      "tests": 227,
+      "passed": 227,
+      "failed": 0
+    },
+    "public_startup": {
+      "exit_code": 0,
+      "tests": 9,
+      "passed": 9,
+      "failed": 0
+    }
+  },
+  "source_review": {
+    "architect": "Approved complete old-pin-to-narrow-backport delta; manifest digest 03b571c8062726b0f18712cc90f6673378a8c59156b7a12031b3060e6d858ae4",
+    "code_reviewer": "APPROVE: helper and public packaging regression, no blocking code findings. Canonical ASCII malformed-JSON fixture is supplemented by actual invalid-UTF8 packaging coverage."
+  },
+  "limits": [
+    "No unrelated upstream skill or upstream.lock refresh.",
+    "Local evidence is not hosted CI, installed activation, exact admission, live authority or merge authority.",
+    "ai-factory has no affected engine-picker consumer; dirty work and reference repositories are preserved.",
+    "SWP-ROOT-01 is still blocked on independent context, goal readiness and legacy-safe posture. No engine dispatch occurred."
+  ]
+}
