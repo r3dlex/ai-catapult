@@ -1,0 +1,61 @@
+{
+  "schema": "direct-goal/1",
+  "bundle": {
+    "schema": "handoff-goals/1",
+    "id": "sce-s11",
+    "repository": {
+      "id": "ai-catapult",
+      "root": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/ai-catapult"
+    },
+    "spec": {
+      "path": "docs/specifications/ACTIVE/skills-catalog-evals-consolidation.md",
+      "sha256": "0aba2b54bcabb59c519e77b85324199b4b0b6fb2aa4344de9c8afc80affbee05"
+    },
+    "issue_ref": "local:aitool-root/.ai/work-intake/skills-catalog-evals-consolidation.md",
+    "planning_complete": true,
+    "status": "active",
+    "goals": [
+      {
+        "id": "SCE-S11",
+        "repository": {
+          "id": "ai-catapult",
+          "root": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/ai-catapult"
+        },
+        "issue_ref": "local:aitool-root/.ai/work-intake/skills-catalog-evals-consolidation.md#SCE-S11",
+        "scope": [
+          "`lock-bump.yml` poller (6 h `schedule` + dispatch, `permissions: contents/pull-requests/actions: write`): compares skills main HEAD with the lock; re-vendors, regenerates fixtures, runs `npm test`; opens or updates **one rolling PR** with the diff + skills log, marked failing with the log when tests are red; dispatches `ci.yml` (which gains `workflow_dispatch`) on that branch; no-op when current; never merges, tags or publishes. Its branch holds only bot commits, and hand edits go in S12a"
+        ],
+        "acceptance_criteria": [
+          "AC-10: see canonical spec",
+          "AC-11: see canonical spec",
+          "G3: see canonical spec",
+          "G8: see canonical spec"
+        ],
+        "dependencies": [],
+        "verification": [
+          "npm test"
+        ],
+        "coverage_status": "unknown",
+        "legacy_safe_tdd": true,
+        "legacy_risk_reason": "Coverage not measured in this repo yet",
+        "requirements": [
+          {
+            "id": "branch-sce-s11",
+            "stage": "merge",
+            "kind": "branch_target",
+            "binding": {
+              "target": "main",
+              "branch": "sce/s11-lock-bump-poller"
+            },
+            "responsible": "Andres Silva Burgstahler"
+          }
+        ],
+        "readiness": {
+          "preparation": "ready",
+          "implementation": "ready",
+          "merge": "unknown"
+        }
+      }
+    ]
+  }
+}
