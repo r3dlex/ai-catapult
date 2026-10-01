@@ -1,0 +1,46 @@
+{
+  "goal_id": "G-04",
+  "handoff": "northstar-plan-opencode-omo-gap-fill-r2",
+  "generation": "68bae98b5c5417422a38feb66bae0a01291ab7f8ae6e80b84a197e5693bd8ae3",
+  "date": "2026-10-02",
+  "tdd": {
+    "red": {
+      "command": "node --test test/opencode-host.test.js (against vendor @ b87fdc20, pre-G-03: edit-article supported_hosts [])",
+      "exit_code": 1,
+      "detail": "new test 'edit-article ships to opencode after the G-03 catalog restore' failed: edit-article must be bundled for opencode (skills G-03 restore). Second red: node --test test/opencode-install.test.js after re-vendoring to b87fdc20 — 'edit-article installs with the opencode payload (AC-9 proxy)' failed (payload manifest missing edit-article)."
+    },
+    "green": {
+      "command": "npm test (after lock bump to 3c2b43905de7f0bbd0b8edda750c20e41a87153d + re-vendor + AC-8 dead-refs edit)",
+      "exit_code": 0,
+      "detail": "221 pass / 0 fail (baseline pre-change: 218 pass / 0 fail)."
+    }
+  },
+  "changes": {
+    "AC-7": [
+      "skills.lock.json: sha b87fdc20 -> 3c2b43905de7f0bbd0b8edda750c20e41a87153d (merged G-03 skills squash)",
+      "vendor/skills re-vendored at 3c2b439; verify-vendor.sh OK; vendored catalog edit-article supported_hosts ['opencode']",
+      "_note dropped on rewrite of skills.lock.json (see repo history for prior bump notes)"
+    ],
+    "AC-8": [
+      "scripts/check-dead-refs.sh NAMES drops edit-article (restored as live opencode host identity, no longer removed/deprecated)",
+      "header comment: 'all four removed/deprecated identities' -> 'all three'; gate PASSED (52 raw matches, all excluded)",
+      "tree-wide: edit-article had exactly one live identity reference (this NAMES list); vendored snapshot excluded by design"
+    ],
+    "AC-9": [
+      "test/opencode-install.test.js: new subprocess-grade test 'edit-article installs with the opencode payload (AC-9 proxy)' — payload manifest must include edit-article, install --harness opencode lands skills/edit-article/SKILL.md with frontmatter name: edit-article",
+      "red proven: with vendor re-vendored at b87fdc20 the test fails; green at 3c2b439"
+    ],
+    "premise_fix": [
+      "test/opencode-host.test.js: 'full parity set' strict deepEqual rewritten as subsumption — post-SSCM edit-article amendment opencode is no longer identical to claude-code∩codex (edit-article ships opencode-only); opencode set must CONTAIN the intersection",
+      "test/vendored-staleness.test.js: real vendored lock premise 'stale + unreachable -> advisory warn' ended by skills PR #83's live upstream.lock refresh (c872eae, d81f3a1, updated 2026-10-01) — the dated flip condition in the gate source. Test now asserts fresh-lock 'staleness: ok' exit 0 and synthetic-stale-hard; advisory-warn wording is unreachable in the snapshot (synthetic stale is hard regardless of mode) and stays covered by the skills repo's own sync_staleness_test.sh"
+    ],
+    "parity_evidence": [
+      "bash ../skills/scripts/check-opencode-parity.sh ../skills/03-configure-generate/edit-article/SKILL.md -> PASS rc=0",
+      "same against vendored copy vendor/skills/03-configure-generate/edit-article/SKILL.md -> PASS rc=0",
+      "npm test green subsumes opencode_parity_test.sh over the full catalog (37 skills for opencode, was 36)"
+    ]
+  },
+  "build_outputs": [
+    "dist/* and dist-snapshot/* are gitignored build outputs derived from vendor/; rebuilt locally and in CI (ci.yml vendor job + pretest), not committed"
+  ]
+}

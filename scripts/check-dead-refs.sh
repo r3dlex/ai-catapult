@@ -12,7 +12,7 @@
 # gate fails (no dead shields):
 #
 #   vendor/skills/**           — the vendored skills snapshot legitimately
-#                                names all four removed/deprecated identities
+#                                names all three removed/deprecated identities
 #                                (its own allowlists cover them there).
 #   dist/** dist-snapshot/**   — build outputs derived from vendor/;
 #                                gitignored, excluded for determinism.
@@ -25,7 +25,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 2
 
-NAMES=(resolving-merge-conflicts ubiquitous-language diagnose edit-article)
+NAMES=(resolving-merge-conflicts ubiquitous-language diagnose)
 
 # identity semantics mirror the vendored gate:
 #   `name` | 'name' | "name" | $name | name/SKILL.md | --skill name
