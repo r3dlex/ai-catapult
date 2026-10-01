@@ -5,7 +5,7 @@
     ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
   },
   "sources": {
-    "package.json": "d478e34f0d2789d122a3c0130922e158f37871509a5438816a928b1a879d3567",
+    "package.json": "ce9ab5b72158885463dd1cede3849fce3b2ff9e8f90cee4dda87e83e926f9534",
     "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
     "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
     "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
@@ -27,7 +27,8 @@
     "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302",
     "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b",
     "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498",
-    "test/autobahn-startup.test.js": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5"
+    "test/autobahn-startup.test.js": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5",
+    "test/release-0.4.3.test.js": "74259efa7602dc051640918eab6d16af7783ea72131398dd7046cbdf2cb500d3"
   },
   "verification": [
     "npm test"
