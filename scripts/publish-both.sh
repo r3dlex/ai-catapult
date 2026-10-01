@@ -71,9 +71,26 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Publish unscoped: ai-catapult (from repo root)
 # ---------------------------------------------------------------------------
+# Rerun tolerance: if this exact version is already on the registry (e.g. a
+# release run that failed at [2/2] being retried via `gh run rerun --failed`),
+# npm would reject the [1/2] PUT with "You cannot publish over the previously
+# published versions" and abort before the scoped mirror ever gets its attempt. Treat "already published" for THIS
+# package+version as success and continue.
 echo "--- [1/2] Publishing ai-catapult (unscoped) ---"
-# shellcheck disable=SC2086
-(cd "${REPO_ROOT}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
+publish_unscoped() {
+  # shellcheck disable=SC2086
+  (cd "${REPO_ROOT}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
+}
+if ! UNPUBLISHED_ERR="$(publish_unscoped 2>&1)"; then
+  if [[ "${UNPUBLISHED_ERR}" == *"previously published versions"* ]]; then
+    echo "ai-catapult@${VERSION} already published — continuing (rerun tolerance)."
+  else
+    printf '%s\n' "${UNPUBLISHED_ERR}" >&2
+    exit 1
+  fi
+else
+  printf '%s\n' "${UNPUBLISHED_ERR}"
+fi
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -129,8 +146,21 @@ writeFileSync(
 process.stdout.write('Scoped package staged at: ' + dest + '\n');
 STAGE_EOF
 
+echo ""
 # shellcheck disable=SC2086
-(cd "${TMPDIR_SCOPED}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
+scoped_publish() {
+  (cd "${TMPDIR_SCOPED}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
+}
+if ! SCOPED_ERR="$(scoped_publish 2>&1)"; then
+  if [[ "${SCOPED_ERR}" == *"previously published versions"* ]]; then
+    echo "@r3dlex/ai-catapult@${VERSION} already published — continuing (rerun tolerance)."
+  else
+    printf '%s\n' "${SCOPED_ERR}" >&2
+    exit 1
+  fi
+else
+  printf '%s\n' "${SCOPED_ERR}"
+fi
 echo ""
 
 # ---------------------------------------------------------------------------
