@@ -1,0 +1,65 @@
+{
+  "schema": "readiness-policy/1",
+  "repository": {
+    "id": "ai-catapult",
+    "root": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/ai-catapult"
+  },
+  "sources": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "2584673bf15a0d022523fa130af37085e0dba37dbd06f19082d1e58821bc9260"
+    },
+    {
+      "path": ".ai/rules/.gitkeep",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "gates": [
+    {
+      "id": "own-execution",
+      "stage": "implementation",
+      "scope": {
+        "repository": true
+      },
+      "kind": "ownership",
+      "binding": {
+        "roles": [
+          "owner"
+        ]
+      },
+      "responsible": "Andres Silva Burgstahler"
+    },
+    {
+      "id": "own-review",
+      "stage": "merge",
+      "scope": {
+        "repository": true
+      },
+      "kind": "ownership",
+      "binding": {
+        "roles": [
+          "reviewer"
+        ]
+      },
+      "responsible": "Andres Silva Burgstahler"
+    },
+    {
+      "id": "tool-present",
+      "stage": "implementation",
+      "scope": {
+        "repository": true
+      },
+      "kind": "tooling",
+      "binding": {
+        "tool": "npm"
+      },
+      "responsible": "Andres Silva Burgstahler"
+    }
+  ],
+  "not_applicable": {
+    "branch_target": "Declared per goal as an additive branch_target requirement (target main), so one policy serves goals on different branches",
+    "fixtures": "No goal needs an isolation fixture; verification is the repo test suite (tests use temporary directories internally)",
+    "registration_approval": "Single-maintainer repo: the owner authors and registers plans; merge approval is the own-review gate",
+    "harness_trust": "Local single-maintainer harness; no in-repo trust anchor exists pre-merge, and creating one would self-sign"
+  }
+}

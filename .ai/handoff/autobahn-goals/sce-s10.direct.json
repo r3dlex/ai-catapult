@@ -1,0 +1,60 @@
+{
+  "schema": "direct-goal/1",
+  "bundle": {
+    "schema": "handoff-goals/1",
+    "id": "sce-s10",
+    "repository": {
+      "id": "ai-catapult",
+      "root": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/ai-catapult"
+    },
+    "spec": {
+      "path": "docs/specifications/ACTIVE/skills-catalog-evals-consolidation.md",
+      "sha256": "0aba2b54bcabb59c519e77b85324199b4b0b6fb2aa4344de9c8afc80affbee05"
+    },
+    "issue_ref": "local:aitool-root/.ai/work-intake/skills-catalog-evals-consolidation.md",
+    "planning_complete": true,
+    "status": "active",
+    "goals": [
+      {
+        "id": "SCE-S10",
+        "repository": {
+          "id": "ai-catapult",
+          "root": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/ai-catapult"
+        },
+        "issue_ref": "local:aitool-root/.ai/work-intake/skills-catalog-evals-consolidation.md#SCE-S10",
+        "scope": [
+          "OpenCode `.ai-catapult-owned.json` `{version, skills[], commands[]}` + prune of previously owned entries the new manifest drops; one-time seed from the current manifest; tmpdir tests (first install, prune after a manifest shrink, foreign dir kept, version recorded, idempotent)"
+        ],
+        "acceptance_criteria": [
+          "G7: see canonical spec",
+          "AC-12: see canonical spec",
+          "AC-13: see canonical spec"
+        ],
+        "dependencies": [],
+        "verification": [
+          "npm test"
+        ],
+        "coverage_status": "unknown",
+        "legacy_safe_tdd": true,
+        "legacy_risk_reason": "Coverage not measured in this repo yet",
+        "requirements": [
+          {
+            "id": "branch-sce-s10",
+            "stage": "merge",
+            "kind": "branch_target",
+            "binding": {
+              "target": "main",
+              "branch": "sce/s10-opencode-prune"
+            },
+            "responsible": "Andres Silva Burgstahler"
+          }
+        ],
+        "readiness": {
+          "preparation": "ready",
+          "implementation": "ready",
+          "merge": "unknown"
+        }
+      }
+    ]
+  }
+}
