@@ -1,26 +1,12 @@
 /**
- * Tests for publish-both.sh rerun tolerance.
- *
- * A release run that fails at [2/2] (scoped) after [1/2] (unscoped) succeeded
- * leaves the unscoped version already on the registry. Re-running the publish
- * step against the same tag → npm rejects [1/2] with "You cannot publish over
- * the previously published versions: X.Y.Z" and the scoped mirror never gets
- * its attempt. publish-both.sh must treat already-published-for-this-version
- * as success and continue; other npm failures (ENEEDAUTH) must still abort.
- *
- * Strategy: copy scripts/publish-both.sh into a sandbox tree (package.json +
- * dist plugin markers), shadow npm with a stub on PATH, and run with
- * AI_CATAPULT_PUBLISH=1 --yes. The stub counts its `publish` invocations in
- * $PB_CALLS_FILE and prints the failure text from
- * $PB_ERROR_DIR/error-<call-index> (exiting 1) when that file exists; it
- * exits 0 with a fake success line otherwise. Counting via env-pinned files
- * (not cwd markers) because the scoped publish runs inside its own mktemp
- * staging directory.
+ * Publisher preflight verifies an existing exact immutable artifact whose
+ * npmjs package/version/payload independently matches the locally packed bytes.
+ * Stubbed npm commands exercise both package names without network or writes.
  */
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { mkdtempSync, cpSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
+import { mkdtempSync, cpSync, writeFileSync, mkdirSync, chmodSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,24 +16,39 @@ const root = join(__dirname, '..');
 const script = join(root, 'scripts', 'publish-both.sh');
 
 const CANNOT_PUBLISH =
-  'npm error You cannot publish over the previously published versions: 9.9.9.';
+  JSON.stringify({ error: { code: 'EPUBLISHCONFLICT', summary: 'You cannot publish over the previously published versions: 9.9.9.' } });
 const ENEEDAUTH =
   'npm error code ENEEDAUTH\nnpm error need auth This command requires you to be logged in.';
 
-const NPM_STUB = `#!/usr/bin/env bash
-calls_file="$PB_CALLS_FILE"
-err_dir="$PB_ERROR_DIR"
-if [[ "$1" == "publish" ]]; then
-  n=$(cat "$calls_file" 2>/dev/null || echo 0)
-  n=$((n + 1))
-  echo "$n" > "$calls_file"
-  if [[ -f "$err_dir/error-$n" ]]; then
-    cat "$err_dir/error-$n"
-    exit 1
-  fi
-fi
-echo "ai-catapult@9.9.9 published (stub)"
-exit 0
+const NPM_STUB = `#!${process.execPath}
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const pkg = require(process.cwd() + '/package.json');
+const args = process.argv.slice(2);
+const integrityFile = '.test-integrity';
+if (args[0] === 'pack') {
+  const dest = args[args.indexOf('--pack-destination') + 1];
+  fs.mkdirSync(path.join(dest, 'package'));
+  fs.writeFileSync(path.join(dest, 'package/package.json'), JSON.stringify({...pkg, name:process.env.PB_ARCHIVE_NAME || pkg.name}));
+  require('node:child_process').execFileSync('tar', ['-czf', path.join(dest, 'package.tgz'), '-C', dest, 'package']);
+  const integrity = 'sha512-' + crypto.createHash('sha512').update(fs.readFileSync(path.join(dest, 'package.tgz'))).digest('base64');
+  fs.writeFileSync(integrityFile, integrity);
+  console.log(JSON.stringify([{name:pkg.name, version:pkg.version, filename:'package.tgz', integrity}]));
+} else if (args[0] === 'view') {
+  if (process.env.PB_VIEW_MALFORMED) { console.log('not json'); process.exit(0); }
+  if (process.env.PB_VIEW_ERROR) { console.log(JSON.stringify({error:{code:process.env.PB_VIEW_ERROR}})); process.exit(1); }
+  if (process.env.PB_EXISTING === pkg.name) console.log(JSON.stringify({name:process.env.PB_NAME || pkg.name, version:process.env.PB_VERSION || pkg.version, 'dist.integrity':process.env.PB_INTEGRITY || fs.readFileSync(integrityFile, 'utf8')}));
+  else { console.log(JSON.stringify({error:{code:'E404'}})); process.exit(1); }
+} else if (args[0] === 'publish') {
+  if (!args.includes('--@r3dlex:registry=https://registry.npmjs.org') || !args.includes('--registry=https://registry.npmjs.org') || 'sha512-' + crypto.createHash('sha512').update(fs.readFileSync(args[1])).digest('base64') !== fs.readFileSync(integrityFile, 'utf8')) process.exit(42);
+  const file = process.env.PB_CALLS_FILE;
+  const n = (fs.existsSync(file) ? Number(fs.readFileSync(file)) : 0) + 1;
+  fs.writeFileSync(file, String(n));
+  const error = path.join(process.env.PB_ERROR_DIR, 'error-' + n);
+  if (fs.existsSync(error)) { console.log(fs.readFileSync(error, 'utf8')); process.exit(Number(process.env.PB_EXIT || 1)); }
+  console.log(pkg.name + ' published (stub)');
+} else process.exit(43);
 `;
 
 /** Build a sandbox tree and configure per-call npm stub failures. */
@@ -81,7 +82,7 @@ exec "${process.execPath}" "$@"
 }
 
 /** Run the sandboxed publish-both.sh in real mode (-x yes). */
-function run(dir) {
+function run(dir, extra = {}) {
   return spawnSync('bash', [join(dir, 'scripts', 'publish-both.sh'), '--yes'], {
     encoding: 'utf8',
     cwd: dir,
@@ -91,6 +92,7 @@ function run(dir) {
       PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
       PB_CALLS_FILE: join(dir, 'calls'),
       PB_ERROR_DIR: join(dir, 'err'),
+      ...extra,
     },
   });
 }
@@ -107,13 +109,14 @@ test('double gate: --yes without AI_CATAPULT_PUBLISH=1 refuses', () => {
 });
 
 test('rerun tolerance: unscoped already-published continues to scoped attempt', () => {
-  const dir = sandbox({ call1: CANNOT_PUBLISH });
-  const r = run(dir);
+  const dir = sandbox();
+  const r = run(dir, { PB_EXISTING: 'ai-catapult' });
+  assert.equal(readFileSync(join(dir, 'calls'), 'utf8'), '1');
   assert.equal(r.status, 0, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
   assert.match(r.stdout, /--- \[1\/2\] Publishing ai-catapult \(unscoped\) ---/);
   assert.match(r.stdout, /ai-catapult@9\.9\.9 already published/);
   assert.match(r.stdout, /--- \[2\/2\] Publishing @r3dlex\/ai-catapult \(scoped mirror\) ---/);
-  assert.match(r.stdout, /Published ai-catapult@9\.9\.9 and @r3dlex\/ai-catapult@9\.9\.9/);
+  assert.match(r.stdout, /Publication complete: ai-catapult@9\.9\.9 and @r3dlex\/ai-catapult@9\.9\.9/);
 });
 
 test('unscoped ENEEDAUTH still aborts', () => {
@@ -124,16 +127,64 @@ test('unscoped ENEEDAUTH still aborts', () => {
 });
 
 test('scoped already-published tolerated (exit 0)', () => {
-  const dir = sandbox({ call2: CANNOT_PUBLISH });
-  const r = run(dir);
+  const dir = sandbox();
+  const r = run(dir, { PB_EXISTING: '@r3dlex/ai-catapult' });
+  assert.equal(readFileSync(join(dir, 'calls'), 'utf8'), '1');
   assert.equal(r.status, 0, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
   assert.match(r.stdout, /@r3dlex\/ai-catapult@9\.9\.9 already published/);
-  assert.match(r.stdout, /Published ai-catapult@9\.9\.9 and @r3dlex\/ai-catapult@9\.9\.9/);
+  assert.match(r.stdout, /Publication complete: ai-catapult@9\.9\.9 and @r3dlex\/ai-catapult@9\.9\.9/);
 });
 
 test('scoped ENEEDAUTH still aborts', () => {
   const dir = sandbox({ call2: ENEEDAUTH });
   const r = run(dir);
   assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /ENEEDAUTH/);
+});
+
+for (const [label, failure, extra] of [
+  ['mixed ENEEDAUTH notice', ENEEDAUTH + '\n' + CANNOT_PUBLISH, {}],
+  ['structured auth with unrelated duplicate notice', JSON.stringify({ error: { code: 'ENEEDAUTH', summary: 'previously published versions' } }), {}],
+  ['wrong registry package', CANNOT_PUBLISH, { PB_NAME: 'foreign' }],
+  ['wrong registry version', CANNOT_PUBLISH, { PB_VERSION: '8.8.8' }],
+  ['registry content mismatch', CANNOT_PUBLISH, { PB_INTEGRITY: 'sha512-OTHER' }],
+]) {
+  test(`retry rejects ${label}`, () => {
+    const r = run(sandbox({ call1: failure }), { ...(label.startsWith('wrong registry') || label === 'registry content mismatch' ? { PB_EXISTING: 'ai-catapult' } : {}), ...extra });
+    assert.notEqual(r.status, 0);
+    assert.doesNotMatch(r.stdout, /Publication complete: ai-catapult@/);
+    assert.match(r.stderr, /previously published versions|registry identity or payload integrity mismatch/);
+  });
+}
+
+for (const code of ['ENEEDAUTH', 'E403', 'E503']) {
+  test(`registry preflight rejects ${code}`, () => {
+    const r = run(sandbox(), { PB_VIEW_ERROR: code });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, new RegExp(code));
+    assert.doesNotMatch(r.stdout, /Publication complete/);
+  });
+}
+test('actual duplicate publish failure is never converted into success', () => {
+  const r = run(sandbox({ call1: CANNOT_PUBLISH }));
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /EPUBLISHCONFLICT/);
+});
+
+test('packed archive identity cannot diverge from requested package', () => {
+  const r = run(sandbox(), { PB_ARCHIVE_NAME: 'foreign' });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /packed archive identity mismatch/);
+});
+
+test('registry malformed metadata fails before publishing', () => {
+  const dir = sandbox();
+  const r = run(dir, { PB_VIEW_MALFORMED: '1' });
+  assert.notEqual(r.status, 0);
+  assert.equal(existsSync(join(dir, 'calls')), false);
+});
+test('actual publisher failure preserves its exit status and diagnostics', () => {
+  const r = run(sandbox({ call1: ENEEDAUTH }), { PB_EXIT: '42' });
+  assert.equal(r.status, 42);
   assert.match(r.stderr, /ENEEDAUTH/);
 });

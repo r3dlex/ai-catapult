@@ -1,0 +1,33 @@
+{
+  "goal_id": "RT-03",
+  "integration_main": "cc337aa8e9e659b9549182e6681517ad9db9a279",
+  "review_tree": "ea6b2ee264de4740c5b15f2245952250a19bc940",
+  "review_patch_sha256": "75ed78e6909b3be773ca0aee59aac2c92b321888f27cb02961a06ee40282b4e4",
+  "publisher_regression": {
+    "red": "Four masked-publish-failure regressions failed on prior candidate",
+    "red_log_sha256": "c36b614c5c7fe0ccede18f03aa9484f22281e47279add3e2721c9a21f190c16f",
+    "green": {
+      "tests": 20,
+      "passed": 20,
+      "skipped": 0
+    },
+    "implementation": "Pack once; inspect archive identity; compare actual SHA512 to exact registry metadata. Verified existing artifacts distinguished from publishing; every actual failure propagates original status and diagnostics."
+  },
+  "local_gates": {
+    "tests": 216,
+    "passed": 216,
+    "skipped": 0,
+    "runs": 2,
+    "exit_code": 0,
+    "log_sha256": "ce8a437505c873b34f6a5a56eac502386f9e9a6dcbecf6d610c4125a0ba81702"
+  },
+  "independent_review": "APPROVE; previous HIGH fixed, no unresolved issues",
+  "npm_precedence_reference": "npm/cli@da1d4d299151781500ec854f10eb7e570696d506 lib/commands/publish.js260-278; matching explicit CLI registry keys override publishConfig. Current archive has no alternative scope routing fields.",
+  "lifecycle": "prepare preserved by npm pack; package defines no prepublishOnly/publish/postpublish hooks",
+  "limits": [
+    "Development source remains5881e0b pending merged skills main pin",
+    "Version0.3.0 preserved from independently advanced main; not readiness release",
+    "No actual publishing performed by regressions",
+    "Prior failed broad-text publisher candidate retained in review history"
+  ]
+}

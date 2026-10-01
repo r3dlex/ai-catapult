@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '88c6db5d5307c464809991f19c77f1c101b57853';
+const sha = JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha;
 const vendor = join(root, 'vendor/skills');
 const canonicalRuntime = join(vendor, 'scripts/render-ci-adapters.py');
 const canonicalTemplates = join(vendor, '03-configure-generate/ai-catapult-init/templates/ci');
@@ -29,7 +29,9 @@ function initializeWorkspace(target) {
 }
 
 test('distribution consumes the exact skills commit pinned by skills.lock.json', () => {
-  assert.equal(JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha, sha);
+  const head = run('git', ['-C', vendor, 'rev-parse', 'HEAD']);
+  assert.equal(head.status, 0, head.stderr);
+  assert.equal(head.stdout.trim(), sha);
   assert.equal(readFileSync(join(vendor, 'HEAD_SHA'), 'utf8').trim(), sha);
 });
 
@@ -133,5 +135,6 @@ test('pinned Skills contract proves golden, policy, transaction, and repeated re
   assert.match(result.stdout, /selected-host-only files/);
   assert.match(result.stdout, /mid-promotion rollback restores exact files/);
   assert.match(result.stdout, /repeated rollback recovery restores exact files/);
-  assert.match(result.stdout, /57 passed; 0 failed/);
+  assert.match(result.stdout, /workspace lock rejects contender and owner explicitly completes/);
+  assert.match(result.stdout, /56 passed; 0 failed/);
 });

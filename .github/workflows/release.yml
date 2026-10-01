@@ -10,13 +10,30 @@ name: Release
 # with organization/user `r3dlex`, repository `ai-catapult`, workflow filename
 # `release.yml`, environment empty. Both packages were first-published manually
 # on 2026-07-02 (npm requires the package to exist before this can be set).
-# Trusted publishing requires npm CLI >= 11.5.1 (upgraded in a step below).
+# Trusted publishing requires Node >= 22.14 and npm CLI >= 11.5.1.
+# setup-node resolves the current Node 22 release; npm is upgraded below.
 #
-# This workflow is inert until a tag matching v* is pushed.
+# Manual recovery is supported only on new release tags containing this workflow
+# and its exact-tag guard; old release tags are not checked out as a workaround.
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Exact package to publish after verifying prior partial release'
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - ai-catapult
+          - '@r3dlex/ai-catapult'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -30,11 +47,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           # NOTE: no registry-url here. setup-node's registry-url writes an
           # .npmrc _authToken=${NODE_AUTH_TOKEN} line with a placeholder value,
           # which can shadow the OIDC trusted-publishing exchange. Trusted
           # publishing needs no registry auth config at all.
+
+      - name: Validate exact release tag and package selection
+        id: release-context
+        run: bash scripts/release-context.sh
+        env:
+          RELEASE_PACKAGE: ${{ inputs.package }}
 
       - name: Upgrade npm for trusted publishing (requires >= 11.5.1)
         run: |
@@ -64,7 +87,13 @@ jobs:
           export CODEX_HOME="${FAKE_CODEX}"
           node bin/ai-catapult.js install --harness all
 
-      - name: Publish both names via OIDC trusted publishing (provenance automatic)
-        run: AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
+      - name: Publish selected names via OIDC trusted publishing (provenance automatic)
+        run: |
+          if [[ "$RELEASE_PACKAGE" == both ]]; then
+            AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
+          else
+            AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes --package "$RELEASE_PACKAGE"
+          fi
         env:
+          RELEASE_PACKAGE: ${{ steps.release-context.outputs.package }}
           CI: 'true'

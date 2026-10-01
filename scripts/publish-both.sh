@@ -10,7 +10,8 @@
 #
 # Usage:
 #   bash scripts/publish-both.sh                               # dry-run
-#   AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes   # real publish
+#   AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes   # real publish both
+#   AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes --package @r3dlex/ai-catapult  # scoped retry
 
 set -euo pipefail
 
@@ -21,10 +22,25 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Parse args
 # ---------------------------------------------------------------------------
 REAL_PUBLISH=false
-for arg in "$@"; do
-  case "${arg}" in
-    --yes) REAL_PUBLISH=true ;;
-    *) echo "Unknown argument: ${arg}" >&2; exit 1 ;;
+PACKAGE=both
+PACKAGE_SET=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --yes)
+      [[ "$REAL_PUBLISH" == false ]] || { echo "ERROR: duplicate --yes" >&2; exit 1; }
+      REAL_PUBLISH=true
+      shift
+      ;;
+    --package)
+      [[ "$PACKAGE_SET" == false && $# -ge 2 ]] || { echo "ERROR: --package requires one exact package name and may appear only once" >&2; exit 1; }
+      case "$2" in
+        ai-catapult|@r3dlex/ai-catapult) PACKAGE="$2" ;;
+        *) echo "ERROR: unsupported package: $2" >&2; exit 1 ;;
+      esac
+      PACKAGE_SET=true
+      shift 2
+      ;;
+    *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
@@ -71,31 +87,77 @@ echo ""
 # ---------------------------------------------------------------------------
 # 1. Publish unscoped: ai-catapult (from repo root)
 # ---------------------------------------------------------------------------
-# Rerun tolerance: if this exact version is already on the registry (e.g. a
-# release run that failed at [2/2] being retried via `gh run rerun --failed`),
-# npm would reject the [1/2] PUT with "You cannot publish over the previously
-# published versions" and abort before the scoped mirror ever gets its attempt. Treat "already published" for THIS
-# package+version as success and continue.
-echo "--- [1/2] Publishing ai-catapult (unscoped) ---"
-publish_unscoped() {
-  # shellcheck disable=SC2086
-  (cd "${REPO_ROOT}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
+# Pack once, then compare/publish those exact bytes. Existing immutable registry
+# content is an idempotent completion, never an excuse to swallow publish errors.
+publish_package() {
+  local package_dir="$1" package_name="$2"
+  node --input-type=module - "$package_dir" "$package_name" "$VERSION" "$DRY_RUN_FLAG" "$PROVENANCE_FLAG" <<'PUBLISH_EOF'
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
+import { createHash } from 'node:crypto';
+const [dir, name, version, dryRun, provenance] = process.argv.slice(2);
+const temp = mkdtempSync(join(tmpdir(), 'ai-catapult-publish-'));
+const run = (args) => spawnSync('npm', args, { cwd: dir, encoding: 'utf8' });
+const requireSuccess = (result) => {
+  process.stderr.write(result.stderr || '');
+  if (result.status !== 0) {
+    process.stderr.write(result.stdout || '');
+    const error = new Error('npm command failed');
+    error.status = result.status > 0 ? result.status : 1;
+    throw error;
+  }
+  return result.stdout;
+};
+try {
+  const packed = JSON.parse(requireSuccess(run(['pack', '--json', '--pack-destination', temp])));
+  if (!Array.isArray(packed) || packed.length !== 1 || packed[0].name !== name || packed[0].version !== version ||
+      typeof packed[0].filename !== 'string' || basename(packed[0].filename) !== packed[0].filename) throw new Error('unexpected local package identity');
+  const tarball = join(temp, packed[0].filename);
+  const integrity = 'sha512-' + createHash('sha512').update(readFileSync(tarball)).digest('base64');
+  if (packed[0].integrity !== integrity) throw new Error('local packed integrity mismatch');
+  const archiveManifest = JSON.parse(requireSuccess(spawnSync('tar', ['-xOf', tarball, 'package/package.json'], { encoding: 'utf8' })));
+  if (archiveManifest.name !== name || archiveManifest.version !== version) throw new Error('packed archive identity mismatch');
+  let existing = false;
+  if (!dryRun) {
+    const remote = run(['view', `${name}@${version}`, 'name', 'version', 'dist.integrity', '--json', '--registry=https://registry.npmjs.org', '--@r3dlex:registry=https://registry.npmjs.org']);
+    if (remote.status === 0) {
+      process.stderr.write(remote.stderr || '');
+      const published = JSON.parse(remote.stdout);
+      if (published.name !== name || published.version !== version || published['dist.integrity'] !== integrity) throw new Error('registry identity or payload integrity mismatch');
+      existing = true;
+    } else {
+      let missing = false;
+      try { missing = JSON.parse(remote.stdout).error?.code === 'E404'; } catch {}
+      if (!missing) requireSuccess(remote);
+      process.stderr.write(remote.stderr || '');
+    }
+  }
+  if (existing) {
+    console.log(`${name}@${version} already published — VERIFIED existing registry artifact (exact payload).`);
+  } else {
+    process.stdout.write(requireSuccess(run(['publish', tarball, '--json', ...[dryRun, provenance].filter(Boolean), '--access', 'public', '--registry=https://registry.npmjs.org', '--@r3dlex:registry=https://registry.npmjs.org'])));
+  }
+} catch (error) {
+  console.error(`publish-both: ${error.message}`);
+  process.exitCode = error.status || 1;
+} finally {
+  rmSync(temp, { recursive: true, force: true });
 }
-if ! UNPUBLISHED_ERR="$(publish_unscoped 2>&1)"; then
-  if [[ "${UNPUBLISHED_ERR}" == *"previously published versions"* ]]; then
-    echo "ai-catapult@${VERSION} already published — continuing (rerun tolerance)."
-  else
-    printf '%s\n' "${UNPUBLISHED_ERR}" >&2
-    exit 1
-  fi
-else
-  printf '%s\n' "${UNPUBLISHED_ERR}"
-fi
+PUBLISH_EOF
+}
+
+if [[ "$PACKAGE" == both || "$PACKAGE" == ai-catapult ]]; then
+echo "--- [1/2] Publishing ai-catapult (unscoped) ---"
+publish_package "$REPO_ROOT" ai-catapult
 echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Publish scoped: @r3dlex/ai-catapult (stage in tmp dir with patched name)
 # ---------------------------------------------------------------------------
+if [[ "$PACKAGE" == both || "$PACKAGE" == @r3dlex/ai-catapult ]]; then
 echo "--- [2/2] Publishing @r3dlex/ai-catapult (scoped mirror) ---"
 
 TMPDIR_SCOPED="$(mktemp -d)"
@@ -147,28 +209,20 @@ process.stdout.write('Scoped package staged at: ' + dest + '\n');
 STAGE_EOF
 
 echo ""
-# shellcheck disable=SC2086
-scoped_publish() {
-  (cd "${TMPDIR_SCOPED}" && npm publish ${DRY_RUN_FLAG} ${PROVENANCE_FLAG} --access public)
-}
-if ! SCOPED_ERR="$(scoped_publish 2>&1)"; then
-  if [[ "${SCOPED_ERR}" == *"previously published versions"* ]]; then
-    echo "@r3dlex/ai-catapult@${VERSION} already published — continuing (rerun tolerance)."
-  else
-    printf '%s\n' "${SCOPED_ERR}" >&2
-    exit 1
-  fi
-else
-  printf '%s\n' "${SCOPED_ERR}"
-fi
+publish_package "$TMPDIR_SCOPED" @r3dlex/ai-catapult
 echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 if [[ "${REAL_PUBLISH}" == "true" ]]; then
-  echo "Published ai-catapult@${VERSION} and @r3dlex/ai-catapult@${VERSION} to npm."
+  if [[ "$PACKAGE" == both ]]; then
+    echo "Publication complete: ai-catapult@${VERSION} and @r3dlex/ai-catapult@${VERSION} published or verified existing."
+  else
+    echo "Publication complete: ${PACKAGE}@${VERSION} published or verified existing."
+  fi
 else
-  echo "Dry-run complete — both packages validated successfully."
-  echo "To publish for real: AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes"
+  echo "Dry-run complete — selected packages validated successfully."
+  echo "Publishing requires AI_CATAPULT_PUBLISH=1 and --yes; preserve any --package selection."
 fi

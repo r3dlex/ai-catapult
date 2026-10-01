@@ -1,0 +1,49 @@
+{
+  "goal_id": "RT-03",
+  "previous_head": "9bfa8cb267f3b238057c5c837a1063d618e5f8d8",
+  "validated_source_tree": "760ac5962f4ee8dcaf6f07544556cc04e5eb5dfb",
+  "production_source": {
+    "repo": "https://github.com/r3dlex/skills.git",
+    "ref": "main",
+    "sha": "28633f0bdb88d406568a170d6095c4bb638810fa",
+    "actual_vendor_head": "28633f0bdb88d406568a170d6095c4bb638810fa",
+    "setup_log_sha256": "bee35009a37a677f968c0e9f949f6d4e3bce14f50f4dd4bf471ba4ed4c0628cb",
+    "verification": "Canonical setup fetched immutable SHA; actual Git HEAD, sentinel and source bytes verified; development note removed"
+  },
+  "delivery": {
+    "command": "npm test",
+    "rebuilt": [
+      "claude",
+      "codex",
+      "opencode"
+    ],
+    "tests": 216,
+    "passed": 216,
+    "skipped": 0,
+    "exit_code": 0,
+    "log_sha256": "e6dd277c047bb8c9005ae1dfbaaeeeb5db616b735336876915a9b7384a258fa8",
+    "focused_command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/readiness-delivery.test.js",
+    "focused_tests": 2,
+    "focused_skipped": 0,
+    "focused_log_sha256": "51cae5620aabfc212ab6c1ce172f759fc034926193fe3f6a371f27be9fd1b0a5",
+    "generated_tracked_fixture_changes": 0
+  },
+  "local_validation": {
+    "driver_source": "28633f0bdb88d406568a170d6095c4bb638810fa",
+    "command": "bash vendor/skills/04-validate-handoff/autobahn/run-gates.sh --root <catapult-rt03> --phase local-validation --goal-record <RT-03-local-goal.json>",
+    "exit_code": 0,
+    "npm_test_runs": 2,
+    "tests_each_run": 216,
+    "skipped_each_run": 0,
+    "lint": "No lint policy configured; driver reports policy=none, not a lint-tool run",
+    "tdd": "Existing RT-03 TDD receipt verified; historical RED preserved unchanged",
+    "log_sha256": "59649b95496593c209d1ec9990bcc4d9fefd027e09926f3e866bc2a24b75962b"
+  },
+  "boundaries": [
+    "Local-validation is supporting evidence, not merge admission or authority",
+    "Version0.3.0 and main integration/publisher recovery code preserved",
+    "Readiness test temporarily installs packed surfaces in disposable directories; no active plugin/cache installation",
+    "No publishing, commits or pushes performed in this slice",
+    "Source tree validated before adding this receipt; final exact-head hosted CI remains leader-owned"
+  ]
+}

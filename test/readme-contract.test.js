@@ -9,7 +9,6 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const canonicalHead = '88c6db5d5307c464809991f19c77f1c101b57853';
 const canonicalGeneratorSha256 = 'aa2a51dc5227ff0f35852b0028ebee69d479573c67bc32a931d34c7332e6447e';
 const canonicalTemplateSha256 = '449a0d74f7150e8558a3884d5bd09c031f00dd4885d8690fef53c00a2ae9a358';
 const stableDist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist');
@@ -45,7 +44,9 @@ after(() => {
 test('skills lock pins the exact canonical README contract from the pinned skills commit', () => {
   const lock = JSON.parse(readFileSync(join(root, 'skills.lock.json'), 'utf8'));
   assert.equal(lock.repo, 'https://github.com/r3dlex/skills.git');
-  assert.equal(lock.sha, canonicalHead);
+  const head = spawnSync('git', ['-C', join(root, 'vendor/skills'), 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+  assert.equal(head.status, 0, head.stderr);
+  assert.equal(head.stdout.trim(), lock.sha);
 });
 
 test('Claude and Codex plugin builds contain byte-identical canonical README contracts', () => {

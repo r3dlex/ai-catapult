@@ -8,11 +8,14 @@ import { tmpdir } from 'node:os';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist-snapshot');
-const sha = '88c6db5d5307c464809991f19c77f1c101b57853';
+const sha = JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha;
 const run = (command, args, options = {}) => spawnSync(command, args, { cwd: root, encoding: 'utf8', ...options });
 
-test('matrix distribution remains pinned through the exact skills commit in skills.lock.json', () => {
-  assert.equal(JSON.parse(readFileSync(join(root, 'skills.lock.json'))).sha, sha);
+test('matrix distribution remains pinned through the current immutable skills commit', () => {
+  assert.match(sha, /^[a-f0-9]{40}$/);
+  const head = run('git', ['-C', 'vendor/skills', 'rev-parse', 'HEAD']);
+  assert.equal(head.status, 0, head.stderr);
+  assert.equal(head.stdout.trim(), sha);
   assert.equal(readFileSync(join(root, 'vendor/skills/HEAD_SHA'), 'utf8').trim(), sha);
 });
 
@@ -75,6 +78,7 @@ test('pinned runtime proves v1.1 projection safety, skew, transaction, concurren
   assert.match(result.stdout, /sanitized child projection contract/);
   assert.match(result.stdout, /profile body version skew rejects/);
   assert.match(result.stdout, /post-intent crash recovered/);
-  assert.match(result.stdout, /stale ABA contender cannot move new live lock/);
-  assert.match(result.stdout, /48 passed; 0 failed/);
+  assert.match(result.stdout, /live lock rejects contender and owner explicitly completes/);
+  assert.match(result.stdout, /stale ABA winner retains exact lock until explicit release/);
+  assert.match(result.stdout, /47 passed; 0 failed/);
 });
