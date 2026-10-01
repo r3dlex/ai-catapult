@@ -3,11 +3,11 @@
   "status": "local-verification-complete",
   "source": {
     "repository": "https://github.com/r3dlex/skills.git",
-    "sha": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
-    "actual_vendor_head": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+    "sha": "5881e0be5ddb4b2ec2990d73e5f0a5cbeeb54d4b",
+    "actual_vendor_head": "5881e0be5ddb4b2ec2990d73e5f0a5cbeeb54d4b",
     "merged": false,
-    "hosted_availability_verified": false,
-    "transport": "process-only Git URL rewrite to isolated skills-rt02 checkout; canonical lock URL unchanged"
+    "hosted_availability_verified": true,
+    "transport": "direct canonical GitHub URL; exact commit fetched by setup.sh; no transport rewrite"
   },
   "red": {
     "command": "node --test test/readiness-delivery.test.js",
@@ -25,15 +25,16 @@
     "passed": 2
   },
   "local_ci": {
-    "command": "bash <verified-skills>/04-validate-handoff/autobahn/local-ci.sh --root .",
+    "command": "bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root .",
     "contract": ".ai/ci/local-ci.json",
     "verification": [
       "npm test"
     ],
     "exit_code": 0,
-    "tests": 188,
-    "passed": 188,
-    "hosted_equivalence": false
+    "tests": 194,
+    "passed": 194,
+    "hosted_equivalence": false,
+    "skipped": 0
   },
   "delivery": {
     "initially_absent": [
@@ -96,16 +97,114 @@
       "sha256": "fb1f01ce79402efa2845f07e2de9ceda87636369ecd9d13ce4bb62bb5a902d2b"
     },
     "local-ci": {
-      "path": "/tmp/rt03-final-local-ci.log",
-      "sha256": "ffa15ca5ba8e683f610098b304d13e3e20f8bb60e5392522567d5501973e904f"
+      "path": "/tmp/rt03-barrier-full-ci.log",
+      "sha256": "fbb0b1e600c901d3cf238e11f6413e92899d7150fa9c3af6aaf800eba75406a4"
     },
     "setup": {
-      "path": "/tmp/rt03-final-setup.log",
-      "sha256": "3d1ad1fbed64f1219e00972c41ba4a487936f892d75f05b03a2f04ca8988e4b8"
+      "path": "/tmp/rt03-barrier-setup.log",
+      "sha256": "9acc534e0f912c8d63a2b0efa5da727836c1143e1de2da7e7c58c61b9b2b153d"
+    },
+    "fixture_red": {
+      "path": "/tmp/rt03-barrier-delivery-red.log",
+      "sha256": "c427fa93b6eee7a4e0b6d244b35816cb94b643a119ccd1c85341ff34269d8315"
+    },
+    "fixture_green": {
+      "path": "/tmp/rt03-barrier-delivery-green.log",
+      "sha256": "4f68504d9a55fefdbd75d42d145606e9918913a2425207f75ab1c40895a04c7f"
+    },
+    "final_local_gate_driver": {
+      "path": "/tmp/rt03-barrier-final-gates.log",
+      "sha256": "7857cf3971f80f9fcb548fbba4fd63474e75826953013eec9684605ca1c89ac3"
     }
   },
   "remaining": [
-    "Source is a reviewed local commit, not a merged or published revision",
-    "Hosted CI, release, real harness registration/reload and merge authority not performed or inferred"
-  ]
+    "Source is a reviewed published development branch commit, not merged main",
+    "Hosted CI for the new delivery commit, release, real harness registration/reload and final merged-source pin remain pending"
+  ],
+  "prior_verification": [
+    {
+      "source": {
+        "repository": "https://github.com/r3dlex/skills.git",
+        "sha": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+        "actual_vendor_head": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+        "merged": false,
+        "hosted_availability_verified": false,
+        "transport": "process-only Git URL rewrite to isolated skills-rt02 checkout; canonical lock URL unchanged"
+      },
+      "local_ci": {
+        "command": "bash <verified-skills>/04-validate-handoff/autobahn/local-ci.sh --root .",
+        "contract": ".ai/ci/local-ci.json",
+        "verification": [
+          "npm test"
+        ],
+        "exit_code": 0,
+        "tests": 188,
+        "passed": 188,
+        "hosted_equivalence": false
+      },
+      "logs": {
+        "red": {
+          "path": "/tmp/rt03-final-red.log",
+          "sha256": "c216478d427e1b82ad3185915becf968d6daf3422e9367da11977ce8657e95dc"
+        },
+        "target": {
+          "path": "/tmp/rt03-final-target.log",
+          "sha256": "fb1f01ce79402efa2845f07e2de9ceda87636369ecd9d13ce4bb62bb5a902d2b"
+        },
+        "local-ci": {
+          "path": "/tmp/rt03-final-local-ci.log",
+          "sha256": "ffa15ca5ba8e683f610098b304d13e3e20f8bb60e5392522567d5501973e904f"
+        },
+        "setup": {
+          "path": "/tmp/rt03-final-setup.log",
+          "sha256": "3d1ad1fbed64f1219e00972c41ba4a487936f892d75f05b03a2f04ca8988e4b8"
+        }
+      },
+      "remaining": [
+        "Source is a reviewed local commit, not a merged or published revision",
+        "Hosted CI, release, real harness registration/reload and merge authority not performed or inferred"
+      ]
+    }
+  ],
+  "fixture_repair": {
+    "scope": "test-only explicit owner acquisition/release barriers; production lock unchanged",
+    "source_commit": "4231b36c72d89c348b3fcfa22f911927065f5404",
+    "command": "node --test --test-name-pattern=\"pinned Skills contract proves|pinned runtime proves\" test/dpua-distribution.test.js test/ci-adapters-distribution.test.js",
+    "red": {
+      "source_sha": "624b813fd92dafa7e7fb29f8a9b232bdabd29de3",
+      "exit_code": 1,
+      "tests": 2,
+      "passed": 0
+    },
+    "green": {
+      "source_sha": "5881e0be5ddb4b2ec2990d73e5f0a5cbeeb54d4b",
+      "exit_code": 0,
+      "tests": 2,
+      "passed": 2,
+      "skipped": 0
+    },
+    "review": "independent code review APPROVE; no issues; not release approval"
+  },
+  "final_local_gate_driver": {
+    "command": "bash vendor/skills/04-validate-handoff/autobahn/run-gates.sh --root . --goal-record .omx/plans/RT-03-local-goal.json --phase all",
+    "exit_code": 0,
+    "verification": [
+      "npm test"
+    ],
+    "tdd_evidence": true,
+    "lint": {
+      "gate_passed": true,
+      "policy": "none",
+      "actual_linter_run": false,
+      "supplemental_checks": [
+        "git diff --check",
+        "node --check test/dpua-distribution.test.js",
+        "node --check test/ci-adapters-distribution.test.js"
+      ]
+    },
+    "local_ci": true,
+    "verification_commands": true,
+    "remote_ci_included": false,
+    "merge_authority_included": false
+  }
 }

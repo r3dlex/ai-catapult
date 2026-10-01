@@ -135,5 +135,6 @@ test('pinned Skills contract proves golden, policy, transaction, and repeated re
   assert.match(result.stdout, /selected-host-only files/);
   assert.match(result.stdout, /mid-promotion rollback restores exact files/);
   assert.match(result.stdout, /repeated rollback recovery restores exact files/);
-  assert.match(result.stdout, /57 passed; 0 failed/);
+  assert.match(result.stdout, /workspace lock rejects contender and owner explicitly completes/);
+  assert.match(result.stdout, /56 passed; 0 failed/);
 });

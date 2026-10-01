@@ -20,7 +20,7 @@
     "scripts/stage-skill-templates.sh": "63d5eb33ed757eb6ac9dad6c0d524d81c4fff37673135370fa043bad9131ffc0",
     "scripts/verify-vendor.sh": "5be8789cab3c08f7e4576644292821c9ca0af1fdee109f8b10011d7bef797f6a",
     "setup.sh": "c301958e5a894a9dee22205a6f2858a48acd23dda6444a35fe0d2891afb4809e",
-    "skills.lock.json": "b7cd215e6921d9757160f71ec8f27861e65d25687a30331873fe87d0e37819e3",
+    "skills.lock.json": "fbdf2ccdd245c6f1d628defe59597cac019b04db5f4026965f643ce34794b804",
     "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
     "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
     "test/publish-recovery.test.js": "219bee83e8ca547486131490c1110f14c683b87c4effb0632d34a35d1b7d9afd",

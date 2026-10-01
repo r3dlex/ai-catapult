@@ -78,6 +78,7 @@ test('pinned runtime proves v1.1 projection safety, skew, transaction, concurren
   assert.match(result.stdout, /sanitized child projection contract/);
   assert.match(result.stdout, /profile body version skew rejects/);
   assert.match(result.stdout, /post-intent crash recovered/);
-  assert.match(result.stdout, /stale ABA contender cannot move new live lock/);
-  assert.match(result.stdout, /48 passed; 0 failed/);
+  assert.match(result.stdout, /live lock rejects contender and owner explicitly completes/);
+  assert.match(result.stdout, /stale ABA winner retains exact lock until explicit release/);
+  assert.match(result.stdout, /47 passed; 0 failed/);
 });
