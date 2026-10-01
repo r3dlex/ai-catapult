@@ -1,0 +1,64 @@
+{
+  "release": "0.4.3",
+  "goal_id": "release-0.4.3",
+  "base_commit": "d396341f2e5badec619894d00547487578f41484",
+  "scope": "Patch release of reviewed Autobahn startup delivery; version, version regression, and local-CI hashes only. No profile implementation or release-policy changes.",
+  "red": {
+    "command": "node --test test/release-0.4.3.test.js",
+    "exit_code": 1
+  },
+  "green": {
+    "command": "node --test test/release-0.4.3.test.js",
+    "exit_code": 0
+  },
+  "provenance": {
+    "test_sha256": "74259efa7602dc051640918eab6d16af7783ea72131398dd7046cbdf2cb500d3",
+    "before_version": "0.4.2",
+    "after_version": "0.4.3",
+    "red_reason": "One acceptance failure: existing published version reused; all eight derived-manifest equality checks passed.",
+    "green_result": "Same unchanged nine tests pass after version bump and existing pretest rebuild.",
+    "red_log": ".ai/evidence/release-0.4.3/red.log",
+    "red_log_sha256": "de6ee7bc4926b72eb90f714c4d4fb73e96023a19111e5865fe02a2cfa89d5eb6",
+    "green_log": ".ai/evidence/release-0.4.3/green.log",
+    "green_log_sha256": "a3c87fd42d02070033e59eb8f1b440ff8be9ed69439021c0e6e69589f459a30a"
+  },
+  "tests": {
+    "command": "npm test",
+    "exit_code": 0,
+    "tests": 236,
+    "passed": 236,
+    "skipped": 0,
+    "log": "/tmp/catapult-release-043-npm-test.log",
+    "log_sha256": "971e46df43d127d82a2be5e9b6fd06cb7f009c3e72fcff0cb41e200ae33e945e"
+  },
+  "publish_dry_run": {
+    "command": "bash scripts/publish-both.sh",
+    "exit_code": 0,
+    "packages": [
+      "ai-catapult",
+      "@r3dlex/ai-catapult"
+    ],
+    "log": "/tmp/catapult-release-043-publish-dry-run.log",
+    "log_sha256": "7f5516b5c53e8ebb8e5f5f34cce74eb5eb50a68637e14cd826f7cf8fbbfd7bc5"
+  },
+  "artifacts": {
+    "surfaces": [
+      "claude",
+      "codex",
+      "opencode"
+    ],
+    "roots": [
+      "dist",
+      "dist-snapshot"
+    ],
+    "version": "0.4.3",
+    "local_ci_manifest": "All source/workflow hashes match",
+    "cli_version": "0.4.3"
+  },
+  "limits": [
+    "Local validation and dry-run are not publication, registry provenance, exact merge admission or live host authority.",
+    "No commit, push, tag, publish, merge, readiness context or provider changes performed.",
+    "Full test and publish dry-run raw logs live in /tmp; hashes recorded here.",
+    "Parent owns independent review, fresh committed-head hosted CI and authorized exact-tag release."
+  ]
+}
