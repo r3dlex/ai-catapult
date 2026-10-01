@@ -1,0 +1,66 @@
+{
+  "release": "0.4.1",
+  "base_commit": "006d0c89c8e3a5eb5c81d393300a4e5ace3b65c0",
+  "validated_source_tree": "1427ff211d83775a0594d3528801f7382ec5e007",
+  "scope": "Keep npm pack JSON parseable using explicit foreground-scripts=false while retaining lifecycle execution, exact archive verification and publish failure propagation",
+  "red": {
+    "command": "node --test test/publish-lifecycle.test.js",
+    "original_publisher": true,
+    "exit_code": 1,
+    "passed": 1,
+    "failed": 1,
+    "result": "Actual npm noisy prepack stdout contaminated pack JSON; failing-prepack exit23 already preserved",
+    "log_sha256": "43a1940f19a295596a851f929bd445f62fe0ecd9e9468313b09085f3d00ef894"
+  },
+  "green": {
+    "command": "node --test test/publish-lifecycle.test.js",
+    "exit_code": 0,
+    "passed": 2,
+    "skipped": 0,
+    "coverage": [
+      "Copied actual publish helper dry-run with real npm and noisy prepack stdout",
+      "Foreground=true ambient posture overridden explicitly, no silent/ignore-scripts/JSON scraping",
+      "Observable lifecycle side effect occurs exactly once",
+      "Failing prepack exit23 and diagnostic retained; publication completion absent"
+    ],
+    "log_sha256": "e6a9bf8990e276c9f98d84852c4d023fdbd0191532a12e92f84b33f145e28ee8"
+  },
+  "runtime": {
+    "node": "26.10.0",
+    "npm": "11.19.1"
+  },
+  "full_validation": {
+    "setup_command": "bash setup.sh",
+    "setup_log_sha256": "0cfa0fa48694619789d5d5ba311b465bb9fcb540ad63670932d9affc11d8a17e",
+    "command": "npm test",
+    "exit_code": 0,
+    "tests": 218,
+    "passed": 218,
+    "skipped": 0,
+    "log_sha256": "cc7d547afc5bae458c692af3d5ecb3bbe92d33b9b5f33f50d50c9892cbe674c3"
+  },
+  "delivery": {
+    "skills_sha": "28633f0bdb88d406568a170d6095c4bb638810fa",
+    "actual_vendor_head_verified": true,
+    "surfaces": [
+      "claude",
+      "codex",
+      "opencode"
+    ],
+    "roots": [
+      "dist",
+      "dist-snapshot"
+    ],
+    "plugin_and_cli_version": "0.4.1",
+    "readiness_files_per_surface_compared_to_git": 40,
+    "ci_manifest_hashes_match": true,
+    "log_sha256": "e1a20624f1588f5c4785ff32b583f5749649c47d69456d87b01a96e4b564f07d"
+  },
+  "boundaries": [
+    "No commit/push/tag/publication/cache installation or credential changes performed",
+    "Version0.4.0 tag remains immutable; no rewrite performed",
+    "Registry identity, archive identity, SHA512 checks and retry behavior unchanged",
+    "No new readiness admission fabricated; independent review and exact-head hosted CI owned by parent",
+    "Source validation tree excludes this newly added receipt"
+  ]
+}

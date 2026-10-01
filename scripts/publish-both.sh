@@ -111,7 +111,7 @@ const requireSuccess = (result) => {
   return result.stdout;
 };
 try {
-  const packed = JSON.parse(requireSuccess(run(['pack', '--json', '--pack-destination', temp])));
+  const packed = JSON.parse(requireSuccess(run(['pack', '--json', '--foreground-scripts=false', '--pack-destination', temp])));
   if (!Array.isArray(packed) || packed.length !== 1 || packed[0].name !== name || packed[0].version !== version ||
       typeof packed[0].filename !== 'string' || basename(packed[0].filename) !== packed[0].filename) throw new Error('unexpected local package identity');
   const tarball = join(temp, packed[0].filename);
