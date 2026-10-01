@@ -5,12 +5,12 @@
     ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
   },
   "sources": {
-    "package.json": "471813685f44e2eee3261c41faffe4cb76f126d1043245b7f91783b5250dc095",
+    "package.json": "f88ae613693647d6146072c185073b81dbe4ffe4e3dd7948f09edc0976dabf9d",
     "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
     "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
     "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
     "scripts/list-bundled-skills.js": "388a4b3377057b5e992283ac474042eefec6dff0b5cb6fc6a1da9294edde29ae",
-    "scripts/publish-both.sh": "12ffbed36316e37ce789338aff9dfee779e9f293e15ab72722e788cc221ee274",
+    "scripts/publish-both.sh": "7fc2eac9bf3022a1b7a76805623549a744381927ffaf57c979a96edcad62d763",
     "scripts/release-context.sh": "b13f8d874910cc346b7c59f771c352470dec2af3535741b01d72f4db372b2be8",
     "scripts/resolve-vendor-skill.js": "2a7993eedf2dad5a9d98d70e72e9cc5612910f227f0cbeedbd1d20b50540e28d",
     "scripts/snapshot-dist.sh": "b0cada040efb3333796728e82cc87d08bf8918c1dfdbd8634aeac23604266ca8",
@@ -25,7 +25,8 @@
     "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
     "test/publish-recovery.test.js": "8e0db95f657e295bc48864cfb42d42afd81801ecf3253cdabb0a3aca6f6d8b9c",
     "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302",
-    "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b"
+    "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b",
+    "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498"
   },
   "verification": [
     "npm test"
