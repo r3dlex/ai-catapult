@@ -1,9 +1,284 @@
 {
-  "schema": "readiness-policy/1",
+  "extensions": {
+    "active_plan": "xskp-p4-adopt-engine",
+    "approval_status": "pending-independent-approval",
+    "generation": "92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
+    "scope_limit": "Active P4 bundle only: readiness-contract/1 rejects policy goal scopes outside the admitted bundle. Other plans require a separately reviewed policy rollover; prior policy approval receipts are not reusable.",
+    "supersedes_policy_sha256": "41d01478582a12b98fba2d6fc96c5769870e20b8ac7b728f624c3bffc65b52b1"
+  },
+  "gates": [
+    {
+      "binding": {
+        "roles": [
+          "owner"
+        ]
+      },
+      "id": "own-execution",
+      "kind": "ownership",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "roles": [
+          "reviewer"
+        ]
+      },
+      "id": "own-review",
+      "kind": "ownership",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "merge"
+    },
+    {
+      "binding": {
+        "tool": "npm"
+      },
+      "id": "tool-present",
+      "kind": "tooling",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "branch": "feat/knowledge-contract-XSKP-P4-01",
+        "target": "main"
+      },
+      "id": "branch-xskp-p4-01",
+      "kind": "branch_target",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-01"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "subject": {
+          "goal": "XSKP-P4-01",
+          "goal_sha256": "aa008a6e96ca4efad004df5edea44889c5c8066f498025accd96c99de9c2ee7e",
+          "mode": "goal-scope"
+        }
+      },
+      "id": "approval-xskp-p4-01",
+      "kind": "protected_approval",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-01"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "branch": "feat/knowledge-read-verbs-XSKP-P4-02",
+        "target": "main"
+      },
+      "id": "branch-xskp-p4-02",
+      "kind": "branch_target",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-02"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "subject": {
+          "goal": "XSKP-P4-02",
+          "goal_sha256": "7e8039ab8d5edd3a353062540da2b402b0f1fe5130c0cfe0462f20aafe385815",
+          "mode": "goal-scope"
+        }
+      },
+      "id": "approval-xskp-p4-02",
+      "kind": "protected_approval",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-02"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "branch": "feat/knowledge-write-verbs-XSKP-P4-03",
+        "target": "main"
+      },
+      "id": "branch-xskp-p4-03",
+      "kind": "branch_target",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-03"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "subject": {
+          "goal": "XSKP-P4-03",
+          "goal_sha256": "b41121e1a34b8cee485c019526b1aec05d925adc7a2afdd0d2074fc21beaa2d4",
+          "mode": "goal-scope"
+        }
+      },
+      "id": "approval-xskp-p4-03",
+      "kind": "protected_approval",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-03"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "branch": "feat/adopt-inventory-XSKP-P4-04",
+        "target": "main"
+      },
+      "id": "branch-xskp-p4-04",
+      "kind": "branch_target",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-04"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "subject": {
+          "goal": "XSKP-P4-04",
+          "goal_sha256": "6a69d65835a1b10cf924fde3c2da4523b939ebe034f6714878abbb5a99f47102",
+          "mode": "goal-scope"
+        }
+      },
+      "id": "approval-xskp-p4-04",
+      "kind": "protected_approval",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-04"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "branch": "feat/adopt-apply-init-XSKP-P4-05",
+        "target": "main"
+      },
+      "id": "branch-xskp-p4-05",
+      "kind": "branch_target",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-05"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "subject": {
+          "goal": "XSKP-P4-05",
+          "goal_sha256": "c4ae861e8809a22ad41ab95679c2d9f9158fc6de468066b47ef968c02492e72b",
+          "mode": "goal-scope"
+        }
+      },
+      "id": "approval-xskp-p4-05",
+      "kind": "protected_approval",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "goals": [
+          "XSKP-P4-05"
+        ]
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "tool": "node"
+      },
+      "id": "tool-node",
+      "kind": "tooling",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "tool": "git"
+      },
+      "id": "tool-git",
+      "kind": "tooling",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "tool": "bash"
+      },
+      "id": "tool-bash",
+      "kind": "tooling",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    },
+    {
+      "binding": {
+        "tool": "tar"
+      },
+      "id": "tool-tar",
+      "kind": "tooling",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    },
+    {
+      "id": "planning-inputs-on-main",
+      "kind": "independent_result",
+      "responsible": "Andres Silva Burgstahler",
+      "scope": {
+        "repository": true
+      },
+      "stage": "implementation"
+    }
+  ],
+  "not_applicable": {
+    "fixtures": "XSKP P4 has no independently provisioned prerequisite fixture. Its layout/topology fixtures under test/fixtures/knowledge-adopt and its temporary-directory and packed-tarball lanes are implementation deliverables, not pre-existing external services; their absence remains blocked by acceptance criteria and TDD/CI gates.",
+    "harness_trust": "XSKP P4 adds the knowledge CLI, adopt engine and init registry scaffold; its acceptance criteria keep vendor/skills and skills.lock.json byte-unchanged, so no pinned executable harness or vendor delivery changes. The frozen contract lock binds content integrity, not an independent 40-character harness commit anchor. This exemption does not attest to installed runtime trust."
+  },
   "repository": {
     "id": "ai-catapult",
     "root": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/ai-catapult"
   },
+  "schema": "readiness-policy/1",
   "sources": [
     {
       "path": "AGENTS.md",
@@ -13,53 +288,5 @@
       "path": ".ai/rules/.gitkeep",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
-  ],
-  "gates": [
-    {
-      "id": "own-execution",
-      "stage": "implementation",
-      "scope": {
-        "repository": true
-      },
-      "kind": "ownership",
-      "binding": {
-        "roles": [
-          "owner"
-        ]
-      },
-      "responsible": "Andres Silva Burgstahler"
-    },
-    {
-      "id": "own-review",
-      "stage": "merge",
-      "scope": {
-        "repository": true
-      },
-      "kind": "ownership",
-      "binding": {
-        "roles": [
-          "reviewer"
-        ]
-      },
-      "responsible": "Andres Silva Burgstahler"
-    },
-    {
-      "id": "tool-present",
-      "stage": "implementation",
-      "scope": {
-        "repository": true
-      },
-      "kind": "tooling",
-      "binding": {
-        "tool": "npm"
-      },
-      "responsible": "Andres Silva Burgstahler"
-    }
-  ],
-  "not_applicable": {
-    "branch_target": "Declared per goal as an additive branch_target requirement (target main), so one policy serves goals on different branches",
-    "fixtures": "No goal needs an isolation fixture; verification is the repo test suite (tests use temporary directories internally)",
-    "registration_approval": "Single-maintainer repo: the owner authors and registers plans; merge approval is the own-review gate",
-    "harness_trust": "Local single-maintainer harness; no in-repo trust anchor exists pre-merge, and creating one would self-sign"
-  }
+  ]
 }

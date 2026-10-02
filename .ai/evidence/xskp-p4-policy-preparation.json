@@ -1,0 +1,11 @@
+{
+  "goal_id": "xskp-p4-policy-preparation",
+  "green": {
+    "command": "node --test test/readiness-policy.test.js",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "node --test test/readiness-policy.test.js",
+    "exit_code": 1
+  }
+}
