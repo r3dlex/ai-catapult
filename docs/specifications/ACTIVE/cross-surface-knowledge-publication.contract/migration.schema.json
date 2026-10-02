@@ -1,0 +1,78 @@
+{
+  "$id": "knowledge-migration/1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "event": {
+      "additionalProperties": false,
+      "description": "One line of .ai/knowledge/migration/ledger.jsonl (append-only).",
+      "properties": {
+        "action": {"$ref": "#/$defs/action"},
+        "after_sha256": {"oneOf": [{"type": "null"}, {"pattern": "^[0-9a-f]{64}$", "type": "string"}]},
+        "at": {"type": "string"},
+        "backup": {"description": ".ai/drift/backups/<run_id>/<path> or null when no bytes changed", "oneOf": [{"type": "null"}, {"type": "string"}]},
+        "before_sha256": {"oneOf": [{"type": "null"}, {"pattern": "^[0-9a-f]{64}$", "type": "string"}]},
+        "refs_repaired": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "after_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+              "before_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+              "file": {"type": "string"}
+            },
+            "required": ["after_sha256", "before_sha256", "file"],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "result": {"enum": ["applied", "noop", "failed", "rolled-back"]},
+        "run_id": {"type": "string"},
+        "schema": {"const": "knowledge-migration-event/1"},
+        "seq": {"minimum": 1, "type": "integer"},
+        "source": {"type": "string"},
+        "target": {"oneOf": [{"type": "null"}, {"type": "string"}]}
+      },
+      "required": ["action", "after_sha256", "at", "backup", "before_sha256", "refs_repaired", "result", "run_id", "schema", "seq", "source", "target"],
+      "type": "object"
+    },
+    "action": {
+      "description": "adopt: register in place, no move. copy: promote to canonical target, source untouched. migrate: relocate with backup and reference repair (the only destructive action; requires the per-run confirmation token from ai-catapult-init modules/migration.md). supersede/deprecate: as in modules/migration.md. reference: cite a federated or external document without registering a copy. skip: private, immutable-only or out of scope, reported. unresolved: needs a human decision; a run with unresolved items is never reported complete.",
+      "enum": ["adopt", "copy", "migrate", "supersede", "deprecate", "reference", "skip", "unresolved"]
+    }
+  },
+  "additionalProperties": false,
+  "description": "Migration map at .ai/knowledge/migration/<run_id>/map.json. Produced by inventory before any write; applying the same map to the same source_commit twice yields only noop events.",
+  "properties": {
+    "created_at": {"type": "string"},
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {"$ref": "#/$defs/action"},
+          "broken_links": {"items": {"type": "string"}, "type": "array"},
+          "classification": {"enum": ["canonical", "native", "native-legacy", "workspace-convention", "private", "unsupported"]},
+          "conflicts": {"description": "competing authorities for the same document, e.g. duplicate ADR roots or numbering", "items": {"type": "string"}, "type": "array"},
+          "duplicate_of": {"oneOf": [{"type": "null"}, {"type": "string"}]},
+          "kind": {"oneOf": [{"type": "null"}, {"type": "string"}]},
+          "knowledge_id": {"oneOf": [{"type": "null"}, {"type": "string"}]},
+          "reason": {"minLength": 1, "type": "string"},
+          "sha256": {"oneOf": [{"type": "null"}, {"pattern": "^[0-9a-f]{64}$", "type": "string"}]},
+          "source": {"type": "string"},
+          "surface": {"enum": ["omc", "omx", "omo", "workspace"]},
+          "target": {"oneOf": [{"type": "null"}, {"type": "string"}]}
+        },
+        "required": ["action", "broken_links", "classification", "conflicts", "duplicate_of", "kind", "knowledge_id", "reason", "sha256", "source", "surface", "target"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "layout": {"description": "detected starting point", "enum": ["greenfield", "brownfield", "partial-v3", "legacy-agents", "legacy-ai-sdlc"]},
+    "repo_id": {"type": "string"},
+    "run_id": {"type": "string"},
+    "schema": {"const": "knowledge-migration-map/1"},
+    "source_commit": {"type": "string"},
+    "topology": {"enum": ["single", "monorepo", "umbrella"]}
+  },
+  "required": ["created_at", "items", "layout", "repo_id", "run_id", "schema", "source_commit", "topology"],
+  "title": "knowledge migration map and ledger event",
+  "type": "object"
+}

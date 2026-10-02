@@ -1,0 +1,38 @@
+{
+  "canonical": {
+    "format": "markdown",
+    "frontmatter_id": true,
+    "immutable": false,
+    "path": "docs/plans/example.md"
+  },
+  "kind": "plan",
+  "knowledge_id": "example-repo:plan:example",
+  "lifecycle": "active",
+  "origin": {
+    "host": "opencode",
+    "native": true,
+    "producer": "prometheus",
+    "surface": "omo"
+  },
+  "relations": [],
+  "repo_id": "example-repo",
+  "revisions": [
+    {
+      "derived_from": [
+        {
+          "classification": "native",
+          "path": ".omo/plans/example.md",
+          "sha256": "3ebbd9127ca61c4603a12722beda66b70e9c424bc67704f342baef1705cb69ac",
+          "surface": "omo"
+        }
+      ],
+      "evidence_class": "verified-current",
+      "published_at": "2026-10-02T00:00:00Z",
+      "rev": 1,
+      "sha256": "c199eb971601a4de443d553886bcdd6279533315d300e7226a8dd85d8d9d8685"
+    }
+  ],
+  "schema": "knowledge-registry/1",
+  "title": "Example plan",
+  "tombstone": null
+}

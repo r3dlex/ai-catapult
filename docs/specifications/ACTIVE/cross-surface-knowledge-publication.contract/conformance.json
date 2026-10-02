@@ -1,0 +1,177 @@
+{
+  "cases": [
+    {
+      "expect": {
+        "exit": 0,
+        "sha256": "c199eb971601a4de443d553886bcdd6279533315d300e7226a8dd85d8d9d8685"
+      },
+      "id": "C01-valid-readback",
+      "root": "fixtures/valid",
+      "verb": "show example-repo:plan:example"
+    },
+    {
+      "expect": {
+        "exit": 0
+      },
+      "id": "C02-aggregate-reproducible",
+      "root": "fixtures/valid",
+      "verb": "rebuild --check"
+    },
+    {
+      "expect": {
+        "error": "hash_mismatch",
+        "exit": 1
+      },
+      "id": "C03-hash-mismatch",
+      "mutate": "append byte to docs/plans/example.md",
+      "verb": "verify"
+    },
+    {
+      "expect": {
+        "error": "missing_without_tombstone",
+        "exit": 1
+      },
+      "id": "C04-missing-without-tombstone",
+      "mutate": "delete docs/plans/example.md",
+      "verb": "verify"
+    },
+    {
+      "expect": {
+        "error": "unsafe_path",
+        "exit": 1
+      },
+      "id": "C05-path-traversal",
+      "mutate": "set canonical.path to ../outside.md",
+      "verb": "verify"
+    },
+    {
+      "expect": {
+        "error": "unsafe_path",
+        "exit": 1
+      },
+      "id": "C06-symlink-component",
+      "mutate": "replace docs/plans with a symlink",
+      "verb": "verify"
+    },
+    {
+      "expect": {
+        "error": "denied_private",
+        "exit": 1
+      },
+      "id": "C07-denied-source",
+      "verb": "publish .omo/run-continuation/ses_x.json"
+    },
+    {
+      "expect": {
+        "error": "secret_detected",
+        "exit": 1
+      },
+      "id": "C08-secret-in-content",
+      "mutate": "write into the source a synthetic AWS-access-key-shaped token assembled at test runtime as 'AKIA' + '0'*16 (never stored literally)",
+      "verb": "publish <source>"
+    },
+    {
+      "expect": {
+        "error": "id_reused",
+        "exit": 1
+      },
+      "id": "C09-id-reuse",
+      "mutate": "retire then publish new doc with same knowledge_id",
+      "verb": "publish"
+    },
+    {
+      "expect": {
+        "exit": 0,
+        "previous_rev_kept": true,
+        "rev": 2
+      },
+      "id": "C10-revision-append",
+      "mutate": "edit canonical, republish",
+      "owner": "write verbs (publish) produce rev 2; read verbs (show) verify it",
+      "verb": "show example-repo:plan:example"
+    },
+    {
+      "expect": {
+        "added": [
+          "knowledge_id"
+        ],
+        "exit": 0,
+        "frontmatter_keys_preserved": true
+      },
+      "id": "C11-frontmatter-merge",
+      "verb": "publish a markdown with existing title frontmatter"
+    },
+    {
+      "expect": {
+        "bytes_unchanged": true,
+        "exit": 0,
+        "frontmatter_id": false
+      },
+      "id": "C12-immutable-no-rewrite",
+      "verb": "publish .ai/handoff/readiness-v1/<plan>/<gen>/handoff.md"
+    },
+    {
+      "expect": {
+        "one_exit": 0,
+        "other_error": "locked"
+      },
+      "id": "C13-lock-contention",
+      "verb": "two concurrent publish of the same knowledge_id"
+    },
+    {
+      "expect": {
+        "exit": 0,
+        "reports_absent": true
+      },
+      "id": "C14-federated-absent-child",
+      "verb": "find --federated"
+    },
+    {
+      "expect": {
+        "x_extra_preserved": true
+      },
+      "id": "C15-unknown-keys-preserved",
+      "mutate": "add x_extra to entry",
+      "owner": "rebuild (read side) and publish (write side) each preserve x_extra",
+      "verb": "rebuild then republish"
+    },
+    {
+      "expect": {
+        "bytes_equal": "fixtures/vectors/serialization-expected.json"
+      },
+      "id": "C16-serialization-vector",
+      "verb": "serialize fixtures/vectors/serialization-input.json"
+    },
+    {
+      "expect": {
+        "absent_writer_error": "verb_unavailable",
+        "absent_writer_exit": 2,
+        "exit_matches_writer": true,
+        "forwarded_argv_verbatim": true
+      },
+      "id": "C17-dispatcher-forwarding",
+      "verb": "scripts/ai-knowledge publish <args>"
+    },
+    {
+      "expect": {
+        "exit": 0,
+        "lock_removed": false,
+        "warning": "stale_lock"
+      },
+      "id": "C18-stale-lock-reported",
+      "mutate": "leave .ai/knowledge/.locks/<entry>.lock from a dead writer",
+      "verb": "verify"
+    },
+    {
+      "expect": {
+        "exit": 0,
+        "ledgered": true,
+        "lock_removed": true
+      },
+      "id": "C19-manual-unlock",
+      "note": "never automatic; without --confirm-no-writer exits 2",
+      "verb": "unlock <knowledge_id> --confirm-no-writer"
+    }
+  ],
+  "schema": "knowledge-conformance/1"
+}

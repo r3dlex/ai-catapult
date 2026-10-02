@@ -1,0 +1,18 @@
+{
+  "entries": [
+    {
+      "entry": ".ai/knowledge/entries/example-repo__plan__example.json",
+      "kind": "plan",
+      "knowledge_id": "example-repo:plan:example",
+      "lifecycle": "active",
+      "path": "docs/plans/example.md",
+      "rev": 1,
+      "sha256": "c199eb971601a4de443d553886bcdd6279533315d300e7226a8dd85d8d9d8685",
+      "surface": "omo",
+      "title": "Example plan"
+    }
+  ],
+  "generated_from": ".ai/knowledge/entries",
+  "repo_id": "example-repo",
+  "schema": "knowledge-registry/1"
+}
