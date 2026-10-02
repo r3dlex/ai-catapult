@@ -1,0 +1,33 @@
+{
+  "$id": "knowledge-registry/1/aggregate",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated aggregate at .ai/knowledge/registry.json. Never hand-edited. Rebuilt from .ai/knowledge/entries/*.json; entries sorted by knowledge_id; serialized as json.dumps(obj, sort_keys=True, indent=2, ensure_ascii=False) + newline. A rebuild from unchanged entries must be byte-identical.",
+  "properties": {
+    "entries": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "entry": {"description": ".ai/knowledge/entries/<knowledge_id with ':' replaced by '__'>.json", "type": "string"},
+          "kind": {"type": "string"},
+          "knowledge_id": {"type": "string"},
+          "lifecycle": {"type": "string"},
+          "path": {"description": "canonical.path", "type": "string"},
+          "rev": {"minimum": 1, "type": "integer"},
+          "sha256": {"description": "latest revision sha256", "pattern": "^[0-9a-f]{64}$", "type": "string"},
+          "surface": {"type": "string"},
+          "title": {"type": "string"}
+        },
+        "required": ["entry", "kind", "knowledge_id", "lifecycle", "path", "rev", "sha256", "surface", "title"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "generated_from": {"const": ".ai/knowledge/entries"},
+    "repo_id": {"type": "string"},
+    "schema": {"const": "knowledge-registry/1"}
+  },
+  "required": ["entries", "generated_from", "repo_id", "schema"],
+  "title": "knowledge-registry/1 aggregate",
+  "type": "object"
+}

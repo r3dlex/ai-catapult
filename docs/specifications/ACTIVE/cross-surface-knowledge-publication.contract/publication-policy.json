@@ -1,0 +1,80 @@
+{
+  "canonical_targets": {
+    "adr": "docs/architecture/adr/",
+    "brd": "docs/specifications/ACTIVE/",
+    "doc": "docs/",
+    "handoff": ".ai/handoff/",
+    "learning": "docs/learning/",
+    "plan": "docs/plans/",
+    "prd": "docs/specifications/ACTIVE/",
+    "research": ".ai/research/",
+    "review": ".ai/reviews/",
+    "spec": "docs/specifications/ACTIVE/",
+    "test-spec": "docs/specifications/ACTIVE/"
+  },
+  "deny": {
+    "description": "Never promoted, never scanned for content, never listed with content by any reader. A match classifies the file as private and any tracked citation of it as an unresolved item. No override flag exists.",
+    "paths": [
+      "**/.env",
+      "**/.env.*",
+      "**/*.pem",
+      "**/*.key",
+      "**/id_rsa*",
+      "**/credentials*",
+      ".memory/**",
+      ".omc/project-memory.json",
+      ".omc/sessions/**",
+      ".omc/state/**",
+      ".omc/logs/**",
+      ".omo/boulder.json",
+      ".omo/ralph-loop.local.md",
+      ".omo/run-continuation/**",
+      ".omo/teams/**",
+      ".omo/ulw-execute/**",
+      ".omx/context/**",
+      ".omx/logs/**",
+      ".omx/notepad.md",
+      ".omx/state/**",
+      ".omx/ultragoal/**",
+      ".sisyphus/boulder.json",
+      ".sisyphus/run-continuation/**",
+      "graphify-out/**",
+      "node_modules/**",
+      "~/**"
+    ],
+    "secret_patterns": [
+      "AKIA[0-9A-Z]{16}",
+      "-----BEGIN [A-Z ]*PRIVATE KEY-----",
+      "gh[pousr]_[A-Za-z0-9]{36,}",
+      "sk-[A-Za-z0-9_-]{20,}",
+      "xox[abprs]-[A-Za-z0-9-]{10,}",
+      "(?i)(api[_-]?key|secret|token|password)[\"']?\\s*[:=]\\s*[\"']?[A-Za-z0-9_\\-/+=]{16,}"
+    ]
+  },
+  "immutable": [
+    ".ai/evidence/**",
+    ".ai/handoff/readiness-v1/**",
+    ".ai/workflows/northstar-readiness-v1.json"
+  ],
+  "native_rules": [
+    {"classification": "native", "glob": ".omc/plans/*.md", "host": "claude-code", "kind": "plan", "surface": "omc"},
+    {"classification": "native", "glob": ".omc/specs/deep-interview-*.md", "host": "claude-code", "kind": "spec", "surface": "omc"},
+    {"classification": "native", "glob": ".omc/research/**/*.md", "host": "claude-code", "kind": "research", "surface": "omc"},
+    {"classification": "native", "glob": ".omx/plans/small-work-reviews/**/*.md", "host": "codex", "kind": "review", "surface": "omx"},
+    {"classification": "native", "glob": ".omx/plans/**/*.md", "host": "codex", "kind": "plan", "surface": "omx"},
+    {"classification": "native", "glob": ".omx/specs/*.md", "host": "codex", "kind": "spec", "surface": "omx"},
+    {"classification": "native", "glob": ".omx/interviews/*.md", "host": "codex", "kind": "research", "surface": "omx"},
+    {"classification": "native", "glob": ".omx/drafts/*.md", "host": "codex", "kind": "plan", "lifecycle": "draft", "surface": "omx"},
+    {"classification": "workspace-convention", "glob": ".omo/plans/*.architect-review.md", "host": "opencode", "kind": "review", "surface": "workspace"},
+    {"classification": "workspace-convention", "glob": ".omo/plans/*.critic-review.md", "host": "opencode", "kind": "review", "surface": "workspace"},
+    {"classification": "native", "glob": ".omo/plans/*.md", "host": "opencode", "kind": "plan", "surface": "omo"},
+    {"classification": "native", "glob": ".omo/drafts/*.md", "host": "opencode", "kind": "plan", "lifecycle": "draft", "surface": "omo"},
+    {"classification": "native", "glob": ".omo/notepads/*/*.md", "host": "opencode", "kind": "learning", "surface": "omo"},
+    {"classification": "native-legacy", "glob": ".sisyphus/plans/*.md", "host": "opencode", "kind": "plan", "surface": "omo"},
+    {"classification": "native-legacy", "glob": ".sisyphus/drafts/*.md", "host": "opencode", "kind": "plan", "lifecycle": "draft", "surface": "omo"},
+    {"classification": "native-legacy", "glob": ".sisyphus/notepads/*/*.md", "host": "opencode", "kind": "learning", "surface": "omo"}
+  ],
+  "native_rules_note": "First matching rule wins, so workspace-convention rules precede the broader native rule for the same directory. OMO paths verified against oh-my-openagent@5.1.7 (PROMETHEUS_PLAN_DIRS, NOTEPAD_BASE_PATH, migrateLegacyWorkspaceDirectory); OMO has no native .omo/specs and writes no separate Momus verdict file.",
+  "schema": "knowledge-publication-policy/1",
+  "unsupported_formats": ["*.docx", "*.pdf", "*.pptx", "*.xlsx", "*.png", "*.jpg", "*.html"]
+}

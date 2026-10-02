@@ -1,0 +1,99 @@
+{
+  "$id": "knowledge-registry/1/entry",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "One registry entry per published document. Stored at .ai/knowledge/entries/<knowledge_id with ':' replaced by '__'>.json, serialized as json.dumps(entry, sort_keys=True, indent=2, ensure_ascii=False) + newline. Unknown keys are preserved, never dropped.",
+  "properties": {
+    "canonical": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {"enum": ["markdown", "json", "yaml", "text"]},
+        "frontmatter_id": {"description": "true when the canonical markdown carries knowledge_id: in its first frontmatter block", "type": "boolean"},
+        "immutable": {"description": "true for readiness-v1 payloads, evidence and other bytes that must never be rewritten; frontmatter_id must then be false", "type": "boolean"},
+        "path": {"description": "repo-relative POSIX path; no leading '/', no '..' segment, no symlink component", "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[^\\0]+$", "type": "string"}
+      },
+      "required": ["format", "frontmatter_id", "immutable", "path"],
+      "type": "object"
+    },
+    "graph_node": {"description": "governance graph node id derived from this entry, e.g. spec:aitool-root:<slug>", "type": "string"},
+    "kind": {"enum": ["adr", "brd", "doc", "handoff", "learning", "plan", "prd", "research", "review", "spec", "test-spec"]},
+    "knowledge_id": {"description": "<repo_id>:<kind>:<slug>; assigned once, never re-derived from path, never reused", "pattern": "^[a-z0-9][a-z0-9-]*:(adr|brd|doc|handoff|learning|plan|prd|research|review|spec|test-spec):[a-z0-9][a-z0-9.-]*$", "type": "string"},
+    "lifecycle": {"enum": ["draft", "active", "superseded", "archived", "retired"]},
+    "origin": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {"enum": ["claude-code", "codex", "opencode", "none"]},
+        "native": {"description": "true when the first revision was promoted from a native harness artifact", "type": "boolean"},
+        "producer": {"description": "skill, command or 'manual' that produced the first revision", "minLength": 1, "type": "string"},
+        "surface": {"enum": ["omc", "omx", "omo", "workspace"]}
+      },
+      "required": ["host", "native", "producer", "surface"],
+      "type": "object"
+    },
+    "relations": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "rel": {"enum": ["derived-from", "implements", "references", "refines", "superseded-by", "supersedes", "tracks"]},
+          "target": {"description": "a knowledge_id, a governance graph node id, or <repo_id>:<knowledge_id> for federated targets", "minLength": 1, "type": "string"}
+        },
+        "required": ["rel", "target"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "repo_id": {"pattern": "^[a-z0-9][a-z0-9-]*$", "type": "string"},
+    "revisions": {
+      "description": "append-only; rev is 1..n contiguous; the last item is current",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "derived_from": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "classification": {"enum": ["canonical", "native", "native-legacy", "workspace-convention"]},
+                "path": {"minLength": 1, "type": "string"},
+                "sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+                "surface": {"enum": ["omc", "omx", "omo", "workspace"]}
+              },
+              "required": ["classification", "path", "sha256", "surface"],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "evidence_class": {"description": "imported-historical: assertions carried over from a pre-existing document, not re-verified; verified-current: checked by a validator in this revision", "enum": ["imported-historical", "verified-current"]},
+          "note": {"type": "string"},
+          "published_at": {"description": "ISO 8601 with UTC offset", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$", "type": "string"},
+          "rev": {"minimum": 1, "type": "integer"},
+          "sha256": {"description": "sha256 of the canonical file bytes at this revision", "pattern": "^[0-9a-f]{64}$", "type": "string"}
+        },
+        "required": ["derived_from", "evidence_class", "published_at", "rev", "sha256"],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema": {"const": "knowledge-registry/1"},
+    "title": {"minLength": 1, "type": "string"},
+    "tombstone": {
+      "description": "non-null iff lifecycle is retired; the entry file is kept forever",
+      "oneOf": [
+        {"type": "null"},
+        {
+          "additionalProperties": false,
+          "properties": {
+            "last_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
+            "reason": {"minLength": 1, "type": "string"},
+            "retired_at": {"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$", "type": "string"}
+          },
+          "required": ["last_sha256", "reason", "retired_at"],
+          "type": "object"
+        }
+      ]
+    }
+  },
+  "required": ["canonical", "kind", "knowledge_id", "lifecycle", "origin", "relations", "repo_id", "revisions", "schema", "title", "tombstone"],
+  "title": "knowledge-registry/1 entry",
+  "type": "object"
+}

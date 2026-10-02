@@ -1,0 +1,29 @@
+{
+  "plans": [
+    {
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v1/xskp-p4-adopt-engine/92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af/goals.json",
+          "sha256": "3222a2ea612cc19b51c6f9b3293e6d4d1b5613729c73398b45db88b33460ee1a"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v1/xskp-p4-adopt-engine/92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af/graph.json",
+          "sha256": "2b3f321da80aa15575a946cdb8f55681c1ceee1510dea98aa377f37ab6a3ba10"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v1/xskp-p4-adopt-engine/92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af/handoff.md",
+          "sha256": "e11870c11c90b70e96850a6d3000b762d5432a434fe5632fb489f4fab34193cb"
+        }
+      },
+      "execution_admitted": false,
+      "generation": "92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
+      "handoff_path": ".ai/handoff/readiness-v1/xskp-p4-adopt-engine/92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af/handoff.md",
+      "id": "northstar-plan-xskp-p4-adopt-engine",
+      "plan_id": "xskp-p4-adopt-engine",
+      "planning_complete": true,
+      "schema": "readiness-contract/1",
+      "status": "active"
+    }
+  ],
+  "schema": "readiness-contract/1"
+}
