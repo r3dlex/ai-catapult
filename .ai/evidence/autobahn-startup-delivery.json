@@ -1,0 +1,20 @@
+{
+  "goal_id": "autobahn-startup-delivery",
+  "green": {
+    "command": "node --test test/autobahn-startup.test.js",
+    "exit_code": 0
+  },
+  "provenance": {
+    "base_skills_commit": "b87fdc2029dad16389cf2501e0faf7934b33b71c",
+    "detailed_evidence": ".ai/evidence/autobahn-startup-delivery/evidence.json",
+    "final_skills_commit": "032df6b11cabf0567cbd132c4ac6c60fc37bff06",
+    "fixture": "Exact git-sourced before/helper bytes copied to all three public host paths, unchanged packaging regression test; green replaces only those helper bytes with reviewed repair.",
+    "source_sha256_after": "2bfb2d3251216efd74a75b770017bf0f86b0a193aa13e1a6ddf4e83acdf82b28",
+    "source_sha256_before": "2913d47da1b848e85d7f7dababea47962b365dd26a2d39edc25aa12978ac0a39",
+    "test_sha256": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5"
+  },
+  "red": {
+    "command": "node --test test/autobahn-startup.test.js",
+    "exit_code": 1
+  }
+}

@@ -1,0 +1,35 @@
+✖ startup repair is delivered under a version newer than published 0.4.2 (1.474709ms)
+✔ dist claude manifest matches package version (0.82425ms)
+✔ dist codex manifest matches package version (0.332666ms)
+✔ dist opencode manifest matches package version (0.400542ms)
+✔ dist Claude marketplace versions match package version (0.297416ms)
+✔ dist-snapshot claude manifest matches package version (0.241167ms)
+✔ dist-snapshot codex manifest matches package version (0.353333ms)
+✔ dist-snapshot opencode manifest matches package version (0.303375ms)
+✔ dist-snapshot Claude marketplace versions match package version (0.635375ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 8
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 156.023583
+
+✖ failing tests:
+
+test at test/release-0.4.3.test.js:8:1
+✖ startup repair is delivered under a version newer than published 0.4.2 (1.474709ms)
+  AssertionError [ERR_ASSERTION]: startup repair must not reuse published 0.4.2; got 0.4.2
+      at TestContext.<anonymous> (file:///Users/andresilvaburgstahler/.codex/worktrees/autobahn-recovery-20261002/ai-catapult/test/release-0.4.3.test.js:10:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
