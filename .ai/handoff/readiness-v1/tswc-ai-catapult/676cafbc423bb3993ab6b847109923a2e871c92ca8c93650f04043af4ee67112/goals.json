@@ -1,0 +1,253 @@
+{
+  "attachments": {
+    "consensus_plan": "aitool-root .omc/plans/ralplan-tswc-ai-catapult.md (local, gitignored, non-authoritative; its goal objects are restated verbatim here)",
+    "cross_lane": "B2 (skills lane plan tswc-skills) <- B1 layout vocabulary; B5 <- A-gates across lanes (A2 here + skills-lane A4). Prose records on the goal objects (cross_lane_relationships); never cross-repo bundle dependencies.",
+    "d1_gate": "Mega-plan \u00a70.6 / PARALLEL-LANES \u00a71.2: every goal in this plan is pre-D1 blocked (certify byte-clean: vendor/ and dist* isolation); autobahn dispatch opens only after the D1 gate-isolation plan merges (=O8).",
+    "harness_scope": "Master \u00a73e: payloads cover native Claude Code, Codex and OpenCode CLI v2 plugins (payload merges + commands/skills, never the v2 plugin array); supported harnesses include OMC, OMX, OpenCode CLI v2, omo-ai (standalone CLI only \u2014 the oh-my-openagent adapter stays retired/quarantined), auggie, copilot, gemini/antigravity.",
+    "interview_record": "aitool-root .omc/specs/deep-interview-tswc-ai-catapult.md (local, gitignored, non-authoritative; agent-run confirmations of master \u00a78 + agent-run adversarial pass)",
+    "master_intake": "aitool-root .ai/work-intake/typescript-wikiskill-convergence.md sha256 c29fafd30db7a06c4e7218cca745fec818eb087955c0b32cf57207c9b7b0d65c (byte-level pin; root-workspace work-intake file, untracked at planning time)",
+    "megaplan": "aitool-root .omc/plans/ralplan-mega-consolidation.md sha256 1bfd161533dfa8f0610737f65bc4329c476cdfb8accbccf33af38b50512a020f (local, gitignored, non-authoritative coordination record) + .omc/handoffs/ach-20261004/PARALLEL-LANES.md",
+    "paper_boundary": "WikiSkill (arXiv:2608.27454v1) supplies the workspace/loop/Eq. 4 architecture only; no threshold is cited to it (master \u00a73a). OKF v0.3 is advisory-only (master \u00a73b).",
+    "rename_wave": "A2 (tswc-ac-a2) lands first as the repo-wide rename wave (mega-plan \u00a72.5, W1); B3/B4/B5 and external C-03/C-04, P4-* rebase onto it and ship in TS on the converted tree.",
+    "root_pin_note": "handoff-goals/1 pins repository.root to the resolved publish root (readiness_contract.py repository()); this bundle therefore records the planning worktree path /Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004, never the primary checkout (worktree-only rule). handoff-goals/2 (in construction on skills main) drops the root field; admission for this plan must pass --root resolving to the pinned path or migrate when v2 lands.",
+    "scoped_intake": "aitool-root .ai/work-intake/tswc-ai-catapult.md sha256 f3b256a2e4a31d8103971687fe872d810c636759a1d499cc6296e191ca6fba04"
+  },
+  "goals": [
+    {
+      "acceptance_criteria": [
+        "AC-1: All ~39 first-party .js files (bin/, src/, scripts/, test/) are strict TypeScript with ai-factory-grade flags; the repo-wide rename wave lands as one PR and every other ai-catapult goal rebases onto it (mega-plan \u00a72.5).",
+        "AC-2: package.json rewires to the compiled artifact (bin \u2192 dist output, files keeps dist/, prepack runs the build) with zero runtime dependencies preserved; typescript/eslint tooling is devDeps only (AGENTS.md contract, master \u00a72/\u00a74.1).",
+        "AC-3: A packaging-change ADR lands in docs/architecture/adr/ (new directory) recording the build step, the shipped compiled output, the Node/CI test-execution mechanism (.ts tests under node --test on the CI Node pin) and the preserved zero-runtime-dep contract (master \u00a74.1).",
+        "AC-4: The two complexity-34/22 hotspots (src/install.js runInstall, src/graph-hooks.js runGraphHooksInstall at a87c912) are refactored under the \u00a74.2 caps (cyclomatic 10 / cognitive 15) with behavior preserved by the existing suite.",
+        "AC-5: Gates land and pass: strict tsc --noEmit typecheck, eslint (complexity 10 labeled project decision, sonarjs cognitive-complexity 15 documented default, no-floating-promises error), shellcheck -S error + shfmt -d on the .sh, wired as prek hooks and package.json scripts (build/typecheck). Red-leg proof per \u00a74.7 (negative fixture or mutation asserting each gate catches a violation) recorded in .ai/evidence/tswc-ac-a2.json.",
+        "AC-6: The hash-bound .ai/ci/local-ci.json source inventory is refreshed for every touched file so the declared local CI stays green; verification stays npm test per the repo's documented local verification (README)."
+      ],
+      "coverage_status": "unknown",
+      "dependencies": [],
+      "id": "tswc-ac-a2",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "legacy_risk_reason": "Coverage not recorded at planning time (xskp-p4's informal run at 7573da8 showed 91% lines / 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius: this goal renames the whole tree, so the pre-existing suite must characterize behavior before and after; no coverage gate is claimed here.",
+      "legacy_safe_tdd": true,
+      "owner": "unassigned",
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "blocked"
+      },
+      "readiness_notes": {
+        "implementation": "Unknown until preparation clears; needs independent live authority and an observed red/green (TDD evidence in .ai/evidence/tswc-ac-a2.json).",
+        "merge": "Unknown until implementation; needs local and hosted CI green, resolved review, and fresh merge-stage admission.",
+        "preparation": "BLOCKED by the D1 gate-isolation dependency (mega-plan \u00a70.6; =O8): ai-catapult certifies only with vendor//dist* isolation \u2014 its build writes dist* and tests need gitignored vendor/. Implementation dispatch is pre-D1 blocked. Registration grants no execution authority. Dispatch first: this rename wave is the rebase base for all ai-catapult work (mega-plan \u00a72.5, W1)."
+      },
+      "repository": {
+        "id": "ai-catapult",
+        "root": "/Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004"
+      },
+      "scope": [
+        "bin",
+        "src",
+        "scripts",
+        "test",
+        "package.json",
+        "tsconfig.json",
+        "eslint.config.js",
+        "prek.toml",
+        "docs/architecture/adr",
+        ".ai/ci/local-ci.json"
+      ],
+      "verification": [
+        "npm run build",
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: The evolve/ workspace layout is implemented as deterministic CLI machinery: raw/<run-id>/ write-once traces, wiki/ with append-only logs.md and skill-impact.md, proposals/ overlays, and the PURPOSE.md convention (master \u00a73a three-layer workspace, \u00a76-B1).",
+        "AC-2: The audit-entry schema (metadata, target skill, unified diff, score, Accepted/Rejected \u2014 append-only, never rolled back) and the judgment-record schema from master \u00a75.4 ({judgment_id, run_id, candidate_overlay_sha256, skill_under_test, task_set_id, task_set_version, judge_model, rubric_sha256, per_criterion_scores[], weighted_aggregate, verdict, cost_usd, recorded_at, recorder}) are delivered as versioned schemas; judgment records live under evolve/raw/<run-id>/.",
+        "AC-3: Structural tests (node --test) plus golden fixtures prove layout invariants, write-once enforcement, append-only enforcement and schema rejection of malformed records; red-leg mutation proof per \u00a74.7 in .ai/evidence/tswc-ac-b1.json.",
+        "AC-4: D_train/D_val split and frozen-D_val-per-cycle semantics (evalset version stamped on task sets; scores never compared across versions) and the held-out T_test reservation are representable in the task-set schema (master \u00a75.4)."
+      ],
+      "coverage_status": "unknown",
+      "cross_lane_relationships": [
+        "B2 (skills lane, plan tswc-skills) consumes this goal's evolve/ layout vocabulary: the three role skills (evolution-rollout, wiki-maintainer, skill-proposer) in r3dlex/skills speak raw//wiki//proposals/ + PURPOSE.md as defined here (master \u00a76-B2, mega W2 edge B2<-B1). Prose cross-lane record only; no cross-repo bundle dependency is minted."
+      ],
+      "dependencies": [],
+      "id": "tswc-ac-b1",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "legacy_risk_reason": "Coverage not recorded; this goal creates new files only (evolve/ layout machinery, schemas, golden fixtures) so there is no legacy surface to characterize. legacy_safe_tdd is set because no goal-scoped measurement exists; the new code ships with its own structural suite.",
+      "legacy_safe_tdd": true,
+      "owner": "unassigned",
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "blocked"
+      },
+      "readiness_notes": {
+        "implementation": "Unknown until preparation clears; needs independent live authority and an observed red/green (TDD evidence in .ai/evidence/tswc-ac-b1.json).",
+        "merge": "Unknown until implementation; needs local and hosted CI green, resolved review, and fresh merge-stage admission.",
+        "preparation": "BLOCKED by the D1 gate-isolation dependency (mega-plan \u00a70.6; =O8): ai-catapult certifies only with vendor//dist* isolation \u2014 its build writes dist* and tests need gitignored vendor/. Implementation dispatch is pre-D1 blocked. Registration grants no execution authority. File-disjoint from A2 (new files), but dispatch ordering is A2 first \u2014 the rename wave is the rebase base for all ai-catapult work (mega-plan \u00a72.5, W1)."
+      },
+      "repository": {
+        "id": "ai-catapult",
+        "root": "/Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004"
+      },
+      "scope": [
+        "src/evolve",
+        "schemas",
+        "test",
+        "test/fixtures"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: `ai-catapult evolve --validate` implements WikiSkill Eq. 4 over recorded judgments: accept iff R(T_val,k) > R_best; early-stop iff R_best = 1.0 (weighted aggregate at rubric maximum); else revert to S_{k-1} and drop the overlay (master \u00a73a, \u00a76-B3). No threshold is cited to the paper (\u00a73a boundary).",
+        "AC-2: Seeding honors F1 (master \u00a74.9): S_0 = current catalog state and R_best = the current skill set's validation score \u2014 never a skill-disabled baseline; S_{k-1} = last accepted state; reject drops the overlay while the wiki keeps its learnings (append-only structurally, even on reject).",
+        "AC-3: Provenance is enforced (master \u00a75.4): a judgment not bound to candidate_overlay_sha256 + task_set_version + judge_model is refused with judgment_unbound; unrecorded invocations surface as attribution gaps in the audit entry.",
+        "AC-4: Spend veto (master \u00a75.5): recorded per-cycle cost_usd is summed and the gate refuses to dispatch or accept past $100/cycle with cycle_budget_exhausted; robustness prefers 3 samples + majority/mean within the ceiling.",
+        "AC-5: Unit vectors cover accept, reject, early-stop, revert, unbound-reject and budget-exhaust; a negative fixture (mutation) proves each refusal fires (\u00a74.7). TDD evidence in .ai/evidence/tswc-ac-b3.json.",
+        "AC-6: The command is deterministic CLI machinery with no runtime LLM dependency (master \u00a73d); judge calls stay out-of-band human runs (\u00a74.4)."
+      ],
+      "coverage_status": "unknown",
+      "dependencies": [
+        "tswc-ac-b1",
+        "tswc-ac-a2"
+      ],
+      "id": "tswc-ac-b3",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "legacy_risk_reason": "Coverage not recorded; greenfield gate arithmetic on top of B1's new machinery. legacy_safe_tdd is set because no goal-scoped measurement exists; the six unit vectors are the characterization surface.",
+      "legacy_safe_tdd": true,
+      "owner": "unassigned",
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "blocked"
+      },
+      "readiness_notes": {
+        "implementation": "Unknown until preparation clears; needs independent live authority and an observed red/green (TDD evidence in .ai/evidence/tswc-ac-b3.json).",
+        "merge": "Unknown until implementation; needs local and hosted CI green, resolved review, and fresh merge-stage admission.",
+        "preparation": "BLOCKED by the D1 gate-isolation dependency (mega-plan \u00a70.6; =O8): ai-catapult certifies only with vendor//dist* isolation \u2014 its build writes dist* and tests need gitignored vendor/. Implementation dispatch is pre-D1 blocked. Registration grants no execution authority. Ships in TS on A2's converted tree and queues through bin/ai-catapult.js with C-04 (mega-plan \u00a72.5)."
+      },
+      "repository": {
+        "id": "ai-catapult",
+        "root": "/Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004"
+      },
+      "scope": [
+        "bin",
+        "src/evolve",
+        "test"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: Accept path: an accepted overlay flows as an atomic single-skill PR to the skills/ SSOT, then a skills.lock.json SHA bump, then revendor and per-host payload rebuilds (resolveBundledSkills, fail-closed) \u2014 the \u00a73c pipeline direction, never in-place skill mutation.",
+        "AC-2: Reject path: the overlay is dropped and the wiki keeps its learnings; no upstream write occurs on reject (master \u00a73c, \u00a76-B4).",
+        "AC-3: The lock bump is a runtime action of the flow, batched per mega-plan \u00a72.3; implementation-time scope excludes skills.lock.json and vendor/.",
+        "AC-4: E2E proof is a fixture run through the opencode-e2e-style harness (local fixture repo + stub upstream): the full accept flow and the reject flow both run green; red-leg fixture proves a broken handoff (e.g. mutated lock SHA) is refused (\u00a74.7). TDD evidence in .ai/evidence/tswc-ac-b4.json.",
+        "AC-5: All harness payloads stay parity-clean for the \u00a73e harness set (OMC/OMX consume claude/codex payloads; OpenCode v2 rides payload merges + commands/skills, never the v2 plugin array; omo-ai standalone only)."
+      ],
+      "coverage_status": "unknown",
+      "dependencies": [
+        "tswc-ac-b1",
+        "tswc-ac-b3"
+      ],
+      "id": "tswc-ac-b4",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "legacy_risk_reason": "Coverage not recorded; new flow machinery plus fixture harness. legacy_safe_tdd is set because no goal-scoped measurement exists; the e2e fixture run is the characterization surface.",
+      "legacy_safe_tdd": true,
+      "owner": "unassigned",
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "blocked"
+      },
+      "readiness_notes": {
+        "implementation": "Unknown until preparation clears; needs independent live authority and an observed red/green (TDD evidence in .ai/evidence/tswc-ac-b4.json).",
+        "merge": "Unknown until implementation; needs local and hosted CI green, resolved review, and fresh merge-stage admission.",
+        "preparation": "BLOCKED by the D1 gate-isolation dependency (mega-plan \u00a70.6; =O8): ai-catapult certifies only with vendor//dist* isolation \u2014 its build writes dist* and tests need gitignored vendor/. Implementation dispatch is pre-D1 blocked. Registration grants no execution authority."
+      },
+      "repository": {
+        "id": "ai-catapult",
+        "root": "/Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004"
+      },
+      "scope": [
+        "src",
+        "scripts",
+        "test"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: Structural/complexity pre-reject runs on proposed skill scripts before any judge invocation: a gnarly proposal costs zero judge dollars (master \u00a75.5 mechanism 1, \u00a76-B5).",
+        "AC-2: The OKF v0.3 frontmatter check (name/description present) rides as findings-only advisory output; it never blocks and never emits okf_version:\"0.3\" (master \u00a73b).",
+        "AC-3: A stub judge harness asserts zero invocations on the gnarly fixture proposal; red-leg fixture per \u00a74.7 in .ai/evidence/tswc-ac-b5.json.",
+        "AC-4: Pre-reject uses the A-gates: this lane's A2 gate stack (strict tsc, eslint complexity 10, sonarjs cognitive-complexity 15) plus the skills-lane A4 gates (ruff C901 10, xenon, shellcheck, shfmt) over proposed skill scripts \u2014 the gates are consumed, not redefined (master \u00a74.2 thresholds)."
+      ],
+      "coverage_status": "unknown",
+      "cross_lane_relationships": [
+        "B5 <- A-gates across lanes: consumes the gate stack from this lane's A2 (strict tsc, eslint complexity 10, sonarjs cognitive 15) and from the skills-lane A4 (ruff C901 10, xenon, shellcheck -S error, shfmt -d, mypy strict over proposed skill scripts) \u2014 A4 is deliverable of plan tswc-skills. Prose cross-lane record only; no cross-repo bundle dependency is minted."
+      ],
+      "dependencies": [
+        "tswc-ac-a2",
+        "tswc-ac-b3"
+      ],
+      "id": "tswc-ac-b5",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "legacy_risk_reason": "Coverage not recorded; new hygiene layer over B3's gate machinery. legacy_safe_tdd is set because no goal-scoped measurement exists; the stub-harness zero-invocation assertion is the characterization surface.",
+      "legacy_safe_tdd": true,
+      "owner": "unassigned",
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "blocked"
+      },
+      "readiness_notes": {
+        "implementation": "Unknown until preparation clears; needs independent live authority and an observed red/green (TDD evidence in .ai/evidence/tswc-ac-b5.json).",
+        "merge": "Unknown until implementation; needs local and hosted CI green, resolved review, and fresh merge-stage admission.",
+        "preparation": "BLOCKED by the D1 gate-isolation dependency (mega-plan \u00a70.6; =O8): ai-catapult certifies only with vendor//dist* isolation \u2014 its build writes dist* and tests need gitignored vendor/. Implementation dispatch is pre-D1 blocked. Registration grants no execution authority."
+      },
+      "repository": {
+        "id": "ai-catapult",
+        "root": "/Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004"
+      },
+      "scope": [
+        "src/evolve",
+        "test"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    }
+  ],
+  "id": "tswc-ai-catapult",
+  "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+  "planning_complete": true,
+  "repository": {
+    "id": "ai-catapult",
+    "root": "/Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004"
+  },
+  "schema": "handoff-goals/1",
+  "spec": {
+    "path": "docs/specifications/ACTIVE/typescript-wikiskill-convergence-tswc-ai-catapult.md",
+    "sha256": "6d54f993b28620d1c887bdf1947f0c45b9ceb6fe5122468f5b61b870e425ed88"
+  },
+  "status": "active"
+}

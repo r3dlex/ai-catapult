@@ -101,6 +101,41 @@
       "source": "handoff:ai-catapult:xskp-p4-adopt-engine:92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
       "target": "plan:ai-catapult:xskp-p4-adopt-engine:XSKP-P4-05:92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
       "type": "plans"
+    },
+    {
+      "source": "issue:ai-catapult:tswc-ai-catapult",
+      "target": "spec:ai-catapult:tswc-ai-catapult",
+      "type": "specified-by"
+    },
+    {
+      "source": "spec:ai-catapult:tswc-ai-catapult",
+      "target": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-a2:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b1:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b3:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b4:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "type": "plans"
     }
   ],
   "generated_at": "2026-08-22T00:00:00Z",
@@ -363,6 +398,102 @@
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "XSKP-P4-05",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "issue:ai-catapult:tswc-ai-catapult",
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "spec:ai-catapult:tswc-ai-catapult",
+      "path": "docs/specifications/ACTIVE/typescript-wikiskill-convergence-tswc-ai-catapult.md",
+      "repo_id": "ai-catapult",
+      "sha256": "6d54f993b28620d1c887bdf1947f0c45b9ceb6fe5122468f5b61b870e425ed88",
+      "status": "active",
+      "title": "TSWC \u2014 ai-catapult lane (`ai-catapult`, plan `tswc-ai-catapult`) \u2014 plan-scoped planning specification",
+      "type": "spec"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:tswc-ai-catapult"
+      ],
+      "id": "issue:ai-catapult:tswc-ai-catapult",
+      "owner": "unassigned",
+      "path": ".ai/work-intake/tswc-ai-catapult.md",
+      "repo_id": "ai-catapult",
+      "status": "needs-triage",
+      "title": "TSWC \u2014 ai-catapult lane (`ai-catapult`, plan `tswc-ai-catapult`) \u2014 local work item",
+      "type": "issue"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:tswc-ai-catapult",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-a2:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b1:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b3:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b4:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/handoff.md",
+      "repo_id": "ai-catapult",
+      "status": "active",
+      "title": "tswc-ai-catapult",
+      "type": "handoff"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-a2:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-a2",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b1:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b1",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b3:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b3",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b4:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b4",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b5",
       "type": "plan"
     }
   ],
