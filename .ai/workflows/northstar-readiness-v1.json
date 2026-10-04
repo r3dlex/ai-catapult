@@ -23,6 +23,30 @@
       "planning_complete": true,
       "schema": "readiness-contract/1",
       "status": "active"
+    },
+    {
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/goals.json",
+          "sha256": "82b687b7321dbec724ffc647dbf6769112260cbb92d08e711a32ed160ddc88a9"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/graph.json",
+          "sha256": "3fabe45122091cdb751fdb9f6be6426f9e53a5d7113bf041e5a30ea306c3b5b0"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/handoff.md",
+          "sha256": "eda129bef3dad166d76898a10994a6fbbbd8dd5330498207c75a76749fd67e78"
+        }
+      },
+      "execution_admitted": false,
+      "generation": "676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+      "handoff_path": ".ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112/handoff.md",
+      "id": "northstar-plan-tswc-ai-catapult",
+      "plan_id": "tswc-ai-catapult",
+      "planning_complete": true,
+      "schema": "readiness-contract/1",
+      "status": "active"
     }
   ],
   "schema": "readiness-contract/1"
