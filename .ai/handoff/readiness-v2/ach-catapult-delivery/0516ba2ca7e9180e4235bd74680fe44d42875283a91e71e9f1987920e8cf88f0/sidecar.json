@@ -1,0 +1,66 @@
+{
+  "goals": {
+    "ACH-C-01": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Replaces the live ai-catapult .ai/policies/readiness-policy.json (XSKP P4's pending v1 policy with extensions.active_plan) whose bytes, generation and goal revisions are pinned by test/readiness-policy.test.js under npm test; also edits the .ai/work-intake/autobahn-startup-delivery.md record, which no test reads. Coverage unknown (npm test has no coverage reporter). Adds the .ai/ci/local-ci.json schema/workspace declaration fold while preserving its reviewed workflows, sources and verification; the merged ACH-S-08 validator must recheck it before publication. Correction: original S-08 is held; eventual O8 closure/rebind and matching merged local-ci/2 driver are unknown. Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: TSWC A2 owns test/ and .ai/ci/local-ci.json; source-owner acknowledgement and main's reviewed rename/lock-batch disposition are missing. Re-derive from the actual reviewed post-rename base; bootstrap/toolchain/output deltas require explicit reviewed source-policy disposition. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-02": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Touches src/install.js copy flow for claude, codex and opencode and skills.lock.json, characterized by test/install.test.js, test/opencode-install.test.js, test/readiness-delivery.test.js, test/vendor.test.js and test/setup.test.js, and re-pins .ai/ci/local-ci.json. Coverage unknown (npm test has no coverage reporter). RE-SLICE PROPOSAL adds only test/fixtures/init-standalone/.ai/policies/readiness-policy.json so this lock bump can satisfy its own unchanged exact init parity and full suite before C-03; fixture bytes/hashes at the future base are not invented. Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: A2 src/test/local-CI scopes and B4's runtime lock batch intersect this goal; source-owner acknowledgement, actual post-rename base and main's reviewed finite lock-batch disposition are missing. No lock descendant, broad fixture scope or tooling grant is inferred. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-03": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Touches src/scaffold.js mechanical copy and the committed test/fixtures/init-standalone fixture that test/init.test.js and test/packed-init.test.js compare byte-for-byte; collision and --force behaviour must stay unchanged. Coverage unknown (npm test has no coverage reporter). Revision-2 scope correction: fixture content ownership moves to C-02; C-03 reads it unchanged and retains semantic, N3, validator/gap, collision/force and source/packed conformance. Baseline packed-init has smoke coverage, not exact whole-fixture parity; C-03 must add the specified policy equivalence evidence. Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: TSWC A2 src/scripts/test scopes and template/batch sequencing require acknowledged source-owner/main disposition and an actually reviewed post-rename base. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-04": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Mostly new files (src/backfill.js, test/backfill.test.js); the only existing seam is subcommand dispatch in bin/ai-catapult.js (init, install, graph-hooks, matrix, ci-adapters), whose commands are characterized by their existing tests. Coverage unknown (npm test has no coverage reporter). Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: TSWC A2 bin/src/test scopes and B3's bin/ dispatch claim intersect backfill. Literal .js paths remain baseline-only until actual reviewed post-rename path/runtime/test re-derivation and source-owner/main sequencing acknowledgement. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-05": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Appends to ai-catapult's v2 registry and .ai/traceability/graph.json next to the immutable .ai/handoff/readiness-v1/xskp-p4-adopt-engine generations and the v1 registry, which must stay byte-unchanged; new migration test only otherwise. Coverage unknown (npm test has no coverage reporter). Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: the migration test intersects A2's test/ scope even though registry/graph paths do not. Re-derive at the actual reviewed post-rename base after source-owner/main sequencing acknowledgement. C-05 stays P4-only, preserves migrated literal content and does not implement P4, migrate TSWC or authorize a TS-scope successor. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-06": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Bumps package.json, which drives the generated Claude, Codex and OpenCode plugin manifests (scripts/build-*-plugin.sh read its version) and is pinned in .ai/ci/local-ci.json; characterized by test/version.test.js, test/claude-plugin.test.js, test/codex-plugin.test.js and test/release-0.4.3.test.js (landed by #50). Coverage unknown (npm test has no coverage reporter). Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: A2 package/test/local-CI scopes intersect the release bump. Re-derive actual reviewed post-rename package/build/test paths and declared-source pins after source-owner/main acknowledgement; retain the entire reviewed C-01 workspace unless an explicit source-policy disposition changes it. No release/version fact or tooling grant is inferred. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "ach-catapult-delivery",
+  "schema": "readiness-sidecar/1"
+}
