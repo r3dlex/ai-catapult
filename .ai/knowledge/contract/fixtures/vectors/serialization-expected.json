@@ -1,0 +1,45 @@
+{
+  "canonical": {
+    "format": "markdown",
+    "frontmatter_id": true,
+    "immutable": false,
+    "path": "docs/learning/umlaut-und-emoji.md"
+  },
+  "kind": "learning",
+  "knowledge_id": "example-repo:learning:umlaut-und-emoji",
+  "lifecycle": "draft",
+  "origin": {
+    "host": "codex",
+    "native": false,
+    "producer": "manual",
+    "surface": "omx"
+  },
+  "relations": [],
+  "repo_id": "example-repo",
+  "revisions": [
+    {
+      "derived_from": [],
+      "evidence_class": "imported-historical",
+      "published_at": "2026-10-02T00:00:00+02:00",
+      "rev": 1,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "schema": "knowledge-registry/1",
+  "title": "Übersicht — Lernnotiz 😀 ｚ",
+  "tombstone": null,
+  "x_nested": {
+    "a": {
+      "a": 2,
+      "ä": 1
+    },
+    "b": [
+      {
+        "a": 2,
+        "z": 1
+      }
+    ]
+  },
+  "x_ｚ": "bmp-fullwidth-z (U+FF5A)",
+  "x_😀": "astral (U+1F600)"
+}

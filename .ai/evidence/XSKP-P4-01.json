@@ -1,0 +1,11 @@
+{
+  "goal_id": "XSKP-P4-01",
+  "green": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/knowledge-contract.test.js",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/knowledge-contract.test.js",
+    "exit_code": 1
+  }
+}
