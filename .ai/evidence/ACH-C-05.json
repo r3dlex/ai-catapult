@@ -1,0 +1,163 @@
+{
+  "generation": "2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8",
+  "goal_id": "ACH-C-05",
+  "green": {
+    "command": "node --test test/xskp-p4-v2-migration.test.js",
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 5,
+    "tests": 5
+  },
+  "inventory": {
+    "adapter": "production-gh",
+    "entries": [
+      {
+        "action": "migrate",
+        "ambiguous": [],
+        "fate": "unstarted",
+        "generation": "92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
+        "goals": [
+          "XSKP-P4-01",
+          "XSKP-P4-02",
+          "XSKP-P4-03",
+          "XSKP-P4-04",
+          "XSKP-P4-05"
+        ],
+        "id": "northstar-plan-xskp-p4-adopt-engine",
+        "in_flight": [],
+        "merged": [],
+        "plan_id": "xskp-p4-adopt-engine",
+        "refused": [],
+        "unmerged": [
+          "XSKP-P4-01",
+          "XSKP-P4-02",
+          "XSKP-P4-03",
+          "XSKP-P4-04",
+          "XSKP-P4-05"
+        ]
+      },
+      {
+        "action": "migrate",
+        "ambiguous": [],
+        "fate": "unstarted",
+        "generation": "676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "goals": [
+          "tswc-ac-a2",
+          "tswc-ac-b1",
+          "tswc-ac-b3",
+          "tswc-ac-b4",
+          "tswc-ac-b5"
+        ],
+        "id": "northstar-plan-tswc-ai-catapult",
+        "in_flight": [],
+        "merged": [],
+        "plan_id": "tswc-ai-catapult",
+        "refused": [],
+        "unmerged": [
+          "tswc-ac-a2",
+          "tswc-ac-b1",
+          "tswc-ac-b3",
+          "tswc-ac-b4",
+          "tswc-ac-b5"
+        ]
+      }
+    ],
+    "provenance": "source-lane",
+    "registry": ".ai/workflows/northstar-readiness-v1.json",
+    "schema": "v1-inventory/1",
+    "target": "refs/remotes/origin/main",
+    "target_revision": "ef6bcbf703d0d6d2d49ecf30fb5c460148cec20f"
+  },
+  "limits": [
+    "Local RED/GREEN and the full npm test are not hosted CI, exact merge admission, installed-lane evidence or live authority.",
+    "The inventory observes the hosted API at 2026-10-09; it is a point-in-time fact, not a standing guarantee.",
+    "No commit, push, tag, merge, release, readiness context or provider change is performed by this evidence.",
+    "AC-7 honored: no approval was requested or created for plan xskp-p4-adopt-engine; its five approval-class gaps stay open until its own future approval flow (tag approval/xskp-p4-adopt-engine/2ce8dbb7e7e8 would be the needed one).",
+    "Every retained v1 xskp-p4-adopt-engine generation (92ecdb62, ed0b95f7, 93c64059) and the v1 registry stay byte-unchanged, digest-pinned by test/xskp-p4-v2-migration.test.js.",
+    "vendor/skills, dist snapshots and release/version files are untouched; no PR labels are set by this goal."
+  ],
+  "migration": {
+    "dropped_dependencies": [],
+    "goal_revisions": 5,
+    "goals": [
+      "XSKP-P4-01",
+      "XSKP-P4-02",
+      "XSKP-P4-03",
+      "XSKP-P4-04",
+      "XSKP-P4-05"
+    ],
+    "legacy_generation": "92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
+    "publication": {
+      "blocking": 0,
+      "approval_class": 5,
+      "deferred": 15,
+      "generation": "2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8",
+      "mode": "live",
+      "planning_complete": true,
+      "published_contract": "readiness-contract/2",
+      "report": "northstar-publication/2",
+      "status": "active"
+    },
+    "schema": "handoff-migration/2",
+    "traceability": ".ai/traceability/graph.json gained edges spec->handoff and handoff->plan for XSKP-P4-01..05 at generation 2ce8dbb7, a handoff node with backlinks, five plan nodes, and one backlink on the existing spec node; generated_at unchanged."
+  },
+  "plan_id": "ach-catapult-delivery",
+  "provenance": {
+    "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+    "lane": "source",
+    "lane_skills_commit": "f5e338b92bb754c2bfffdf542b498530258fdbc0",
+    "lane_verified_by": "autobahn and northstar readiness-dependency-v2.json are byte-identical (sha256 96501e7bcd01e50d041956b31b538645ef5ab071745e880ecc6d29087a3b82bf)",
+    "legacy_v1_sha256": {
+      "registry": "391dfc01a3d437cb7cf9acae6f44aab903e0a79424a7511a901b9cff976a705f",
+      "gen_92ecdb62": {
+        "goals.json": "3222a2ea612cc19b51c6f9b3293e6d4d1b5613729c73398b45db88b33460ee1a",
+        "graph.json": "2b3f321da80aa15575a946cdb8f55681c1ceee1510dea98aa377f37ab6a3ba10",
+        "handoff.md": "e11870c11c90b70e96850a6d3000b762d5432a434fe5632fb489f4fab34193cb"
+      },
+      "gen_ed0b95f7": {
+        "goals.json": "159737c64c9f1b47ba98676811a9ba961e957fb0a8d7521cfe77b513425d7055",
+        "graph.json": "9aedf8ada23ab608b296b344c9c48eb70fc0b7ad8a7704bfde37ec309c71689d",
+        "handoff.md": "e11870c11c90b70e96850a6d3000b762d5432a434fe5632fb489f4fab34193cb"
+      },
+      "gen_93c64059": {
+        "goals.json": "7b201186818ac2bd94164daa9c1efb4e961c796e05609824e98cb3849d1926ed",
+        "graph.json": "615cca8a6f3926b993cbed7f6959afe5c45534893b3e1057ce75c17b8d222789",
+        "handoff.md": "e11870c11c90b70e96850a6d3000b762d5432a434fe5632fb489f4fab34193cb"
+      }
+    },
+    "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+    "red_defect_note": "The unpushed red commit originally encoded the chain as cumulative dependency lengths ('01234'); that was a test authoring error against the actual legacy shape. It was amended in place (e67ab11873fdebde788544954b4a05f2e65ad041 -> ccbc73649b7dc48f5a344119bab7712bd4526536) before any push; the corrected test at the amended red commit fails with the same counts (4 fail / 1 pass) because the v2 artifacts are absent, and the recorded migration carries the legacy chain byte-equal.",
+    "red_redcommit_sha": "ccbc73649b7dc48f5a344119bab7712bd4526536",
+    "test_sha256": "08cdb3998d951784c471f539feb8f76387d32e49c8fabe773a82f47efff57d2c",
+    "tools": "contract-run.sh inventory-v1; migrate-handoff.sh --to readiness-contract/2; northstar/handoff-write.sh; all from the source lane at f5e338b92",
+    "v2_registry_sha256_after": "8c1d3d331a92c3f7916a19b58c6af6399967c0753c33210ce49e3adc152305f7",
+    "v2_registry_sha256_before": "5c12458ce86ed5a5fb91052709eed987b589f2a5b84b160be199849f85fe6783"
+  },
+  "red": {
+    "command": "node --test test/xskp-p4-v2-migration.test.js",
+    "exit_code": 1,
+    "failed": 4,
+    "passed": 1,
+    "reason": "At the red commit the .ai/handoff/readiness-v2/xskp-p4-adopt-engine generation and its registry entry do not exist, so the four v2-dependent checks fail (registry, content projection, goal_revision_v2 hashing, empty-hold sidecar); only the retained-v1-bytes check passes.",
+    "tests": 5
+  },
+  "summary": "The registered xskp-p4-adopt-engine v1 generation 92ecdb62 (handoff-goals/1) is migrated to readiness-contract/2 via migrate-then-publish at source lane f5e338b92: exactly one new live v2 generation 2ce8dbb7 registered (planning_complete true, 0 blocking / 5 approval-class / 15 deferred gaps, no approval created for P4), legacy v1 bytes and registry frozen, traceability graph extended; five-goal 5-deep sequential chain preserved.",
+  "tests": {
+    "command": "npm test",
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 250,
+    "skipped": 0,
+    "tests": 250
+  },
+  "verification": {
+    "commands": [
+      "npm test",
+      "git diff --check"
+    ],
+    "exit_codes": {
+      "npm test": 0,
+      "git diff --check": 0
+    }
+  }
+}

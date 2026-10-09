@@ -1,0 +1,133 @@
+{
+  "attachments": {
+    "consensus_plan": "aitool-root .omc/plans/ralplan-cross-surface-knowledge-publication.md (local, gitignored, non-authoritative; its goal objects are restated verbatim here)",
+    "contract_pack_lock": "docs/specifications/ACTIVE/cross-surface-knowledge-publication.contract/contract.lock.json sha256 9f5d7edfc17554c383b06aa4726dfffe564ecc8d657b16baa89ce72098d5e102",
+    "independence": "No goal depends on a goal in another plan; the six xskp-* plans are callable by separate autobahn runs in any order.",
+    "requirements_closure": "aitool-root .omc/specs/deep-interview-cross-surface-knowledge-publication.md (local, gitignored, non-authoritative)",
+    "umbrella_spec": "r3dlex/ai-tool-workspace docs/specifications/ACTIVE/cross-surface-knowledge-publication.md sha256 d50488d9b480fdfdea6c2fa2b7265a507d98fdae97758c3b1d2f501951415586"
+  },
+  "goals": [
+    {
+      "acceptance_criteria": [
+        "AC-1: .ai/knowledge/contract is a byte-identical copy of the repo's docs/specifications/ACTIVE/cross-surface-knowledge-publication.contract; test/knowledge-contract.test.js (auto-discovered by node --test under npm test) verifies both copies against contract.lock.json, pins lock sha256 9f5d7edfc17554c383b06aa4726dfffe564ecc8d657b16baa89ce72098d5e102, and goes red on a mutated byte in a temp copy.",
+        "Packaged lane: package.json files includes .ai/knowledge/contract/; the test runs 'npm pack --ignore-scripts' (the precedent at test/graph-hooks.test.js:118, so prepack's setup.sh never touches vendor/skills) and asserts that the tarball listing contains every contract file.",
+        "skills.lock.json and vendor/skills are unchanged.",
+        "AC-7: no native, immutable, reference-only or pre-existing dirty/untracked path changes."
+      ],
+      "dependencies": [],
+      "id": "XSKP-P4-01",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        ".ai/knowledge/contract",
+        "package.json",
+        "test/knowledge-contract.test.js"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "'ai-catapult knowledge list|find|show|verify|rebuild' passes C01-C06, C14, the C15 read half and C18 with the same exit codes and error tokens as the contract.",
+        "C16: the JS writer orders keys by Unicode code point (not UTF-16 code unit) and writes non-ASCII literally; its output equals fixtures/vectors/serialization-expected.json byte-for-byte; C02 reproduces the fixture registry.json.",
+        "Packaged lane: the same cases run against the dist-snapshot tree.",
+        "test/knowledge-conformance.test.js is auto-discovered by node --test under npm test.",
+        "AC-7: no native, immutable, reference-only or pre-existing dirty/untracked path changes."
+      ],
+      "dependencies": [
+        "XSKP-P4-01"
+      ],
+      "id": "XSKP-P4-02",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        "src/knowledge.js",
+        "bin/ai-catapult.js",
+        "test/knowledge-conformance.test.js"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "publish/archive/retire/unlock pass C07-C13, the C15 write half and C19 (unlock without --confirm-no-writer exits 2; never automatic; ledgered).",
+        "The policy's inline (?i) secret pattern is translated to a JS 'i' flag and tested explicitly, because Node 26 rejects (?i); the C08 token is assembled at runtime.",
+        "The lock is an atomic mkdirSync; contention fails immediately with locked; a stale lock is reported, never removed automatically.",
+        "AC-3 (P4) is complete: C01-C19 pass in source and packaged lanes.",
+        "AC-7 executable guard wraps every publish test (git status --porcelain plus native/immutable sha snapshots, before and after)."
+      ],
+      "dependencies": [
+        "XSKP-P4-02"
+      ],
+      "id": "XSKP-P4-03",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        "src/knowledge.js",
+        "test/knowledge-conformance.test.js"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "'ai-catapult adopt' dry-run inventory produces a migration.schema.json-valid map for every layout (greenfield, brownfield, partial-v3, legacy-agents, legacy-ai-sdlc) times topology (single, monorepo, umbrella) fixture, including an AiTool-shaped umbrella.",
+        "migrate actions are refused without the per-run confirmation token defined by ai-catapult-init modules/migration.md.",
+        "Private, immutable and unsupported items are classified per publication-policy.json.",
+        "test/adopt.test.js is auto-discovered by node --test under npm test.",
+        "AC-7 executable guard wraps every inventory test."
+      ],
+      "dependencies": [
+        "XSKP-P4-03"
+      ],
+      "id": "XSKP-P4-04",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        "src/adopt.js",
+        "bin/ai-catapult.js",
+        "test/adopt.test.js",
+        "test/fixtures/knowledge-adopt"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "adopt apply writes backups under .ai/drift/backups/<run_id>/, knowledge-migration-event/1 ledger lines and reference repairs; a rerun on the same commit yields only noop events.",
+        "init creates .ai/knowledge/entries/.gitkeep and .ai/knowledge/registry.json whose bytes are exactly the contract serialization of {entries: [], generated_from: '.ai/knowledge/entries', repo_id: <repo_id>, schema: 'knowledge-registry/1'}; it never overwrites an existing registry and does not depend on vendored templates.",
+        "Packaged lane: test/packed-init.test.js builds the tarball with 'npm pack --ignore-scripts', extracts it, and runs init from the extracted package, asserting the registry bytes and the presence of the contract; vendor/skills and skills.lock.json are byte-unchanged afterwards.",
+        "Installed lane (report-only, not gated): scripts/report-installed-knowledge.sh resolves the global install at run time as \"$(npm prefix -g)/lib/node_modules/ai-catapult\" with CLI \"$(npm prefix -g)/bin/ai-catapult\" (observed /opt/homebrew at planning; never hardcoded), runs 'ai-catapult knowledge verify' against a temp repo, and hashes the global install directory before and after.",
+        "Installed lane, continued: the script also reports the Claude plugin cache ~/.claude/plugins/cache/ai-catapult/ (versions present plus a directory hash before and after) without executing it, because the plugin cache cannot run the CLI. It prints MATCH or MISMATCH for both hashes, mutates neither location, and the output is attached to the PR.",
+        "AC-7 executable guard wraps every apply and init test.",
+        "Tests are auto-discovered by node --test under npm test."
+      ],
+      "dependencies": [
+        "XSKP-P4-04"
+      ],
+      "id": "XSKP-P4-05",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        "src/adopt.js",
+        "src/knowledge.js",
+        "src/scaffold.js",
+        "scripts/report-installed-knowledge.sh",
+        "test/adopt.test.js",
+        "test/init.test.js",
+        "test/packed-init.test.js"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    }
+  ],
+  "id": "xskp-p4-adopt-engine",
+  "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+  "repository": {
+    "id": "ai-catapult"
+  },
+  "schema": "handoff-goals/2",
+  "spec": {
+    "path": "docs/specifications/ACTIVE/cross-surface-knowledge-publication-xskp-p4-adopt-engine.md"
+  }
+}

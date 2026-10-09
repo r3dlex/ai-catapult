@@ -1,0 +1,56 @@
+{
+  "goals": {
+    "XSKP-P4-01": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. New files only (contract copy and fingerprint test); the one existing seam is package.json, which the plugin builds and npm pack read. Change only what the test runner needs.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "XSKP-P4-02": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. Existing seam: bin/ai-catapult.js, the CLI dispatcher every user command passes through, at 54% overall branch coverage with uncovered dispatch lines 36-46. Characterize current dispatch; sprout knowledge verbs into the new src/knowledge.js.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "XSKP-P4-03": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. New files only (write verbs inside P4's own new src/knowledge.js); no existing call site, so legacy-safe is equivalent to standard test-first here.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "XSKP-P4-04": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. Existing seam: bin/ai-catapult.js dispatch gains the adopt command. Characterize current dispatch; sprout the engine into the new src/adopt.js.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "XSKP-P4-05": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. Highest blast radius in P4: src/scaffold.js (uncovered lines 41-48, 111-113, 141-146, 175-187) drives init in every scaffolded repo, and init/packed-init tests guard the shipped tarball. Characterize current init and tarball output before adding the empty registry.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "xskp-p4-adopt-engine",
+  "schema": "readiness-sidecar/1"
+}
