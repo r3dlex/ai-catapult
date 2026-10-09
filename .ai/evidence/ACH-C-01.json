@@ -1,0 +1,141 @@
+{
+  "autobahn_startup_delivery": {
+    "cherry_pick_of": [
+      "d396341f2e5badec619894d00547487578f41484",
+      "62600e48e43f9ccb0f5e07a28913af0990f36ca3"
+    ],
+    "merge_commit": "a87c91258fddad854e250f80045688da147644b7",
+    "pr": 50,
+    "pr_46": {
+      "author": "br4vesirrobin",
+      "head_ref": "fix/autobahn-startup-delivery-20261002",
+      "merged": false,
+      "state": "CLOSED"
+    },
+    "retained_skills_branch": {
+      "name": "fix/autobahn-startup-delivery-backport-20261002",
+      "sha": "032df6b11cabf0567cbd132c4ac6c60fc37bff06"
+    },
+    "skills_lock": "26d25105b028903ea1b34aebe9fbf4595b550051"
+  },
+  "generation": "0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0",
+  "goal_id": "ACH-C-01",
+  "green": {
+    "command": "node --test test/readiness-policy.test.js",
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 6,
+    "tests": 6
+  },
+  "inventory": {
+    "adapter": "production-gh",
+    "entries": [
+      {
+        "action": "migrate",
+        "ambiguous": [],
+        "fate": "unstarted",
+        "generation": "92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
+        "goals": [
+          "XSKP-P4-01",
+          "XSKP-P4-02",
+          "XSKP-P4-03",
+          "XSKP-P4-04",
+          "XSKP-P4-05"
+        ],
+        "id": "northstar-plan-xskp-p4-adopt-engine",
+        "in_flight": [],
+        "merged": [],
+        "plan_id": "xskp-p4-adopt-engine",
+        "refused": [],
+        "unmerged": [
+          "XSKP-P4-01",
+          "XSKP-P4-02",
+          "XSKP-P4-03",
+          "XSKP-P4-04",
+          "XSKP-P4-05"
+        ]
+      },
+      {
+        "action": "migrate",
+        "ambiguous": [],
+        "fate": "unstarted",
+        "generation": "676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "goals": [
+          "tswc-ac-a2",
+          "tswc-ac-b1",
+          "tswc-ac-b3",
+          "tswc-ac-b4",
+          "tswc-ac-b5"
+        ],
+        "id": "northstar-plan-tswc-ai-catapult",
+        "in_flight": [],
+        "merged": [],
+        "plan_id": "tswc-ai-catapult",
+        "refused": [],
+        "unmerged": [
+          "tswc-ac-a2",
+          "tswc-ac-b1",
+          "tswc-ac-b3",
+          "tswc-ac-b4",
+          "tswc-ac-b5"
+        ]
+      }
+    ],
+    "provenance": "source-lane",
+    "registry": ".ai/workflows/northstar-readiness-v1.json",
+    "schema": "v1-inventory/1",
+    "target": "refs/remotes/origin/main",
+    "target_revision": "959accce9fc04412f1e0f31f866685a101a1e588"
+  },
+  "limits": [
+    "Local RED/GREEN and the full npm test are not hosted CI, exact merge admission, installed-lane evidence or live authority.",
+    "The inventory observes the hosted API at 2026-10-09; it is a point-in-time fact, not a standing guarantee.",
+    "No commit, push, tag, merge, release, readiness context or provider change is performed by this evidence.",
+    "The v2 registry and every v1 generation and registry byte are left unchanged; no completed v1 entry existed to retire.",
+    "The candidate accept list and default_mode are the retained DRAFT choice, not a final D-TIERS decision."
+  ],
+  "plan_id": "ach-catapult-delivery",
+  "provenance": {
+    "approval": {
+      "assurance": "in-session",
+      "digest": "243e7e7bdeaf156b00c30f03ab8c6bda42b42988f9e99c39dfa2a5dade002956",
+      "mode": "prompt",
+      "note": "Human in-session confirmation of the plan-approval/1 digest for generation 0516ba2c; NOT agent-self (a bootstrap generation refuses agent-self).",
+      "publication_commit": "644df4c05aa38d7c49db45507ed79903e972eba9",
+      "tag": "approval/ach-catapult-delivery/0516ba2ca7e9",
+      "tag_object": "db60873e1e54dd6f46ba59cfed0004c954c05ad8"
+    },
+    "intake_sha256": "5aaf6d94cafc7f8462dd8afcde150e85d68b3427191c3a8052d428dd330a513d",
+    "inventory_tool": "contract-run.sh inventory-v1 (readiness-contract/2), adapter production-gh, provenance source-lane, target_revision 959accce9fc04412f1e0f31f866685a101a1e588",
+    "lane": "source",
+    "lane_skills_commit": "f5e338b92bb754c2bfffdf542b498530258fdbc0",
+    "lane_verified_by": "autobahn and northstar readiness-dependency-v2.json are byte-identical (sha256 96501e7bcd01e50d041956b31b538645ef5ab071745e880ecc6d29087a3b82bf)",
+    "local_ci_sha256": "c31b724d74fab4d91b98f5257fe275217342c46ab03d07eef47df00144a8cc51",
+    "policy_candidate_path": ".ai/handoff/readiness-v2/ach-catapult-delivery/0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0/policy-candidate.json",
+    "policy_candidate_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+    "policy_path": ".ai/policies/readiness-policy.json",
+    "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+    "retired_reason": "inventory-v1 observed both v1 registry entries unstarted (no merged, no open PR or unmerged origin branch carrying a goal token), so no completed entry exists and no top-level retired_v1 record is written; the v2 registry is unchanged.",
+    "test_sha256": "8bc8f376eb77bae04ce563adde4696236f8e20bef4369274d38f805c020819bb",
+    "v1_registry_sha256": "391dfc01a3d437cb7cf9acae6f44aab903e0a79424a7511a901b9cff976a705f",
+    "v1_retired": [],
+    "v2_registry_sha256": "5c12458ce86ed5a5fb91052709eed987b589f2a5b84b160be199849f85fe6783"
+  },
+  "red": {
+    "command": "node --test test/readiness-policy.test.js",
+    "exit_code": 1,
+    "failed": 5,
+    "passed": 1,
+    "reason": "Before the swap the live .ai/policies/readiness-policy.json was readiness-policy/1 and .ai/ci/local-ci.json was local-ci/1, so five of the six rewritten checks fail; only the retained-v1-bytes check passes.",
+    "tests": 6
+  },
+  "summary": "ai-catapult readiness-policy/2 (identity_model multi) byte-equal to the generation candidate, with the every-entry v1 inventory recorded and no completed v1 entry to retire; local-ci/2 workspace fold; autobahn-startup-delivery #50 reconciliation.",
+  "tests": {
+    "command": "npm test",
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 245,
+    "skipped": 0,
+    "tests": 245
+  }
+}

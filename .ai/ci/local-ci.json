@@ -1,5 +1,5 @@
 {
-  "schema": "local-ci/1",
+  "schema": "local-ci/2",
   "workflows": {
     ".github/workflows/ci.yml": "0a29e2711bd98db48a6be24d51d24c98b926fb077a745ab8121d5e4e076f28c6",
     ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
@@ -32,5 +32,17 @@
   },
   "verification": [
     "npm test"
-  ]
+  ],
+  "workspace": {
+    "bootstrap": [
+      "bash setup.sh"
+    ],
+    "dependencies": [
+      "vendor"
+    ],
+    "outputs": [
+      "dist",
+      "dist-snapshot"
+    ]
+  }
 }
