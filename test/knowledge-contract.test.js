@@ -82,19 +82,26 @@ function walkRel(dir) {
 
 /**
  * Verify a contract copy directory against the lock file: every locked file
- * must exist with exactly the recorded sha256, the lock document itself must
- * be present (it is part of the copy but cannot hash itself), and the copy
- * must contain no extra files besides the lock. Throws with a descriptive
- * message on the first mismatch.
+ * must exist with exactly the recorded sha256, the copied lock document must
+ * itself be pinned to LOCK_SHA256 (the lock cannot hash itself, so the copy's
+ * lock is pinned from outside), and the copy must contain no extra files
+ * besides the lock. Throws with a descriptive message on the first mismatch.
  */
 function verifyContractCopy(copyDir) {
   const lock = readLock();
+  // The lock document ships inside the copy but is not hashed by itself; pin
+  // it to LOCK_SHA256 instead so a mutated byte in a copied lock is caught.
   assert.ok(
     existsSync(join(copyDir, LOCK_FILE)),
     `copy is missing ${LOCK_FILE}`,
   );
+  const copiedLockSha = sha256File(join(copyDir, LOCK_FILE));
+  if (copiedLockSha !== LOCK_SHA256) {
+    throw new Error(
+      `sha256 mismatch for ${LOCK_FILE}: got ${copiedLockSha}, want ${LOCK_SHA256}`,
+    );
+  }
   const expectedFiles = Object.keys(lock.files).sort();
-  // The lock document ships inside the copy but is not hashed by itself.
   const actualFiles = walkRel(copyDir).filter((f) => f !== LOCK_FILE);
 
   const missing = expectedFiles.filter((f) => !actualFiles.includes(f));
@@ -172,6 +179,23 @@ test('verifier goes red on a mutated byte in a temp copy, green after restore', 
 
     // Restoring the original bytes turns the verifier green again.
     writeFileSync(target, bytes);
+    assert.doesNotThrow(() => verifyContractCopy(tmp));
+
+    // A mutated byte in the lock document itself must also be caught: the
+    // verifier pins the copied lock's sha256, not just its presence.
+    const lockTarget = join(tmp, LOCK_FILE);
+    const lockBytes = readFileSync(lockTarget);
+    const lockMutated = Buffer.from(lockBytes);
+    lockMutated[lockMutated.length - 1] = lockMutated[lockMutated.length - 1] ^ 0x01;
+    writeFileSync(lockTarget, lockMutated);
+    assert.throws(
+      () => verifyContractCopy(tmp),
+      (err) => err instanceof Error && new RegExp(`sha256 mismatch for ${LOCK_FILE}`).test(err.message),
+      'mutated byte in contract.lock.json must be caught by the verifier',
+    );
+
+    // Restoring the lock bytes turns the verifier green again.
+    writeFileSync(lockTarget, lockBytes);
     assert.doesNotThrow(() => verifyContractCopy(tmp));
   } finally {
     rmSync(tmp, { recursive: true, force: true });
