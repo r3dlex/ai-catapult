@@ -1,4 +1,5 @@
-// Pins the active XSKP P4 readiness policy. These checks grant no execution authority.
+// Pins the active ai-catapult readiness-policy/2 and the retained
+// readiness-contract/1 generations. These checks grant no execution authority.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -7,125 +8,145 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const POLICY_PATH = '.ai/policies/readiness-policy.json';
-const POLICY_SHA256 = '3ff4515609748c9dfbb08643eb913977fb7a12ac84ffb9f4b35985f9489cfed2';
-const PREVIOUS_POLICY_SHA256 = '41d01478582a12b98fba2d6fc96c5769870e20b8ac7b728f624c3bffc65b52b1';
-const GENERATION = '92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af';
-const BUNDLE_PATH = `.ai/handoff/readiness-v1/xskp-p4-adopt-engine/${GENERATION}/goals.json`;
-const BUNDLE_SHA256 = '3222a2ea612cc19b51c6f9b3293e6d4d1b5613729c73398b45db88b33460ee1a';
-const BRANCHES = {
-  'XSKP-P4-01': 'feat/knowledge-contract-XSKP-P4-01',
-  'XSKP-P4-02': 'feat/knowledge-read-verbs-XSKP-P4-02',
-  'XSKP-P4-03': 'feat/knowledge-write-verbs-XSKP-P4-03',
-  'XSKP-P4-04': 'feat/adopt-inventory-XSKP-P4-04',
-  'XSKP-P4-05': 'feat/adopt-apply-init-XSKP-P4-05',
+const read = (rel) => readFileSync(join(root, rel));
+const sha256 = (rel) => createHash('sha256').update(read(rel)).digest('hex');
+
+const POLICY = '.ai/policies/readiness-policy.json';
+const CI = '.ai/ci/local-ci.json';
+const V1_REGISTRY = '.ai/workflows/northstar-readiness-v1.json';
+const V2_REGISTRY = '.ai/workflows/northstar-readiness-v2.json';
+
+// The generation this policy is bound to (readiness-contract/2, handoff-goals/2).
+const GENERATION = '0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0';
+const HANDOFF = `.ai/handoff/readiness-v2/ach-catapult-delivery/${GENERATION}`;
+const CANDIDATE = `${HANDOFF}/policy-candidate.json`;
+const POLICY_SHA256 = 'f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f';
+const ANCHOR_SHA256 = '8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1';
+
+// policy/2 is fixed and plan-agnostic: exactly these fields, no extensions.
+const POLICY_FIELDS = [
+  'approval', 'branch_pattern', 'gates', 'identity_model', 'repository',
+  'required_checks', 'reviewer_requirements', 'schema', 'skippable_checks',
+  'sources', 'target', 'tools',
+];
+const GATE_KINDS = [
+  'ownership', 'review', 'branch_target', 'tooling', 'file_digest',
+  'git_ancestor', 'hosted_checks', 'plan_approval', 'fixture', 'harness_trust',
+];
+const NOT_APPLICABLE = { fixture: 'no-fixture-dependency', harness_trust: 'no-pinned-harness' };
+
+// Every readiness-contract/1 generation and registry byte that must stay frozen (O10).
+const V1_REGISTRY_SHA256 = '391dfc01a3d437cb7cf9acae6f44aab903e0a79424a7511a901b9cff976a705f';
+const V1_GENERATIONS = {
+  'xskp-p4-adopt-engine': {
+    dir: '.ai/handoff/readiness-v1/xskp-p4-adopt-engine/92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af',
+    files: {
+      'goals.json': '3222a2ea612cc19b51c6f9b3293e6d4d1b5613729c73398b45db88b33460ee1a',
+      'graph.json': '2b3f321da80aa15575a946cdb8f55681c1ceee1510dea98aa377f37ab6a3ba10',
+      'handoff.md': 'e11870c11c90b70e96850a6d3000b762d5432a434fe5632fb489f4fab34193cb',
+    },
+  },
+  'tswc-ai-catapult': {
+    dir: '.ai/handoff/readiness-v1/tswc-ai-catapult/676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112',
+    files: {
+      'goals.json': '82b687b7321dbec724ffc647dbf6769112260cbb92d08e711a32ed160ddc88a9',
+      'graph.json': '3fabe45122091cdb751fdb9f6be6426f9e53a5d7113bf041e5a30ea306c3b5b0',
+      'handoff.md': 'eda129bef3dad166d76898a10994a6fbbbd8dd5330498207c75a76749fd67e78',
+    },
+  },
 };
-// goal_revision() from autobahn readiness-contract/1 over the frozen bundle above.
-const REVISIONS = {
-  'XSKP-P4-01': 'aa008a6e96ca4efad004df5edea44889c5c8066f498025accd96c99de9c2ee7e',
-  'XSKP-P4-02': '7e8039ab8d5edd3a353062540da2b402b0f1fe5130c0cfe0462f20aafe385815',
-  'XSKP-P4-03': 'b41121e1a34b8cee485c019526b1aec05d925adc7a2afdd0d2074fc21beaa2d4',
-  'XSKP-P4-04': '6a69d65835a1b10cf924fde3c2da4523b939ebe034f6714878abbb5a99f47102',
-  'XSKP-P4-05': 'c4ae861e8809a22ad41ab95679c2d9f9158fc6de468066b47ef968c02492e72b',
-};
 
-const sha256 = (rel) => createHash('sha256').update(readFileSync(join(root, rel))).digest('hex');
-const policy = JSON.parse(readFileSync(join(root, POLICY_PATH), 'utf8'));
-const bundle = JSON.parse(readFileSync(join(root, BUNDLE_PATH), 'utf8'));
-const byKind = (kind) => policy.gates.filter((g) => g.kind === kind);
-
-test('policy digest is the exact revision submitted for approval', () => {
-  assert.equal(sha256(POLICY_PATH), POLICY_SHA256);
-  assert.equal(policy.extensions?.supersedes_policy_sha256, PREVIOUS_POLICY_SHA256);
+test('the active policy is the approved generation candidate, byte for byte', () => {
+  const generation = JSON.parse(read(V2_REGISTRY)).plans
+    .filter((plan) => plan.plan_id === 'ach-catapult-delivery');
+  assert.equal(generation.length, 1, 'exactly one registered ai-catapult generation');
+  const [plan] = generation;
+  assert.equal(plan.status, 'active');
+  assert.equal(plan.generation, GENERATION);
+  assert.equal(plan.policy_sha256, POLICY_SHA256, 'generation binds this policy digest');
+  assert.equal(plan.artifacts.policy_candidate.sha256, POLICY_SHA256, 'candidate digest is the policy digest');
+  assert.equal(sha256(POLICY), POLICY_SHA256);
+  assert.deepEqual(read(POLICY), read(CANDIDATE), 'the live policy must equal the generation candidate');
 });
 
-test('policy targets the frozen P4 generation and is pending approval', () => {
-  assert.equal(policy.schema, 'readiness-policy/1');
-  assert.deepEqual(policy.repository, bundle.repository);
-  assert.equal(sha256(BUNDLE_PATH), BUNDLE_SHA256);
-  assert.equal(policy.extensions.active_plan, 'xskp-p4-adopt-engine');
-  assert.equal(policy.extensions.generation, GENERATION);
-  assert.equal(policy.extensions.approval_status, 'pending-independent-approval');
-});
-
-test('sources are current and cover AGENTS.md', () => {
-  const paths = policy.sources.map((s) => s.path);
-  assert.equal(new Set(paths).size, paths.length);
-  assert.ok(paths.includes('AGENTS.md'));
-  for (const ref of policy.sources) assert.equal(sha256(ref.path), ref.sha256, ref.path);
-});
-
-test('existing ownership and npm gates are retained', () => {
-  const ids = Object.fromEntries(policy.gates.map((g) => [g.id, g]));
-  assert.deepEqual([ids['own-execution']?.stage, ids['own-execution']?.binding.roles], ['implementation', ['owner']]);
-  assert.deepEqual([ids['own-review']?.stage, ids['own-review']?.binding.roles], ['merge', ['reviewer']]);
-  assert.deepEqual(ids['tool-present']?.binding, { tool: 'npm' });
-  for (const id of ['own-execution', 'own-review', 'tool-present']) assert.deepEqual(ids[id].scope, { repository: true });
-});
-
-test('branch binding is exact per goal and targets main', () => {
-  const gates = byKind('branch_target');
-  assert.equal(gates.length, 5);
-  const actual = {};
-  for (const gate of gates) {
-    assert.equal(gate.stage, 'implementation');
-    assert.deepEqual(Object.keys(gate.scope), ['goals']);
-    assert.equal(gate.scope.goals.length, 1);
-    const [goal] = gate.scope.goals;
-    assert.ok(!(goal in actual), goal);
-    assert.equal(gate.binding.target, 'main');
-    actual[goal] = gate.binding.branch;
-  }
-  assert.deepEqual(actual, BRANCHES);
-  assert.ok(!('branch_target' in policy.not_applicable));
-});
-
-test('approval is per goal revision, not inferred from registration', () => {
-  assert.ok(!('registration_approval' in policy.not_applicable));
-  const gates = byKind('protected_approval');
-  assert.equal(gates.length, 5);
-  for (const gate of gates) {
-    const { subject } = gate.binding;
-    assert.equal(gate.stage, 'implementation');
-    assert.equal(subject.mode, 'goal-scope');
-    assert.deepEqual(gate.scope, { goals: [subject.goal] });
-    assert.equal(subject.goal_sha256, REVISIONS[subject.goal]);
-  }
-  assert.deepEqual(new Set(gates.map((g) => g.binding.subject.goal)), new Set(Object.keys(REVISIONS)));
-});
-
-test('tooling is observed per tool, never exempted', () => {
-  assert.ok(!('tooling' in policy.not_applicable));
-  const gates = byKind('tooling');
-  assert.deepEqual(new Set(gates.map((g) => g.binding.tool)), new Set(['npm', 'node', 'git', 'bash', 'tar']));
-  for (const gate of gates) {
-    assert.equal(gate.stage, 'implementation');
-    assert.deepEqual(gate.scope, { repository: true });
-  }
-});
-
-test('default-branch publication (B5) is a gate, not a receipt', () => {
-  const gates = policy.gates.filter((g) => g.id === 'planning-inputs-on-main');
-  assert.equal(gates.length, 1);
-  assert.deepEqual(gates[0], {
-    id: 'planning-inputs-on-main', kind: 'independent_result', responsible: gates[0].responsible,
-    scope: { repository: true }, stage: 'implementation',
+test('the policy conforms to readiness-policy/2 and stays plan-agnostic', () => {
+  const policy = JSON.parse(read(POLICY));
+  assert.deepEqual(Object.keys(policy).sort(), [...POLICY_FIELDS].sort(), 'exactly the fixed policy fields');
+  assert.equal(policy.schema, 'readiness-policy/2');
+  assert.deepEqual(policy.repository, { id: 'ai-catapult' });
+  assert.equal(policy.identity_model, 'multi');
+  assert.deepEqual(policy.reviewer_requirements, { independent_lane: true });
+  assert.deepEqual(policy.required_checks, ['test', 'vendor', 'codex-plugin', 'plugin-claude']);
+  assert.deepEqual(policy.skippable_checks, []);
+  assert.deepEqual(policy.tools, ['bash', 'python3', 'git', 'ssh-keygen', 'gh', 'node', 'npm', 'tar']);
+  assert.deepEqual(policy.sources, ['AGENTS.md', 'CLAUDE.md', 'CONTEXT.md', 'GEMINI.md']);
+  assert.equal(policy.branch_pattern, '^(feat|fix|chore)/<plan_id>-<goal_id>$');
+  assert.equal(policy.target, 'main');
+  assert.deepEqual(policy.approval, {
+    accept: ['agent-self', 'ssh-tag', 'in-session'],
+    anchor_sha256: ANCHOR_SHA256,
+    default_mode: 'agent',
+    max_age_days: 14,
   });
 });
 
-test('only current-bundle scopes, no new exemptions, no authority claims', () => {
-  const goals = new Set(bundle.goals.map((g) => g.id));
-  const ids = policy.gates.map((g) => g.id);
-  assert.equal(new Set(ids).size, ids.length);
+test('every gate is repository-scoped, uniquely named and of a fixed kind', () => {
+  const policy = JSON.parse(read(POLICY));
+  assert.ok(Array.isArray(policy.gates) && policy.gates.length > 0);
+  const ids = policy.gates.map((gate) => gate.id);
+  assert.equal(new Set(ids).size, ids.length, 'gate ids are unique');
   for (const gate of policy.gates) {
-    if (gate.scope.repository === true) continue;
-    assert.deepEqual(Object.keys(gate.scope), ['goals']);
-    for (const g of gate.scope.goals) assert.ok(goals.has(g), g);
+    assert.ok(GATE_KINDS.includes(gate.kind), gate.id);
+    assert.deepEqual(gate.scope, { repository: true }, `${gate.id} is repository-scoped`);
+    assert.deepEqual(Object.keys(gate.scope), ['repository'], `${gate.id} carries no per-goal scope`);
+    if ('not_applicable' in gate) {
+      assert.deepEqual(gate.not_applicable, { reason: NOT_APPLICABLE[gate.kind] }, gate.id);
+      assert.ok(!('binding' in gate), gate.id);
+    }
   }
-  assert.deepEqual(Object.keys(policy.not_applicable).sort(), ['fixtures', 'harness_trust']);
-  for (const reason of Object.values(policy.not_applicable)) {
-    assert.doesNotMatch(reason, /single-maintainer|verified present|planning_complete=true|self-sign/i);
+  for (const kind of ['hosted_checks', 'review']) {
+    assert.equal(policy.gates.filter((gate) => gate.kind === kind && gate.stage === 'merge').length, 1, kind);
   }
-  for (const key of ['authority', 'results', 'completed_goals']) assert.ok(!(key in policy), key);
-  for (const goal of bundle.goals) assert.equal(goal.owner, 'unassigned');
+  assert.ok(!('extensions' in policy), 'a plan-agnostic policy carries no extensions');
+});
+
+test('no plan or goal id from either registry leaks into the policy', () => {
+  const policy = read(POLICY).toString('utf8');
+  const ids = new Set();
+  for (const path of [V1_REGISTRY, V2_REGISTRY]) {
+    for (const plan of JSON.parse(read(path)).plans) {
+      ids.add(plan.id);
+      ids.add(plan.plan_id);
+      for (const goal of JSON.parse(read(plan.artifacts.bundle.path)).goals) ids.add(goal.id);
+    }
+  }
+  assert.ok(ids.has('xskp-p4-adopt-engine') && ids.has('tswc-ai-catapult') && ids.has('XSKP-P4-01'));
+  for (const id of ids) assert.ok(!policy.includes(id), `${id} must not appear in the policy`);
+});
+
+test('retained readiness-contract/1 generations and the v1 registry are byte-unchanged', () => {
+  const registry = JSON.parse(read(V1_REGISTRY));
+  assert.equal(registry.schema, 'readiness-contract/1');
+  assert.deepEqual(registry.plans.map((plan) => plan.plan_id).sort(),
+    Object.keys(V1_GENERATIONS).sort());
+  for (const [plan, generation] of Object.entries(V1_GENERATIONS)) {
+    for (const [file, digest] of Object.entries(generation.files)) {
+      assert.equal(sha256(`${generation.dir}/${file}`), digest, `${plan}/${file}`);
+    }
+  }
+  assert.equal(sha256(V1_REGISTRY), V1_REGISTRY_SHA256);
+});
+
+test('the local CI contract is local-ci/2 with the declared isolated workspace', () => {
+  const record = JSON.parse(read(CI));
+  assert.deepEqual(Object.keys(record).sort(),
+    ['schema', 'sources', 'verification', 'workflows', 'workspace']);
+  assert.equal(record.schema, 'local-ci/2');
+  assert.deepEqual(record.workspace, {
+    bootstrap: ['bash setup.sh'],
+    dependencies: ['vendor'],
+    outputs: ['dist', 'dist-snapshot'],
+  });
+  assert.deepEqual(record.verification, ['npm test']);
+  assert.ok('setup.sh' in record.sources, 'the bash bootstrap source stays pinned');
 });
