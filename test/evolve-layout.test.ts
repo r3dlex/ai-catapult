@@ -29,6 +29,7 @@ import fs, {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -501,14 +502,13 @@ void test('a run directory swapped for a symlink between the check and the write
   }
 });
 
-void test('a run directory swapped for a symlink immediately before the open cannot receive the write', () => {
+void test('a run directory swapped for a symlink immediately before the open is detected and refused (relocation)', () => {
   const { paths, root } = initTmpLayout('evolve-swap-open-');
   const outside = join(root, 'outside');
   const runDir = join(paths.rawDir, SWAP_RUN_ID);
   const savedDir = `${runDir}-saved`;
   const targetAbs = join(runDir, 'trace.json');
   const originalOpen = fs.openSync;
-  const contents = 'bound to the verified inode\n';
   try {
     mkdirSync(outside);
     mkdirSync(runDir);
@@ -522,23 +522,215 @@ void test('a run directory swapped for a symlink immediately before the open can
     withPatchedFs(
       {
         openSync: (...args: unknown[]) => {
-          // Swap before the open: path-based writes follow the planted symlink
-          // out of the workspace, while an inode-bound write cannot.
+          // Swap before the open: an inode-bound write cannot follow the
+          // planted symlink, and the relocation must be detected and refused.
           if (String(args[0]) === 'trace.json' || String(args[0]) === targetAbs) swap();
           return (originalOpen as unknown as PatchedFsFunction)(...args);
         },
       },
       () => {
-        const written = recordTrace(paths, SWAP_RUN_ID, 'trace.json', contents);
-        assert.equal(written.bytes, Buffer.byteLength(contents, 'utf8'));
+        assert.throws(
+          () => recordTrace(paths, SWAP_RUN_ID, 'trace.json', 'must not escape\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
       },
     );
-    // The symlink target never received the write…
+    // The symlink target never received the write, and the relocation was
+    // caught before a trace could settle anywhere.
     assert.equal(existsSync(join(outside, 'trace.json')), false);
-    // …the write stayed bound to the verified directory inode.
-    assert.equal(readFileSync(join(savedDir, 'trace.json'), 'utf8'), contents);
+    assert.deepEqual(collectFiles(savedDir), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('a workspace root swapped for a symlink at bind time is refused (root identity binding)', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-rootswap-')));
+  const attempts: Array<[string, (paths: EvolvePaths) => unknown]> = [
+    ['trace', (paths) => recordTrace(paths, 'run-a', 'trace.json', 'ATTACK\n')],
+    ['wiki', (paths) => appendWikiFile(paths, 'logs.md', 'ATTACK\n')],
+    ['overlay', (paths) => stageOverlay(paths, 'skill', 'ATTACK\n')],
+    ['init', (paths) => initEvolveLayout(paths.root)],
+  ];
+  try {
+    let index = 0;
+    for (const [label, attempt] of attempts) {
+      index += 1;
+      const root = join(base, `case-${index}`, 'workspace');
+      const outside = join(base, `case-${index}`, 'outside');
+      mkdirSync(root, { recursive: true });
+      mkdirSync(outside);
+      initEvolveLayout(root);
+      initEvolveLayout(outside);
+      const paths = evolvePaths(root);
+      const sentinel = join(outside, 'evolve', 'wiki', 'logs.md');
+      writeFileSync(sentinel, 'EXTERNAL-SENTINEL');
+      const originalChdir = Reflect.get(process, 'chdir');
+      let fired = false;
+      // The round-3 architect's script shape: substitute the root with a
+      // symlink immediately before the workspace root's chdir.
+      process.chdir = (path: string) => {
+        if (!fired && path === root) {
+          fired = true;
+          renameSync(root, `${root}-saved`);
+          symlinkSync(outside, root);
+        }
+        return originalChdir(path);
+      };
+      try {
+        assert.throws(
+          () => attempt(paths),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+          `${label} must refuse the substituted workspace root`,
+        );
+      } finally {
+        process.chdir = originalChdir;
+      }
+      assert.equal(fired, true, `${label}: the root substitution must have fired`);
+      assert.equal(readFileSync(sentinel, 'utf8'), 'EXTERNAL-SENTINEL', `${label}: external bytes must stay untouched`);
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+type RelocationOp = 'trace' | 'wiki' | 'overlay' | 'init';
+type RelocationTiming = 'lstat' | 'chdir' | 'open' | 'write';
+
+function componentsForOp(op: RelocationOp): readonly string[] {
+  if (op === 'trace') return ['evolve', 'raw', 'raw/run-a'];
+  if (op === 'overlay') return ['evolve', 'proposals'];
+  return ['evolve', 'wiki'];
+}
+
+function runRelocationOp(op: RelocationOp, paths: EvolvePaths, root: string): void {
+  if (op === 'trace') {
+    recordTrace(paths, 'run-a', 'trace.json', 'ATTACK\n');
+    return;
+  }
+  if (op === 'wiki') {
+    appendWikiFile(paths, 'logs.md', 'ATTACK\n');
+    return;
+  }
+  if (op === 'overlay') {
+    stageOverlay(paths, 'skill', 'ATTACK\n');
+    return;
+  }
+  initEvolveLayout(root);
+}
+
+/** Install one timing's relocation hook on fs/process; returns the restore. */
+function installRelocationHooks(
+  timing: RelocationTiming,
+  target: string,
+  swap: () => void,
+): { restore: () => void } {
+  const originalLstat = Reflect.get(fs, 'lstatSync') as PatchedFsFunction;
+  const originalOpen = Reflect.get(fs, 'openSync') as PatchedFsFunction;
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  const originalChdir = Reflect.get(process, 'chdir');
+  let fired = false;
+  const fire = (): void => {
+    if (fired) return;
+    fired = true;
+    swap();
+  };
+  const matches = (arg: unknown): boolean => join(process.cwd(), String(arg)) === target;
+  if (timing === 'lstat') {
+    Reflect.set(fs, 'lstatSync', (...args: unknown[]) => {
+      const answer = originalLstat(...args);
+      if (matches(args[0])) fire();
+      return answer;
+    });
+  } else if (timing === 'chdir') {
+    Reflect.set(process, 'chdir', (path: string) => {
+      const match = matches(path);
+      originalChdir(path);
+      if (match) fire();
+    });
+  } else if (timing === 'open') {
+    Reflect.set(fs, 'openSync', (...args: unknown[]) => {
+      if (process.cwd().startsWith(target)) fire();
+      return originalOpen(...args);
+    });
+  } else {
+    Reflect.set(fs, 'writeSync', (...args: unknown[]) => {
+      if (process.cwd().startsWith(target)) fire();
+      return originalWriteSync(...args);
+    });
+  }
+  syncBuiltinESMExports();
+  return {
+    restore: () => {
+      Reflect.set(fs, 'lstatSync', originalLstat);
+      Reflect.set(fs, 'openSync', originalOpen);
+      Reflect.set(fs, 'writeSync', originalWriteSync);
+      Reflect.set(process, 'chdir', originalChdir);
+      syncBuiltinESMExports();
+    },
+  };
+}
+
+/** Run one relocation-matrix case; returns an escape descriptor or null. */
+function runRelocationCase(
+  base: string,
+  index: number,
+  testCase: { op: RelocationOp; component: string; timing: RelocationTiming; relocation: 'inside' | 'outside' },
+): string | null {
+  const { op, component, timing, relocation } = testCase;
+  const root = join(base, String(index), 'workspace');
+  const outside = join(base, String(index), 'outside');
+  mkdirSync(root, { recursive: true });
+  mkdirSync(outside);
+  initEvolveLayout(root);
+  const paths = evolvePaths(root);
+  mkdirSync(join(paths.rawDir, 'run-a'));
+  if (op === 'init') {
+    rmSync(paths.wikiLogsFile);
+    rmSync(paths.wikiSkillImpactFile);
+  }
+  const target = join(root, component === 'evolve' ? 'evolve' : `evolve/${component}`);
+  const saved = relocation === 'inside' ? `${target}-saved` : join(outside, 'moved');
+  const hooks = installRelocationHooks(timing, target, () => {
+    renameSync(target, saved);
+    symlinkSync(outside, target);
+  });
+  let error: string | null = null;
+  try {
+    runRelocationOp(op, paths, root);
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : String(caught);
+  } finally {
+    hooks.restore();
+  }
+  const changed = collectFiles(outside).filter((file) => {
+    const contents = readFileSync(join(outside, file), 'utf8');
+    return contents.includes('ATTACK') || (op === 'init' && file.endsWith('logs.md'));
+  });
+  if (changed.length === 0) return null;
+  return JSON.stringify({ op, component, timing, relocation, error, changed });
+}
+
+void test('relocation matrix: bound directories moved out of the workspace are refused without external byte changes', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-reloc-')));
+  const escapes: string[] = [];
+  let total = 0;
+  try {
+    for (const op of ['trace', 'wiki', 'overlay', 'init'] as const) {
+      for (const component of componentsForOp(op)) {
+        for (const timing of ['lstat', 'chdir', 'open', 'write'] as const) {
+          for (const relocation of ['inside', 'outside'] as const) {
+            total += 1;
+            const escape = runRelocationCase(base, total, { op, component, timing, relocation });
+            if (escape !== null) escapes.push(escape);
+          }
+        }
+      }
+    }
+    assert.deepEqual(escapes, [], `relocation matrix escapes (${escapes.length}/${total}):\n${escapes.join('\n')}`);
+    assert.equal(total, 72);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
   }
 });
 

@@ -12,11 +12,11 @@
  * existing bytes. verifyEvolveLayout() reports every deviation from the shape
  * as a {path, reason} violation, with paths relative to the evolve/ directory.
  */
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { EvolveError, nodeErrorCode } from './errors.ts';
-import { createFileHere, enterDirectory, enterOrCreateDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
+import { EvolveError } from './errors.ts';
+import { createFileHere, ensureDirectoryHere, enterDirectory, enterOrCreateDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
 import { OVERLAY_FILE_PATTERN } from './proposals.ts';
 
 export const EVOLVE_DIR = 'evolve';
@@ -90,24 +90,18 @@ export interface EvolveInitResult {
 export function initEvolveLayout(root: string): EvolveInitResult {
   const created: string[] = [];
   return withBoundRoot(root, (anchor) => {
-    const existed = ensureEvolveDir(anchor);
+    const existed = entryKind(EVOLVE_DIR) === 'directory';
+    const evolve = enterOrCreateDirectory(EVOLVE_DIR, anchor);
     ensurePurposeFile(created);
     for (const dir of TOP_LEVEL_DIRS) {
-      ensureTopLevelDir(dir, created);
+      if (ensureDirectoryHere(dir, evolve)) created.push(dir);
     }
-    enterDirectory('wiki', join(anchor, EVOLVE_DIR));
+    enterDirectory('wiki', evolve);
     for (const name of WIKI_FILE_NAMES) {
       ensureWikiFile(name, created);
     }
     return { created: created.sort(), existed };
   });
-}
-
-/** Create or enter evolve/; a symlink or non-directory is refused. */
-function ensureEvolveDir(anchor: string): boolean {
-  const existed = entryKind(EVOLVE_DIR) === 'directory';
-  enterOrCreateDirectory(EVOLVE_DIR, anchor);
-  return existed;
 }
 
 function ensurePurposeFile(created: string[]): void {
@@ -125,22 +119,6 @@ function ensurePurposeFile(created: string[]): void {
       'layout-violation',
       'PURPOSE.md exists but its bytes differ from the pinned purpose text; init never blesses a mutated workspace',
     );
-  }
-}
-
-/** Create a missing top-level directory; an existing symlink or file is refused. */
-function ensureTopLevelDir(name: string, created: string[]): void {
-  if (entryKind(name) === 'missing') {
-    try {
-      mkdirSync(name);
-      created.push(name);
-      return;
-    } catch (error) {
-      if (nodeErrorCode(error) !== 'EEXIST') throw error;
-    }
-  }
-  if (entryKind(name) !== 'directory') {
-    throw new EvolveError('unsafe-path', `${name} must be a real directory; symlinks and non-directories are refused`);
   }
 }
 
