@@ -77,6 +77,9 @@
  *                                 under its claim, never renamed back), refuses
  *                                 a running unlock's claim, and concurrent
  *                                 unlocks remove one stale lock exactly once
+ *   review-r8                     an ownerless lock snapshot holds its
+ *                                 directory open (no inode recycling) and
+ *                                 closes it on every exit path
  *   review-r5/r6/r7               lock events are one whole file each
  *                                 (atomic link; nothing published when a write
  *                                 fails; no damaged event blocks unlock); the
@@ -1838,5 +1841,39 @@ test('XSKP-P4-03 review-r6: archive ledgers read past an interrupted repair at e
     assert.deepEqual(JSON.parse(damaged.stdout), {
       error: 'invalid_ledger', detail: '.ai/knowledge/migration/ledger.jsonl:2: ledger lines must be objects',
     });
+  });
+});
+
+test('XSKP-P4-03 review-r8: an ownerless lock snapshot holds its directory open, so a replacement cannot recycle its inode (source + packaged)', async () => {
+  await writeCase('r8-ownerless-inode', {}, (lane, tmp) => {
+    seedLock(tmp, ENTRY_LOCK_REL);
+    const probe = spawnSync(process.execPath, ['--input-type=module', '-e', [
+      "import { fstatSync, lstatSync, mkdirSync, rmSync } from 'node:fs';",
+      "import { join } from 'node:path';",
+      'const [url, root, rel, id] = process.argv.slice(1);',
+      'const { planUnlock, executeUnlock } = await import(url);',
+      'const targets = planUnlock(root, id);',
+      'const [{ snapshot }] = targets;',
+      'const held = fstatSync(snapshot.fd, { bigint: true }).ino === snapshot.ino;',
+      '// Another unlock removes the ownerless lock; a new writer dies leaving an ownerless replacement.',
+      'rmSync(join(root, rel), { recursive: true });',
+      'mkdirSync(join(root, rel));',
+      'const recycled = lstatSync(join(root, rel), { bigint: true }).ino === snapshot.ino;',
+      'const fd = snapshot.fd;',
+      'let error = null;',
+      'try { executeUnlock(root, id, targets); } catch (caught) { error = caught.error; }',
+      'let closed = false;',
+      "try { fstatSync(fd); } catch (caught) { closed = caught.code === 'EBADF'; }",
+      'process.stdout.write(JSON.stringify({ planned: targets.length, owner: snapshot.owner, held, recycled, error, closed }));',
+    ].join('\n'), laneModuleUrl(lane), realpathSync(tmp), ENTRY_LOCK_REL, EXAMPLE_ID], { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(probe.status, 0, `ownerless probe failed\n${probe.stderr}`);
+    assert.deepEqual(JSON.parse(probe.stdout), {
+      planned: 1, owner: null, held: true, recycled: false, error: 'lock_changed', closed: true,
+    });
+    // The replacement was never deleted: it is kept under its claim, which still blocks writers.
+    const kept = readdirSync(join(tmp, '.ai/knowledge/.locks'));
+    assert.equal(kept.length, 1);
+    assert.match(kept[0], CLAIM_NAME);
+    assert.deepEqual(readdirSync(join(tmp, '.ai/knowledge/.locks', kept[0])), [], 'the ownerless replacement is intact');
   });
 });
