@@ -154,11 +154,38 @@ function hashSurface(autobahnDir, northstarDir) {
 }
 
 /**
+ * Component-wise trust check on a registered installPath, applied BEFORE any
+ * filesystem resolution: it mirrors the safePath()/unsafeReason() convention
+ * established at 2ede4ce (XSKP-P4-02, src/knowledge.js) — reject '\0', empty
+ * values, and traversal ('.', '..' or empty components) before the path is
+ * resolved. Returns null when trusted, else a stable reason string.
+ *
+ * The knowledge.js symlink-chain and realpath containment rules do not
+ * transfer to registration-declared install roots: those are machine-local
+ * locations the plugin manager declares (not in-repo relatives), and this
+ * sweep's reads are content-compared against the vendored pin, so a
+ * symlink-redirected read fails parity instead of passing.
+ */
+function unsafeRegistrationPathReason(installPath) {
+  if (typeof installPath !== 'string' || installPath.length === 0 || installPath.includes('\0')) {
+    return 'missing';
+  }
+  // Classify the root designator ('/…' absolute, '~/…' home-relative or a
+  // bare path relative to HOME), then check the remaining components.
+  const body = installPath.startsWith('/') ? installPath.slice(1) : installPath.replace(/^~\/?/, '');
+  if (body === '' || body.split('/').some((part) => part === '' || part === '.' || part === '..')) {
+    return 'traversal';
+  }
+  return null;
+}
+
+/**
  * Resolve the loaded-cache payload dirs from ~/.claude/plugins/
  * installed_plugins.json: every ai-catapult@* entry is inspected (later keys,
  * later array records), deduplicated by resolved payload dir. Absent when the
  * file is missing or carries no ai-catapult@* entry; corrupt manifests fail
- * closed; registrations with invalid installPaths are reported for scanning.
+ * closed; registrations with invalid or unsafe installPaths are reported
+ * without being resolved.
  */
 function resolveLoadedCachePaths(env) {
   const pluginsFile = join(env.HOME, '.claude', 'plugins', 'installed_plugins.json');
@@ -180,8 +207,10 @@ function resolveLoadedCachePaths(env) {
     const records = Array.isArray(recordField) ? recordField : [recordField];
     for (const record of records) {
       const installPath = record?.installPath;
-      if (typeof installPath !== 'string' || installPath.length === 0) {
-        invalidKeys.push(key);
+      // Trust check before resolution (2ede4ce safePath convention).
+      const reason = unsafeRegistrationPathReason(installPath);
+      if (reason) {
+        invalidKeys.push({ key, reason });
         continue;
       }
       // Real installs store either an absolute path, a ~/… path or a path
@@ -231,9 +260,14 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
   const xdgConfig = env.XDG_CONFIG_HOME ?? join(home, '.config');
 
   // spec.autobahnDir/northstarDir: null when the surface cannot exist here.
-  // spec.installRoot is the directory whose existence proves the surface is
-  // installed: a surface is only reported `absent` when that root is missing.
-  // An existing installation whose contract directories are missing drifts.
+  // Ownership test: a surface is installed when its ownership evidence exists.
+  // Path-scoped roots (vendor, dist, marketplace, codex cache) are ai-catapult's
+  // own directories — the root's existence proves the payload is installed.
+  // A sharedRoot surface (the OpenCode skills root) also hosts unrelated
+  // payloads, so only the presence of an ai-catapult contract dir proves
+  // ownership. A surface is reported `absent` only when that evidence is
+  // missing; an existing installation whose contract directories are missing
+  // or incomplete drifts.
   const specs = [
     {
       label: 'vendor/skills',
@@ -262,6 +296,10 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
     },
     {
       label: 'opencode skills',
+      // A SHARED OpenCode surface: unrelated skills may live in this root, so
+      // its existence does not prove ai-catapult is installed here. Ownership
+      // needs contract evidence instead — at least one contract dir.
+      sharedRoot: true,
       installRoot: join(xdgConfig, 'opencode', 'skills'),
       autobahnDir: join(xdgConfig, 'opencode', 'skills', 'autobahn'),
       northstarDir: join(xdgConfig, 'opencode', 'skills', 'northstar'),
@@ -294,9 +332,14 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
         );
         findings.push(...scanned.findings);
       }
-      for (const key of resolved.invalidKeys) {
+      for (const { key, reason } of resolved.invalidKeys) {
         findings.push(
-          { path: resolved.path, expected: `valid installPath under ${key}`, actual: 'missing-or-invalid-installPath', kind: 'unreadable-installed-plugins' },
+          {
+            path: resolved.path,
+            expected: `valid installPath under ${key}`,
+            actual: reason === 'missing' ? 'missing-or-invalid-installPath' : `unsafe-installPath (${reason})`,
+            kind: 'unreadable-installed-plugins',
+          },
         );
       }
       const firstPayloadDir = resolved.registrations[0]?.payloadDir ?? null;
@@ -306,6 +349,10 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
         findings,
         refreshHints: findings.length > 0 ? LOADED_CACHE_REFRESH_HINTS : [],
         autobahnDir: firstPayloadDir === null ? null : join(firstPayloadDir, 'skills', 'autobahn'),
+        // Every registered payload dir participates in cross-surface parity —
+        // not only the anchor-carrying first registration (which stays
+        // autobahnDir for packaged-context anchoring).
+        registrationDirs: resolved.registrations.map((r) => join(r.payloadDir, 'skills', 'autobahn')),
       });
       continue;
     }
@@ -315,7 +362,10 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
       records.push({ label: spec.label, status: 'absent', findings: [], refreshHints: [], autobahnDir: null });
       continue;
     }
-    if (!existsSync(spec.installRoot)) {
+    const installed = spec.sharedRoot
+      ? existsSync(spec.autobahnDir) || existsSync(spec.northstarDir)
+      : existsSync(spec.installRoot);
+    if (!installed) {
       records.push({ label: spec.label, status: 'absent', findings: [], refreshHints: [], autobahnDir: null });
       continue;
     }
@@ -375,43 +425,51 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
   };
   if (anchor?.autobahnDir && present.length > 1) {
     for (const record of present) {
-      if (record === anchor || !record.autobahnDir) continue;
-      for (const manifestName of MANIFEST_NAMES) {
-        const copy = join(record.autobahnDir, manifestName);
-        const anchorCopy = join(anchor.autobahnDir, manifestName);
-        if (!existsSync(copy) || !existsSync(anchorCopy)) continue;
-        let bytes;
-        let anchorBytes;
-        try {
-          bytes = readFileSync(copy);
-        } catch (err) {
-          pushCopyReadFailure(record, copy, err);
-          continue;
-        }
-        try {
-          anchorBytes = readFileSync(anchorCopy);
-        } catch (err) {
-          pushCopyReadFailure(record, anchorCopy, err);
-          continue;
-        }
-        if (bytes.equals(anchorBytes) === false) {
-          record.status = 'drift';
-          if (record.label === 'loaded cache' && record.refreshHints.length === 0) {
-            record.refreshHints = LOADED_CACHE_REFRESH_HINTS;
+      // Every registered dir of this record is checked: the anchor-carrying
+      // dir (autobahnDir) plus all later registrations (registrationDirs on
+      // loaded-cache records). Only the anchor's own dir is skipped — it is
+      // the comparison base — while a later registration of the anchor record
+      // itself must still be compared against the anchor dir.
+      const dirs = record.registrationDirs ?? (record.autobahnDir ? [record.autobahnDir] : []);
+      for (const dir of dirs) {
+        if (record === anchor && dir === record.autobahnDir) continue;
+        for (const manifestName of MANIFEST_NAMES) {
+          const copy = join(dir, manifestName);
+          const anchorCopy = join(anchor.autobahnDir, manifestName);
+          if (!existsSync(copy) || !existsSync(anchorCopy)) continue;
+          let bytes;
+          let anchorBytes;
+          try {
+            bytes = readFileSync(copy);
+          } catch (err) {
+            pushCopyReadFailure(record, copy, err);
+            continue;
           }
-          record.findings.push({
-            path: copy,
-            expected: sha256(anchorBytes),
-            actual: sha256(bytes),
-            kind: 'surface-pin-parity',
-          });
+          try {
+            anchorBytes = readFileSync(anchorCopy);
+          } catch (err) {
+            pushCopyReadFailure(record, anchorCopy, err);
+            continue;
+          }
+          if (bytes.equals(anchorBytes) === false) {
+            record.status = 'drift';
+            if (record.label === 'loaded cache' && record.refreshHints.length === 0) {
+              record.refreshHints = LOADED_CACHE_REFRESH_HINTS;
+            }
+            record.findings.push({
+              path: copy,
+              expected: sha256(anchorBytes),
+              actual: sha256(bytes),
+              kind: 'surface-pin-parity',
+            });
+          }
         }
       }
     }
   }
 
   const exitCode = records.some((r) => r.status === 'drift') ? 1 : 0;
-  const surfaces = records.map(({ label, autobahnDir, pinnedEntries, ...rest }) => ({
+  const surfaces = records.map(({ label, autobahnDir, pinnedEntries, registrationDirs, ...rest }) => ({
     label,
     status: rest.status,
     findings: rest.findings,
