@@ -2,7 +2,7 @@
   "goal_id": "ACH-C-02",
   "plan_id": "ach-catapult-delivery",
   "generation": "0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0",
-  "summary": "Skills lock bumped 26d25105b028903ea1b34aebe9fbf4595b550051 to 28f813bf9fd767960b96e9d54857964de8181a53 (O8 accepted release pin per AC[0]; exact ancestor chain O8 f5e338b9) with the AC-8 six-surface readiness-contract drift sweep built test-first (src/contract-drift.js + 15 tests: 10 AC-8 + 5 review-round hardening tests, wired into src/install.js post-install, dry-run skips, non-zero exit naming path/expected/actual, loaded-cache refresh hints, installed-payload fail-closed absence rule, every loaded-cache registration inspected), the amended lock-coupled fixture delta bound from two byte-identical regen runs (coordinator decision 2026-10-10T04:31Z, cited byte-exactly after review round 1), local-ci/2 re-pinned on its two changed declared sources with the C-01 workspace object preserved exactly, and the full npm suite 273/273 green in the sanitized environment.",
+  "summary": "Skills lock bumped 26d25105b028903ea1b34aebe9fbf4595b550051 to 28f813bf9fd767960b96e9d54857964de8181a53 (O8 accepted release pin per AC[0]; exact ancestor chain O8 f5e338b9) with the AC-8 six-surface readiness-contract drift sweep built test-first (src/contract-drift.js + 15 tests: 10 AC-8 + 5 review-round hardening tests, wired into src/install.js post-install, dry-run skips, non-zero exit naming path/expected/actual, loaded-cache refresh hints, installed-payload fail-closed absence rule, every loaded-cache registration inspected), the amended lock-coupled fixture delta bound from two byte-identical regen runs (coordinator decision 2026-10-10T04:31Z, cited byte-exactly after review round 1), local-ci/2 re-pinned on its two changed declared sources with the C-01 workspace object preserved exactly, and the full npm suite 273/273 green in the sanitized environment. Review round 2 then stopped pending coordinator dispatch (findings 2 and the OpenCode ownership major at the standing 2-round budget); the coordinator granted a final round 3 with a condition-4 interpretation (admit-v2 exit 0/gaps [] at each head proves the contract tooling accepted the amended scope — condition (2) satisfied by the recorded receipt; no amendment primitive required). P4-02 (PR #56) landed mid-flight as 5de9a311 and the branch was rebased; round-3 honest red legs (d09b027) and fixes (f984239) are receipted below with the full suite at 290/290 sanitized.",
   "red": [
     {
       "id": "red1",
@@ -202,14 +202,12 @@
   },
   "tests": {
     "command": "npm test",
-    "exit_code": 0,
+    "tests": 290,
+    "passed": 290,
     "failed": 0,
-    "passed": 273,
-    "skipped": 0,
-    "tests": 273,
     "environment": "sanitized temp HOME/CODEX_HOME/XDG_CONFIG_HOME (disclosure in verification.npm_test); the pre-review green runs at head f68c28c (268/268) are receipts in verification.npm_test",
     "environment_command": "SAN=$(mktemp -d /tmp/ach-c02-sanitized.XXXXXX) && env HOME=\"$SAN/home\" CODEX_HOME=\"$SAN/codex\" XDG_CONFIG_HOME=\"$SAN/xdg\" PYTHONDONTWRITEBYTECODE=1 npm test — cwd: the goal worktree; the scratch dir is removed after the run",
-    "log": ".omc/plans/receipts-c02-20261010/npm-test-sanitized-at-review-fix.log"
+    "receipt": ".omc/plans/receipts-c02-20261010/round3-green-full-suite.log"
   },
   "review_round_1": {
     "reviewer": "omc ask codex (independent reviewer lane, separate advisor artifact)",
@@ -286,5 +284,80 @@
     "The pre-bump lock bytes are not readable from the depth-1 vendored db; the 40-count pre-bump value is byte-proven from the full skills-repo history receipt instead.",
     "The packed pinned-bytes test asserts the real tarball shape (dist/<harness>-plugin flat payloads); the earlier invented top-level skills/ shape was corrected inside this goal's own in-scope test file before first green and is disclosed here.",
     "No commit, push, tag, merge, release, readiness context or provider change is performed by this evidence."
-  ]
+  ],
+  "round_3": {
+    "triggered_by": "SOLE COORDINATOR — C-02 round-3 grant + condition-4 interpretation (.omc/handoffs/ach-20261004/PARALLEL-LANES.md), read verbatim before any round-3 work",
+    "round_scope": [
+      "finding 2 (review round 2, unresolved): surface-pin-parity extended to EVERY registration dir, with an honest red-first bypass leg and the 2ede4ce safePath()-before-resolution convention as parity authority",
+      "OpenCode shared-root ownership major (review round 2, new): minimal fix after determining where the correct fix lives; outside-scope would STOP unimplemented for re-slicing"
+    ],
+    "breaker": "coordinator: round 3 is FINAL for these two defects; if finding 2 fails review again → terminal STOP, no round 4, full attempt history escalated",
+    "condition_4_interpretation": {
+      "status": "accepted (coordinator decision, no further referral)",
+      "text": "admit-v2 exit 0 / gaps [] at f68c28c, a5de872 and 1e33769 proves the contract tooling ACCEPTED the amended scope — condition (2) is satisfied by the already-recorded coordinator-decision receipt; no amendment primitive was required and none is owed",
+      "consequence": "the round-2 PR-body referral no longer blocks; PR body updated accordingly at closeout"
+    },
+    "p4_02_midflight": {
+      "event": "XSKP-P4-02 (PR #56) merged on catapult origin/main mid-flight as squash 5de9a31176b9b310dbb6cc5aa7a2e7c8137e992f",
+      "files": [
+        ".ai/evidence/XSKP-P4-02.json",
+        "bin/ai-catapult.js",
+        "src/knowledge.js",
+        "test/knowledge-conformance.test.js"
+      ],
+      "overlap_check": "zero overlap with this goal's 11 registered files AND zero overlap with the 24 local-ci/2 declared sources; skills.lock.json untouched by P4-02, so the local-ci rebind stays valid at 5de9a311",
+      "action": "git fetch; branch REBASED onto 5de9a311 (3 commits replayed cleanly, no conflicts); pre-round-3 head 191a7b2 (rebased); round-3 legs d09b027 (red) → f984239 (green)",
+      "suite_arithmetic": "goal's 273 (256 baseline + 12 AC-8 + 5 review-round incl. v2 packaged lane and amended fixture delta) + 14 knowledge-conformance tests riding the rebase (P4-02) + 3 round-3 tests = 290"
+    },
+    "finding_2": {
+      "red_leg": {
+        "commit": "d09b027 (test-only, committed BEFORE the fix)",
+        "tests": [
+          "stale-but-self-consistent bytes in a later registration KEY fail cross-surface pin parity",
+          "stale-but-self-consistent bytes in a later array RECORD fail cross-surface pin parity"
+        ],
+        "reproduction": "makeSelfConsistent() rewrites all four manifest copies of the later payload to match its current (mutated) bytes: in-surface hashing passes, later registrations were invisible to parity — both variants exit 0/ok under the round-2 code",
+        "run": "node --test test/contract-drift.test.js at d09b027: 15 pass / 3 fail / 18 tests, exit 1 (round3-red-leg.log, round3-red-leg-summary.txt)"
+      },
+      "fix_commit": "f984239",
+      "design": [
+        "loaded-cache record carries registrationDirs = every deduplicated registered payload dir's skills/autobahn (first + all later); the first registration keeps autobahnDir for packaged-context anchoring",
+        "parity loop walks record.registrationDirs ?? [record.autobahnDir]; only the anchor's OWN dir is skipped (it is the comparison base); a later registration of the anchor record itself still compares against the anchor dir",
+        "pre-existing first-registration coverage is preserved (registrationDirs includes it) so new registrations and every pre-existing registration dir are covered identically",
+        "unsafeRegistrationPathReason(): component-wise trust check BEFORE resolution, mirroring the 2ede4ce (XSKP-P4-02, src/knowledge.js) safePath()/unsafeReason() convention — '\\0'/empty → 'missing'; '.', '..', or empty components (absolute, ~/ and HOME-relative forms alike) → 'traversal'; unresolved registrations fail closed as unreadable-installed-plugins findings",
+        "invalidKeys now carry {key, reason}; missing/empty/\u0000 keep actual 'missing-or-invalid-installPath' (round-1 regression expectation unchanged); traversal reports 'unsafe-installPath (traversal)'"
+      ],
+      "convention_note": "knowledge.js's symlink-chain + realpath containment rules are NOT transferred to machine-local registration install roots: those are manager-declared external locations, and parity compares CONTENT against the vendored pin, so a redirected read fails parity rather than passing — disclosed, not hidden",
+      "green_leg": {
+        "commit": "f984239",
+        "contract_drift_suite": "18/18 pass",
+        "full_suite": "290/290 pass, exit 0, sanitized env (round3-green-full-suite.log)",
+        "git_diff_check": "exit 0"
+      }
+    },
+    "opencode_ownership": {
+      "scope_determination": "the absence/ownership semantics of the six surfaces live in src/contract-drift.js — this goal's registered file; the reviewer's finding cites exactly those semantics, so the correct fix home is INSIDE the C-02 coordinator-amended scope. The alternatives the coordinator named (skills repo, harness fixtures, another goal's files) are not where this rule lives; no sibling repo touched, scope not expanded",
+      "red_leg": {
+        "test": "unrelated OpenCode skills do not make the opencode surface a false-positive drift",
+        "at": "d09b027",
+        "before_fix": "shared xdgConfig/opencode/skills root with an unrelated skill only → status drift (missing-contract-dir) → install --harness claude exit 1; module-level red mirrors the reviewer's repro shape (the CLI path is install.js consuming this same sweep)"
+      },
+      "fix": "opencode spec marked sharedRoot: true; ownership evidence = existsSync(autobahnDir) || existsSync(northstarDir) instead of installRoot existence; path-scoped surfaces (vendor/dist/marketplace/codex cache) keep the installRoot existence rule (their roots are ai-catapult-owned by construction)",
+      "semantics": "an ai-catapult payload partially installed on the shared surface still drifts (missing-peer-dir / hash / parity); unrelated-only roots report absent; AC-8's non-zero-on-drift guarantee unchanged",
+      "green_leg": "18/18 within the contract-drift suite at f984239"
+    },
+    "tests": {
+      "command": "npm test",
+      "tests": 290,
+      "passed": 290,
+      "failed": 0,
+      "environment": "sanitized temp HOME/CODEX_HOME/XDG_CONFIG_HOME (disclosure in verification.npm_test); the pre-review green runs at head f68c28c (268/268) are receipts in verification.npm_test",
+      "environment_command": "SAN=$(mktemp -d /tmp/ach-c02-sanitized.XXXXXX) && env HOME=\"$SAN/home\" CODEX_HOME=\"$SAN/codex\" XDG_CONFIG_HOME=\"$SAN/xdg\" PYTHONDONTWRITEBYTECODE=1 npm test — cwd: the goal worktree; the scratch dir is removed after the run",
+      "receipt": ".omc/plans/receipts-c02-20261010/round3-green-full-suite.log"
+    },
+    "review": {
+      "status": "pending — fresh omc ask codex review at the exact round-3 head after push + hosted checks"
+    },
+    "out_of_scope_note": "pre-existing test/finish-prompt.test.js:390 real-home collision stays untouched (disclosed in round 1); sanitized runs are unaffected"
+  }
 }
