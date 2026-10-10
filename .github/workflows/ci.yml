@@ -12,6 +12,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
         run: node scripts/setup.ts
       - name: Verify vendor integrity
@@ -25,6 +27,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
         run: node scripts/setup.ts
       - name: Verify vendor integrity
@@ -37,6 +41,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
         run: node scripts/setup.ts
       - name: Build Codex plugin
@@ -71,6 +77,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
         run: node scripts/setup.ts
       - name: Verify vendor integrity

@@ -1,8 +1,8 @@
 {
   "schema": "local-ci/2",
   "workflows": {
-    ".github/workflows/ci.yml": "c9f4afd9c7f771d85dce4252045342988fc5df485daabc686f6c665d7bdf1a87",
-    ".github/workflows/release.yml": "44c1c2a4e3bcd71bdf51312fb1cfbc2f62c7e13983cb19e29ab2ae95a3b404a9"
+    ".github/workflows/ci.yml": "49fac58f7be6e4d924036ba77f74f8564e4b8ab52560b2214991392d8f30c0b8",
+    ".github/workflows/release.yml": "3b04f9243715a3405ae47d1b70935a5332665cad172929fe4af97baf967425e1"
   },
   "sources": {
     "package.json": "e22b543710090eb911e9444663075b1c54f116c8bb22c4629bd033510c3d8730",

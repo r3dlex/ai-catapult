@@ -53,6 +53,9 @@ jobs:
           # which can shadow the OIDC trusted-publishing exchange. Trusted
           # publishing needs no registry auth config at all.
 
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
+
       - name: Validate exact release tag and package selection
         id: release-context
         run: node scripts/release-context.ts
