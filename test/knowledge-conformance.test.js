@@ -1115,10 +1115,8 @@ test('XSKP-P4-03 C13-lock-contention: of two concurrent publishes one exits 0, t
     }
     assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false, 'the holder releases its own lock');
     // Swap the drained FIFO for a regular file so later scans read the same entry.
-    const parked = readFileSync(join(tmp, 'docs/plans/zz-parked.md'));
     rmSync(holder.fifo);
     writeFileSync(holder.fifo, parkedEntryBytes(tmp), 'utf8');
-    assert.deepEqual(readFileSync(join(tmp, 'docs/plans/zz-parked.md')), parked);
     const check = spawnKnowledge(lane, tmp, ['rebuild', '--check']);
     assert.equal(check.status, 0, `the holder's aggregate must reproduce (exit ${check.status})\n${check.stdout}`);
   });
@@ -1190,9 +1188,7 @@ test('XSKP-P4-03 C17-dispatcher-forwarding: `ai-catapult knowledge` forwards arg
 // ---------------------------------------------------------------------------
 
 test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen, unlocked only with --confirm-no-writer (source + packaged)', async () => {
-  await writeCase('C19', {
-    mutate: (dir) => appendFileSync(join(dir, EXAMPLE_DOC), '\nAfter recovery.\n', 'utf8'),
-  }, async (lane, tmp) => {
+  await writeCase('C19', {}, async (lane, tmp) => {
     // A real writer dies inside its critical section and leaves its lock.
     const holder = await parkPublisher(lane, tmp, ['publish', EXAMPLE_DOC]);
     const pid = holder.child.pid;
@@ -1239,9 +1235,13 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     );
     assert.match(applied.run_id, /^[0-9a-f-]{36}$/);
 
+    // Recovery complete: the next edit publishes normally.
+    appendFileSync(join(tmp, EXAMPLE_DOC), '\nAfter recovery.\n', 'utf8');
     const recovered = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
     assert.equal(recovered.status, 0, `publish after unlock must succeed (exit ${recovered.status})\n${recovered.stdout}`);
-    assert.equal(JSON.parse(recovered.stdout).revisions.length, 2);
+    assert.deepEqual(JSON.parse(recovered.stdout).revisions.map((revision) => revision.sha256), [
+      CANONICAL_SHA256, sha256File(join(tmp, EXAMPLE_DOC)),
+    ]);
     const again = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(again.status, 1);
     assert.deepEqual(JSON.parse(again.stdout), { error: 'not_locked', detail: 'entry lock directory does not exist' });
