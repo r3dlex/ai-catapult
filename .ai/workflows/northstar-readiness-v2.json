@@ -131,6 +131,38 @@
         "sha256": "45c3c274d9c891bd1bb49c3d08e520f926d0d6f9f5eb815977d5efa6fc5f1ccd"
       },
       "status": "active"
+    },
+    {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/goals.json",
+          "sha256": "4c3904d077fba34b211aca425111417bc47af815aac042ce62f7218a202ddf33"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/graph.json",
+          "sha256": "8e3a6663bcadcb405b9024586e296c99721ec843f1334c5eea19b1fb02f3e10c"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/handoff.md",
+          "sha256": "57dff19cb02e16fb3584589fa224ec45b6ee8133ef0779b9d2fa41897b95a54e"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/sidecar.json"
+        }
+      },
+      "generation": "0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "handoff_path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/handoff.md",
+      "id": "northstar-plan-xskp-p4-adopt-engine-ts",
+      "mode": "live",
+      "plan_id": "xskp-p4-adopt-engine-ts",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/cross-surface-knowledge-publication-xskp-p4-adopt-engine.md",
+        "sha256": "8bd078a7ac9dd4cc615db896e2e572645f3736b2dc5b899cccd1b9df6f20b579"
+      },
+      "status": "active"
     }
   ],
   "schema": "readiness-contract/2"
