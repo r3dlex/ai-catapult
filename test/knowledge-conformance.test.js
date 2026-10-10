@@ -70,9 +70,11 @@
  *   review-r1 F1                  two identities racing for one canonical or
  *                                 one archive token are serialized (locked,
  *                                 then the sequential refusal)
- *   review-r2                     unlock recovers an ownerless lock and an
- *                                 interrupted claim, never removes a lock it
- *                                 did not inspect, and concurrent unlocks
+ *   review-r2/r3                  unlock recovers an ownerless lock and a
+ *                                 dead unlock's claim, removes only the lock
+ *                                 incarnations it snapshotted (each claimed
+ *                                 exclusively first), refuses a running
+ *                                 unlock's claim, and concurrent unlocks
  *                                 remove one stale lock exactly once
  *
  * Every case runs in TWO lanes against the same fixtures:
@@ -88,7 +90,7 @@
  */
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   appendFileSync,
   closeSync,
@@ -611,7 +613,10 @@ const LANES = ['source', 'packaged'];
 const EXAMPLE_ID = 'example-repo:plan:example';
 const EXAMPLE_DOC = 'docs/plans/example.md';
 const ENTRY_LOCK_REL = '.ai/knowledge/.locks/example-repo__plan__example.json.lock';
-const CLAIM_LOCK_REL = '.ai/knowledge/.locks/example-repo__plan__example.json.unlocking.lock';
+/** The name an unlock run by claimerPid gives a lock it is removing. */
+function claimRel(claimerPid) {
+  return `.ai/knowledge/.locks/example-repo__plan__example.json.unlocking-${claimerPid}-${randomUUID()}.lock`;
+}
 /** The refusal a writer of another identity gets while lockRel is held. */
 function serialized(lockRel) {
   return { error: 'locked', detail: `${lockRel}: held by another writer; writers are serialized (unlock it if stale)` };
@@ -1251,7 +1256,7 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(unlock.status, 0, `confirmed unlock must exit 0 (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
     assert.equal(existsSync(lockDir), false, 'the confirmed unlock removes the lock');
-    assert.equal(existsSync(join(tmp, CLAIM_LOCK_REL)), false, 'and its claim');
+    assert.deepEqual(readdirSync(join(tmp, '.ai/knowledge/.locks')), [], 'and leaves no claim behind');
     const event = JSON.parse(unlock.stdout);
     assert.equal(event.schema, 'knowledge-lock-event/1');
     assert.equal(event.result, 'applied');
@@ -1548,51 +1553,105 @@ test('XSKP-P4-03 review-r2 F2: a lock without owner.json (writer killed before w
   });
 });
 
-test('XSKP-P4-03 review-r2 F1: unlock claims only the lock it inspected; a replaced lock is put back, and an interrupted claim is recoverable (source + packaged)', async () => {
-  await writeCase('r2-claim', {}, (lane, tmp) => {
-    const lockDir = join(tmp, ENTRY_LOCK_REL);
-    mkdirSync(lockDir, { recursive: true });
-    writeFileSync(join(lockDir, 'owner.json'), `${JSON.stringify({ pid: deadPid() })}\n`, 'utf8');
-    const replacement = `${JSON.stringify({ pid: process.pid })}\n`;
-    // Between inspection and claim, another unlock removed the stale lock and a
-    // new writer took the same path: the claim must not remove the new lock.
-    const probe = spawnSync(process.execPath, ['--input-type=module', '-e', [
-      "import { mkdirSync, rmSync, writeFileSync } from 'node:fs';",
-      "import { join } from 'node:path';",
-      'const [url, root, rel, claim, replacement] = process.argv.slice(1);',
-      'const { inspectLock, claimLock } = await import(url);',
-      'const snapshot = inspectLock(root, rel);',
-      'rmSync(join(root, rel), { recursive: true });',
-      'mkdirSync(join(root, rel));',
-      "writeFileSync(join(root, rel, 'owner.json'), replacement);",
-      'try {',
-      '  claimLock(root, rel, claim, snapshot);',
-      "  process.stdout.write('{}');",
-      '} catch (error) {',
-      '  process.stdout.write(JSON.stringify({ error: error.error, detail: error.detail }));',
-      '}',
-    ].join('\n'), laneModuleUrl(lane), realpathSync(tmp), ENTRY_LOCK_REL, CLAIM_LOCK_REL, replacement], {
-      encoding: 'utf8', timeout: 30_000,
-    });
-    assert.equal(probe.status, 0, `claim probe failed\n${probe.stderr}`);
-    assert.deepEqual(JSON.parse(probe.stdout), { error: 'lock_changed', detail: 'the lock was removed or replaced during unlock' });
-    assert.equal(readFileSync(join(lockDir, 'owner.json'), 'utf8'), replacement, 'the replacement lock is put back intact');
-    assert.equal(existsSync(join(tmp, CLAIM_LOCK_REL)), false);
+/**
+ * Run planUnlock, then a disturbance, then executeUnlock in one child process
+ * importing the lane's module: the interleavings a concurrent unlock or a new
+ * writer could produce between snapshot and removal, made deterministic.
+ */
+function unlockProbe(lane, tmp, disturb) {
+  const probe = spawnSync(process.execPath, ['--input-type=module', '-e', [
+    "import { mkdirSync, rmSync, writeFileSync } from 'node:fs';",
+    "import { join } from 'node:path';",
+    'const [url, root, disturb] = process.argv.slice(1);',
+    'const { planUnlock, executeUnlock } = await import(url);',
+    `const targets = planUnlock(root, ${JSON.stringify(EXAMPLE_ID)});`,
+    'for (const step of JSON.parse(disturb)) {',
+    '  const path = join(root, step.path);',
+    "  if (step.op === 'rm') rmSync(path, { recursive: true });",
+    "  if (step.op === 'mkdir') mkdirSync(path, { recursive: true });",
+    "  if (step.op === 'write') writeFileSync(path, step.data);",
+    '}',
+    'try {',
+    `  const event = executeUnlock(root, ${JSON.stringify(EXAMPLE_ID)}, targets);`,
+    '  process.stdout.write(JSON.stringify({ planned: targets.map((t) => t.relative), applied: event.lock_path }));',
+    '} catch (error) {',
+    '  process.stdout.write(JSON.stringify({ planned: targets.map((t) => t.relative), error: error.error }));',
+    '}',
+  ].join('\n'), laneModuleUrl(lane), realpathSync(tmp), JSON.stringify(disturb)], { encoding: 'utf8', timeout: 30_000 });
+  assert.equal(probe.status, 0, `unlock probe failed\n${probe.stderr}`);
+  return JSON.parse(probe.stdout);
+}
 
-    // An unlock killed after its claim leaves the claim: it blocks writers, and unlock finishes it.
-    rmSync(lockDir, { recursive: true });
-    mkdirSync(join(tmp, CLAIM_LOCK_REL));
-    writeFileSync(join(tmp, CLAIM_LOCK_REL, 'owner.json'), `${JSON.stringify({ pid: deadPid() })}\n`, 'utf8');
+function seedLock(tmp, rel, owner) {
+  mkdirSync(join(tmp, rel), { recursive: true });
+  if (owner !== undefined) writeFileSync(join(tmp, rel, 'owner.json'), owner, 'utf8');
+}
+
+const liveOwner = () => `${JSON.stringify({ pid: process.pid, token: randomUUID() })}\n`;
+const deadOwner = () => `${JSON.stringify({ pid: deadPid() })}\n`;
+
+test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snapshotted, each claimed exclusively first (source + packaged)', async () => {
+  await writeCase('r3-claims', {}, (lane, tmp) => {
+    const locks = join(tmp, '.ai/knowledge/.locks');
+    const lockEvents = () => readLedger(tmp, LOCK_EVENTS_REL).map((event) => [event.lock_path, event.result]);
+
+    // (a) The stale entry lock is replaced (another unlock removed it, a new
+    // writer took the path) between snapshot and removal: put back, lock_changed.
+    seedLock(tmp, ENTRY_LOCK_REL, deadOwner());
+    const replacement = liveOwner();
+    const replaced = unlockProbe(lane, tmp, [
+      { op: 'rm', path: ENTRY_LOCK_REL }, { op: 'mkdir', path: ENTRY_LOCK_REL },
+      { op: 'write', path: `${ENTRY_LOCK_REL}/owner.json`, data: replacement },
+    ]);
+    assert.deepEqual(replaced, { planned: [ENTRY_LOCK_REL], error: 'lock_changed' });
+    assert.equal(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8'), replacement, 'the replacement is put back intact');
+    assert.deepEqual(readdirSync(locks), [ENTRY_LOCK_REL.split('/').at(-1)]);
+    assert.deepEqual(lockEvents(), [[ENTRY_LOCK_REL, 'prepared'], [ENTRY_LOCK_REL, 'failed']]);
+    rmSync(join(tmp, ENTRY_LOCK_REL), { recursive: true });
+
+    // (b) A claim left by an unlock that died blocks writers. A writer lock that
+    // appears after planning (once the claim is gone) is never adopted.
+    const leftover = claimRel(deadPid());
+    seedLock(tmp, leftover, deadOwner());
+    const fresh = liveOwner();
+    const adopted = unlockProbe(lane, tmp, [
+      { op: 'mkdir', path: ENTRY_LOCK_REL }, { op: 'write', path: `${ENTRY_LOCK_REL}/owner.json`, data: fresh },
+    ]);
+    assert.deepEqual(adopted, { planned: [leftover], applied: leftover });
+    assert.equal(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8'), fresh, 'the new writer\'s lock is untouched');
+    assert.deepEqual(readdirSync(locks), [ENTRY_LOCK_REL.split('/').at(-1)]);
+    rmSync(join(tmp, ENTRY_LOCK_REL), { recursive: true });
+
+    // (c) A leftover claim replaced between snapshot and removal is put back.
+    const resumed = claimRel(deadPid());
+    seedLock(tmp, resumed, deadOwner());
+    const other = liveOwner();
+    const resumedRace = unlockProbe(lane, tmp, [
+      { op: 'rm', path: resumed }, { op: 'mkdir', path: resumed }, { op: 'write', path: `${resumed}/owner.json`, data: other },
+    ]);
+    assert.deepEqual(resumedRace, { planned: [resumed], error: 'lock_changed' });
+    assert.equal(readFileSync(join(tmp, resumed, 'owner.json'), 'utf8'), other, 'the replaced claim is put back intact');
+    rmSync(join(tmp, resumed), { recursive: true });
+
+    // (d) A claim held by an unlock that is still running is refused, untouched.
+    const running = claimRel(process.pid);
+    seedLock(tmp, running, deadOwner());
+    const inProgress = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
+    assert.equal(inProgress.status, 1);
+    assert.deepEqual(JSON.parse(inProgress.stdout), { error: 'locked', detail: `${running}: claimed by an unlock that is still running` });
+    assert.ok(existsSync(join(tmp, running, 'owner.json')));
+    rmSync(join(tmp, running), { recursive: true });
+
+    // (e) Through the CLI: a dead unlock's claim blocks writers; the confirmed unlock finishes it.
+    const dead = claimRel(deadPid());
+    seedLock(tmp, dead, deadOwner());
     writeFileSync(join(tmp, 'docs/other.md'), '# Other\n', 'utf8');
     const blocked = spawnKnowledge(lane, tmp, ['publish', 'docs/other.md']);
     assert.equal(blocked.status, 1);
-    assert.deepEqual(JSON.parse(blocked.stdout), serialized(CLAIM_LOCK_REL));
+    assert.deepEqual(JSON.parse(blocked.stdout), serialized(dead));
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(unlock.status, 0, `unlock must finish the claim (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
-    assert.deepEqual(readdirSync(join(tmp, '.ai/knowledge/.locks')), []);
-    assert.deepEqual(readLedger(tmp, LOCK_EVENTS_REL).map((event) => [event.lock_path, event.result]), [
-      [CLAIM_LOCK_REL, 'prepared'], [CLAIM_LOCK_REL, 'applied'],
-    ]);
+    assert.deepEqual(readdirSync(locks), []);
     const published = spawnKnowledge(lane, tmp, ['publish', 'docs/other.md']);
     assert.equal(published.status, 0, `writers proceed after recovery (exit ${published.status})\n${published.stdout}`);
   });
