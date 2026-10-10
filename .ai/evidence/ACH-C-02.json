@@ -380,5 +380,35 @@
       "verified_by_reviewer": "rebase clean (range-diff maps all three prior commits unchanged; P4-02 files byte-identical to origin/main); scope matches registered inventory; 290/290 sanitized, zero skips; hosted checks 8/8 SUCCESS at exact head; AC-8 semantics unchanged (one post-install sweep, dry-run skip, non-zero propagation)"
     },
     "out_of_scope_note": "pre-existing test/finish-prompt.test.js:390 real-home collision stays untouched (disclosed in round 1); sanitized runs are unaffected"
+  },
+  "round_4": {
+    "triggered_by": "SOLE COORDINATOR — C-02 ROUND 4 GRANTED BY HUMAN ACKNOWLEDGEMENT per breaker protocol (.omc/handoffs/ach-20261004/PARALLEL-LANES.md 2026-10-10T05:39Z entry, read verbatim before any round-4 work); the round-3 terminal stop was resolved by the user explicitly authorizing a fourth attempt",
+    "round_scope": "ONLY the round-3 reviewer-identified residual: the parity trigger gate at src/contract-drift.js:426 (`present.length > 1`) skipped the parity block when the loaded cache was the ONLY present surface; parity must fire whenever parity-relevant surfaces exist including the sole-present case (reviewer's two stale-self-consistent probe variants must exit nonzero). Everything else frozen; any NEW reviewer findings are recorded for escalation, not fixed (budget covers the residual only)",
+    "breaker": "if the residual fails review again -> TERMINAL, no round 5, re-slice decision returns to the coordinator/user",
+    "red_leg": {
+      "commit": "6dd3c41 (test-only, committed BEFORE the fix, at round-3-terminal head lineage 98bd804)",
+      "tests": [
+        "contract drift: sole-present loaded cache — stale-self-consistent bytes in a later registration KEY fail cross-registration parity",
+        "contract drift: sole-present loaded cache — stale-self-consistent bytes in a later array RECORD fail cross-registration parity"
+      ],
+      "premise_guard": "each test asserts every non-loaded-cache surface status === 'absent' before asserting the drift, so the bypass premise cannot degrade silently",
+      "reproduction": "loaded cache as ONLY present surface (installed_plugins.json registered, payloads outside plugin dirs; no vendorRoot/distRoot/marketplace/codex/opencode); first registration fresh, later key/record stale-self-consistent via makeSelfConsistent() — under the round-3 code both variants exited 0/ok with no findings (the round-3 reviewer probe, re-verified by the runner)",
+      "run": "node --test test/contract-drift.test.js at 6dd3c41: 18 pass / 2 fail / 20 tests, exit 1 (round4-red-leg.log, round4-red-leg-summary.txt)"
+    },
+    "fix": {
+      "commit": "b0e7c57",
+      "change": "src/contract-drift.js:426 parity gate `anchor?.autobahnDir && present.length > 1` -> `anchor?.autobahnDir` (one line + comment): the parity walk runs whenever an anchor exists; the dir-level skip (record === anchor && dir === record.autobahnDir) already prevents the anchor comparing to itself, so in the sole-present case a lone loaded-cache record's later registrations compare against its own first (anchor-carrying) dir — matching the reviewer's suggested fix shape (the record's first dir acts as the intra-record comparison base; no vendor anchor needed)",
+      "no_other_change": "no other file, no refactor, no scope growth; the whole round-4 diff is one gate line + its comment + the two red tests (+ evidence)"
+    },
+    "green_leg": {
+      "commit": "b0e7c57",
+      "contract_drift_suite": "20/20 pass",
+      "full_suite": "292/292 pass, exit 0, sanitized env (round4-green-full-suite.log; = 290 floor + 2 round-4 tests)",
+      "git_diff_check": "exit 0"
+    },
+    "rebase_note": "catapult origin/main unchanged at 5de9a311 during round 4 (XSKP-P4-03 PR not merged at round-4 start); branch base already current main — no rebase required",
+    "review": {
+      "status": "pending — fresh omc ask codex review at the exact round-4 head after push + hosted checks"
+    }
   }
 }
