@@ -356,7 +356,28 @@
       "receipt": ".omc/plans/receipts-c02-20261010/round3-green-full-suite.log"
     },
     "review": {
-      "status": "pending — fresh omc ask codex review at the exact round-3 head after push + hosted checks"
+      "status": "terminal stop executed",
+      "verdict": "REQUEST_CHANGES",
+      "artifact": ".omc/artifacts/ask/codex-independent-review-round-3-r3dlex-ai-catapult-pr-57-goal-ach-2026-10-10T05-17-36-193Z.md",
+      "prompt": ".omc/plans/receipts-c02-20261010/review-prompt-round3.md",
+      "reviewer": "omc ask codex (fresh independent review at exact head 2e78e31)",
+      "answered": {
+        "opencode_ownership": "RESOLVED (independent northstar-only partial-install probe exit 1 with structured finding)",
+        "safepath_convention": "RESOLVED (component validation precedes resolution; {key,reason} shape; missing/empty/NUL and traversal probes all exit 1 unreadable-installed-plugins; disclosure judged sound with the conditional note that byte-identical redirected content passes content parity by authority, differing bytes fail)",
+        "condition_4_recording": "RESOLVED (receipt, PR body and evidence agree with the coordinator's granted entry)",
+        "finding_2": "NOT RESOLVED again"
+      },
+      "finding_2_residual": {
+        "defect": "parity block gated on `present.length > 1` (src/contract-drift.js:426, reviewed head): when the loaded cache is the ONLY present surface (no vendor/dist/marketplace/codex/opencode), cross-registration parity is skipped entirely — later key/record payloads with stale-but-self-consistent bytes exit 0/ok with no findings and no refresh hints",
+        "reviewer_repro": "reviewer-authored test/independent-round3.test.js run in their disposable copy against the reviewed head: both later-key and later-array-record variants returned ok:true / exitCode 0 (expected-drift assertions failed); d09b027's red tests do not cover the sole-present case",
+        "reviewer_classification": "an incomplete closure of finding 2, rather than a separate new defect"
+      },
+      "breaker_execution": {
+        "rule": "coordinator granted entry: 'Breaker: round 3 is FINAL for these two defects. If finding 2 fails review again → terminal STOP, no round 4, report the full attempt history for human escalation.'",
+        "applied": "finding 2 failed review in round 3 → TERMINAL STOP: no round 4, no fix attempt on the residual, no merge; full attempt history reported to the coordinator for human escalation"
+      },
+      "merge": "NOT performed; PR #57 stays OPEN at 2e78e31 marked DO-NOT-MERGE",
+      "verified_by_reviewer": "rebase clean (range-diff maps all three prior commits unchanged; P4-02 files byte-identical to origin/main); scope matches registered inventory; 290/290 sanitized, zero skips; hosted checks 8/8 SUCCESS at exact head; AC-8 semantics unchanged (one post-install sweep, dry-run skip, non-zero propagation)"
     },
     "out_of_scope_note": "pre-existing test/finish-prompt.test.js:390 real-home collision stays untouched (disclosed in round 1); sanitized runs are unaffected"
   }
