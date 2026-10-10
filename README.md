@@ -98,6 +98,11 @@ claim both packages succeeded. Dry-run the missing package only:
 node scripts/publish-both.ts --package @r3dlex/ai-catapult
 ```
 
+The scoped leg stages from a freshly built runtime: it fresh-builds the root
+runtime (`npm run build`) before staging and refuses to pack a staged tree
+missing the executable `dist/bin/ai-catapult.js` or `skills.lock.json` — a
+clean checkout fails closed instead of publishing a broken mirror.
+
 In the authorized publishing environment, retry that same selection with
 `AI_CATAPULT_PUBLISH=1` and `--yes`. CI provenance handling and npm's immutable
 version checks remain unchanged. The default still publishes both names; no

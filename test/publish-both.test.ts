@@ -33,6 +33,11 @@ if (args[0] === 'pack') {
   fs.writeFileSync(path.join(dest, 'package/package.json'), JSON.stringify({...pkg, name:process.env.PB_ARCHIVE_NAME || pkg.name}));
   require('node:child_process').execFileSync('tar', ['-czf', path.join(dest, 'package.tgz'), '-C', dest, 'package']);
   const integrity = 'sha512-' + crypto.createHash('sha512').update(fs.readFileSync(path.join(dest, 'package.tgz'))).digest('base64');
+  // Pack-time witness: whether the directory being packed carried the compiled
+  // bin. The scoped leg packs from a staged temp dir, so this file is the
+  // green leg's evidence that the fresh-built runtime actually reached the
+  // pack (the red legs prove the script refuses before packing).
+  if (process.env.PB_RUNTIME_SNAPSHOT) fs.writeFileSync(process.env.PB_RUNTIME_SNAPSHOT, String(fs.existsSync(path.join(process.cwd(), 'dist/bin/ai-catapult.js'))));
   fs.writeFileSync(integrityFile, integrity);
   console.log(JSON.stringify([{name:pkg.name, version:pkg.version, filename:'package.tgz', integrity}]));
 } else if (args[0] === 'view') {
@@ -48,6 +53,23 @@ if (args[0] === 'pack') {
   const error = path.join(process.env.PB_ERROR_DIR, 'error-' + n);
   if (fs.existsSync(error)) { console.log(fs.readFileSync(error, 'utf8')); process.exit(Number(process.env.PB_EXIT || 1)); }
   console.log(pkg.name + ' published (stub)');
+} else if (args[0] === 'run' && args[1] === 'build') {
+  // Models scripts/publish-both.ts's fresh root build for scoped-only dispatch:
+  // PB_CLEAN_CHECKOUT replays a clean checkout whose toolchain cannot run
+  // tsc (the unscoped prepack's 127 class); PB_NO_BIN_ARTIFACT models a
+  // tree that "built" but produced no compiled bin.
+  if (process.env.PB_CLEAN_CHECKOUT) {
+    console.error('npm error code 127');
+    console.error('npm error command failed');
+    console.error('sh: tsc: command not found');
+    process.exit(127);
+  }
+  fs.mkdirSync('dist/bin', { recursive: true });
+  if (!process.env.PB_NO_BIN_ARTIFACT) {
+    fs.writeFileSync('dist/bin/ai-catapult.js', '#!/usr/bin/env node\\n');
+    fs.chmodSync('dist/bin/ai-catapult.js', 0o755);
+  }
+  fs.writeFileSync('skills.lock.json', '{"skills":[]}');
 } else process.exit(43);
 `;
 
@@ -74,7 +96,11 @@ function sandbox({ call1, call2 }: SandboxOptions = {}): string {
   writeFileSync(join(dir, 'package.json'), JSON.stringify({
     name: 'ai-catapult',
     version: '9.9.9',
-    files: [],
+    bin: { 'ai-catapult': 'dist/bin/ai-catapult.js' },
+    // The scoped staging set mirrors the real contract: the staged tree must
+    // carry the compiled runtime (dist/) and skills.lock.json, or the
+    // publish-both.ts scoped leg refuses to pack it (review round 2).
+    files: ['dist/', 'skills.lock.json'],
     scripts: {},
   }));
   if (call1 !== undefined) writeFileSync(join(dir, 'err', 'error-1'), call1);
@@ -99,6 +125,22 @@ function run(dir: string, extra: Record<string, string> = {}): SpawnSyncReturns<
     env: {
       ...process.env,
       AI_CATAPULT_PUBLISH: '1',
+      PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
+      PB_CALLS_FILE: join(dir, 'calls'),
+      PB_ERROR_DIR: join(dir, 'err'),
+      ...extra,
+    },
+  });
+}
+
+/** Run the sandboxed publish-both.ts scoped-only in its default dry-run mode. */
+function runScopedOnly(dir: string, extra: Record<string, string> = {}): SpawnSyncReturns<string> {
+  return spawnSync(process.execPath, [join(dir, 'scripts', 'publish-both.ts'), '--package', '@r3dlex/ai-catapult'], {
+    encoding: 'utf8',
+    cwd: dir,
+    env: {
+      ...process.env,
+      AI_CATAPULT_PUBLISH: '',
       PATH: `${join(dir, 'bin')}:${process.env.PATH}`,
       PB_CALLS_FILE: join(dir, 'calls'),
       PB_ERROR_DIR: join(dir, 'err'),
@@ -202,4 +244,42 @@ void test('actual publisher failure preserves its exit status and diagnostics', 
   const r = run(sandbox({ call1: ENEEDAUTH }), { PB_EXIT: '42' });
   assert.equal(r.status, 42);
   assert.match(r.stderr, /ENEEDAUTH/);
+});
+
+// --- Review round 2: scoped-only publication builds the root runtime first ---
+// `--package @r3dlex/ai-catapult` dispatches no root pack, so nothing ran the
+// root prepack's `npm run build`: a clean checkout staged a mirror without
+// dist/ and npm packed a package with "No bin file found". The sandboxed
+// plugin manifests are pre-created so ensureBuilt skips, modeling the
+// reviewer's clean checkout, where the self-contained plugin builds succeed
+// and only the root tsc build is impossible.
+
+void test('scoped-only dry-run fails closed when the root runtime build fails (clean checkout)', () => {
+  const dir = sandbox();
+  const r = runScopedOnly(dir, { PB_CLEAN_CHECKOUT: '1' });
+  assert.equal(r.status, 127, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
+  assert.match(r.stderr, /root runtime build failed/);
+  assert.match(r.stderr, /tsc: command not found/);
+  assert.doesNotMatch(r.stdout, /Dry-run complete/);
+  assert.equal(existsSync(join(dir, 'calls')), false, 'no npm pack/view/publish may run before the root build succeeds');
+});
+
+void test('scoped-only dry-run fails closed when the staged runtime is incomplete', () => {
+  const dir = sandbox();
+  const r = runScopedOnly(dir, { PB_NO_BIN_ARTIFACT: '1' });
+  assert.equal(r.status, 1, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
+  assert.match(r.stderr, /staged scoped runtime incomplete/);
+  assert.match(r.stderr, /dist\/bin\/ai-catapult\.js/);
+  assert.doesNotMatch(r.stdout, /Dry-run complete/);
+  assert.equal(existsSync(join(dir, 'calls')), false, 'an incomplete staged runtime must never be packed');
+});
+
+void test('scoped-only dry-run packs a fresh-built complete runtime', () => {
+  const dir = sandbox();
+  const r = runScopedOnly(dir, { PB_RUNTIME_SNAPSHOT: join(dir, 'staged-bin-at-pack') });
+  assert.equal(r.status, 0, `stdout: ${r.stdout}\nstderr: ${r.stderr}`);
+  assert.match(r.stdout, /Building root runtime \(npm run build\)\.\.\./);
+  assert.match(r.stdout, /Dry-run complete — selected packages validated successfully\./);
+  assert.equal(readFileSync(join(dir, 'staged-bin-at-pack'), 'utf8'), 'true');
+  assert.equal(readFileSync(join(dir, 'calls'), 'utf8'), '1');
 });

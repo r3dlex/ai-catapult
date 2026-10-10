@@ -17,7 +17,7 @@
 // only node builtins, so it also runs inside a staged package directory.)
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -295,16 +295,72 @@ function ensureBuilt(pluginJsonPath: string, label: string, scriptName: string):
   if (built.error || built.status !== 0) process.exit(built.status ?? 1);
 }
 
+/**
+ * Fresh root runtime build before scoped staging (review round 2). The
+ * scoped-only retry dispatches no root pack, so nothing ran the root
+ * prepack's `npm run build`: a clean checkout (no tsc, no dist/) staged an
+ * empty mirror and npm packed a package with "No bin file found". The
+ * unscoped leg never had this hole — its pack runs from the repo root, where
+ * prepack builds the runtime or fails closed (the v0.2.0 clean-checkout 127
+ * class). Called on both scoped lanes (runScopedPublish) so every staged
+ * mirror comes from a build that just succeeded; exiting with npm's own
+ * status keeps both lanes fail-closed the same way.
+ */
+function buildRootRuntime(repoRoot: string): void {
+  console.log('Building root runtime (npm run build)...');
+  const built = npmRun(['run', 'build'], repoRoot);
+  process.stderr.write(built.stderr || '');
+  if (built.error || built.status !== 0) {
+    process.stdout.write(built.stdout || '');
+    process.stderr.write('publish-both: root runtime build failed — refusing to stage or publish the scoped mirror\n');
+    process.exit(built.status ?? 1);
+  }
+}
+
+/**
+ * Compiled-runtime completeness of the staged scoped mirror (review round 2).
+ * The staged tree packs with zero lifecycle scripts, so a missing build
+ * artifact can never be caught downstream — it would publish as-is. These two
+ * paths mirror the tarball assertions in test/scoped-mirror-staging.test.ts.
+ */
+function missingScopedRuntime(stagedDir: string): string[] {
+  const missing: string[] = [];
+  const bin = join(stagedDir, 'dist', 'bin', 'ai-catapult.js');
+  // npm's POSIX bin shim resolves execution permission on its target, so the
+  // compiled bin must exist AND carry its mode fidelity (prepare-dist.ts
+  // chmods the live dist/bin/ai-catapult.js to 0755).
+  if (!existsSync(bin) || (statSync(bin).mode & 0o111) === 0) missing.push('dist/bin/ai-catapult.js (executable)');
+  if (!existsSync(join(stagedDir, 'skills.lock.json'))) missing.push('skills.lock.json');
+  return missing;
+}
+
 function runScopedPublish(repoRoot: string, version: string, options: PublishOptions): void {
+  // The staged mirror packs with zero lifecycle scripts (round-1 fix), so the
+  // runtime it stages must already be complete. Fresh-build the root runtime
+  // right here: the scoped-only retry dispatches no root pack at all (nothing
+  // ran the root prepack's build — the review-round-2 clean-checkout hole),
+  // and `both` mode rebuilds what the unscoped prepack just produced so every
+  // scoped lane stages from a build that just succeeded under one uniform
+  // fail-closed contract.
+  buildRootRuntime(repoRoot);
   const scopedDir = mkdtempSync(join(tmpdir(), 'tmp-'));
+  let failed = true;
   try {
     stageScopedPackage(repoRoot, scopedDir);
-    console.log('');
-    publishPackageOrExit(scopedDir, '@r3dlex/ai-catapult', version, options);
-    console.log('');
+    const missing = missingScopedRuntime(scopedDir);
+    if (missing.length === 0) {
+      console.log('');
+      publishPackageOrExit(scopedDir, '@r3dlex/ai-catapult', version, options);
+      console.log('');
+      failed = false;
+    } else {
+      process.stderr.write(`publish-both: staged scoped runtime incomplete — missing: ${missing.join(', ')}\n`);
+      process.stderr.write('publish-both: the staged mirror packs with zero lifecycle scripts, so nothing downstream can rebuild it — refusing to publish\n');
+    }
   } finally {
     rmSync(scopedDir, { recursive: true, force: true });
   }
+  if (failed) process.exit(1);
 }
 
 function printSummary(realPublish: boolean, selectedPackage: string, version: string): void {

@@ -389,6 +389,38 @@
         "The void-test failure-signal claim was independently probed and verified."
       ],
       "scope_note": "Fix landing commit touches only package.json, bin/ai-catapult.ts, scripts/publish-both.ts (prepack deletion + distSource option), scripts/prepare-dist.ts, test/installed-bin.test.ts (new), test/scoped-mirror-staging.test.ts, test/packed-init.test.ts (stale-comment-only), this evidence file, .ai/ci/local-ci.json (package.json pin refresh), and the ADR 0001 errata section. A blinded round-2 review of the follow-up commit re-adjudicates before approval."
+    },
+    "review_round_2": {
+      "verdict": "REQUEST_CHANGES",
+      "reviewed_head": "9e74f52b3d6cd6dca841f5a3bd6082623fb82b8a",
+      "reviewer": "blinded independent reviewer lane (codex, via omc ask)",
+      "prompt": "receipts home review-prompt-round2.md (outside the checkout)",
+      "artifact": "receipts home round2/codex-you-are-an-independent-peer-reviewer-code-reviewer-lane-for--2026-10-10T13-36-26-839Z.md",
+      "log": "receipts home review-codex-round2.log",
+      "artifact_relocation_disclosure": "The round-2 artifact quotes the old-world pre-fix commit; it was moved to the receipts home outside the checkout before the gate re-run (round-1 precedent). Gate result afterwards: 61 raw matches, all excluded (unchanged). No repo content changed as part of relocation.",
+      "findings": {
+        "F1_major": "Scoped-only publication packs a broken package from a clean checkout. The scoped-only dispatch (reviewer's citation: scripts/publish-both.ts:353) never packs the repo root, so the root prepack's npm run build never runs; stageScopedPackage stages from an absent dist/ (clean checkout: no tsc, no dist/, only the self-contained plugin ensureBuilt steps succeed), warns 'not staged', deletes the staged prepack and packs anyway — npm warned 'No bin file found'. The unscoped lane is fail-closed by its root prepack (the v0.2.0 incident 127 class); the scoped-only retry was not."
+      },
+      "fixes": {
+        "fresh_root_build": "runScopedPublish now fresh-builds the root runtime before staging (buildRootRuntime: npm run build at the repo root). It closes the scoped-only hole (that dispatch runs no root pack) and rebuilds in both mode (one tsc cycle) so every scoped lane stages from a build that just succeeded, under one uniform contract. Failure exits with npm's own status — the same fail-closed clean-checkout class as the unscoped prepack.",
+        "staged_runtime_validation": "missingScopedRuntime validates the staged tree before pack: executable dist/bin/ai-catapult.js (npm's POSIX bin shim resolves exec permission on its target; prepare-dist.ts chmods 0755) and skills.lock.json. Any miss refuses publication with a clear error — the staged mirror packs with zero lifecycle scripts, so nothing downstream could rebuild it.",
+        "docs": "ADR 0001 errata item 6; README release-recovery section documents the fresh-build precondition and the refusal."
+      },
+      "regressions": {
+        "sandboxed_publish": "test/publish-both.test.ts (not local-ci-pinned): three scoped-only dry-run tests — clean-checkout build failure exits 127 and never prints the dry-run summary nor packs; incomplete staged runtime exits 1 and never packs; complete runtime green asserts the pack-time bin witness and the dry-run summary.",
+        "recovery_fixture": "test/publish-recovery.test.ts (local-ci-pinned): files entry gains skills.lock.json and the stub gains a run-build handler creating the same compiled-runtime artifacts prepare-dist.ts guarantees; pin refreshed (see post_fix_gates.pin_refresh).",
+        "red_green": "17/20 against the unfixed script at 9e74f52 (exactly the three new scoped-only tests red; all pre-existing green) → 20/20 with the fix; receipts round2fix/red-publish-both.log and green-publish-both.log."
+      },
+      "post_fix_gates": {
+        "full_suite": { "command": "npm test", "exit_code": 0, "tests": 328, "passed": 328, "failed": 0, "skipped": 0, "note": "325 round-2 baseline + the 3 new scoped-only regression tests" },
+        "typecheck": "npx tsc --noEmit exit 0",
+        "eslint": "npx eslint . exit 0, 0 problems",
+        "dead_refs": "node scripts/check-dead-refs.ts PASSED — 61 raw matches, all excluded (unchanged baseline)",
+        "diff_check": "git diff --check clean",
+        "prek": "prek run --all-files green except the pre-existing disclosed validate-rules exit-127 scaffold defect (unchanged, not patched per pins mandate)",
+        "pin_refresh": ".ai/ci/local-ci.json sources test/publish-recovery.test.ts 33a9ff1c86e7c7847685013f8d423f5d1753799aedd8d08ebbdc5266b64bc43f → 91b4fe293ac4589c9da179a562c23c91396871942e7e7c837fb6b0311d4029f5"
+      },
+      "scope_note": "Fix commit touches only scripts/publish-both.ts (fresh root build in runScopedPublish + staged-runtime validation), test/publish-both.test.ts (three scoped-only regression tests + sandbox files/stub upgrade), test/publish-recovery.test.ts (files entry + run-build stub handler; local-ci pin refreshed), README.md (release-recovery preconditions), the ADR 0001 errata section (item 6), .ai/ci/local-ci.json (pin refresh), and this evidence file. A blinded round-3 review re-adjudicates before the approval flow."
     }
   }
 }

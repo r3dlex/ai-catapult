@@ -289,6 +289,22 @@ failing-first test (captures under the session receipts, `phase-g/`).
    trade `packed-init.test.ts` makes for its `npm pack`; snapshot copies
    preserve file modes so the 0755 bin bit survives. The publish path is
    unchanged — it still packs the live, freshly built `dist/`.
+6. **Scoped-only root build and staged-runtime completeness (review round 2
+   of this PR).** The scoped-only retry (`--package @r3dlex/ai-catapult`)
+   dispatches no root pack, so nothing ran the root prepack's
+   `npm run build`: from a clean checkout (no tsc, no `dist/`) the staged
+   mirror carried no compiled runtime and npm packed it, warning
+   "No bin file found" — the pack-side round-1 finding's publish-dispatch
+   sibling. `runScopedPublish` now fresh-builds the root runtime before
+   staging (`npm run build`, exiting with npm's status — the unscoped
+   prepack's fail-closed clean-checkout class; in `both` mode this rebuilds
+   what the unscoped prepack just produced, one tsc cycle for a uniform
+   contract) and refuses to publish a staged tree missing the executable
+   `dist/bin/ai-catapult.js` or `skills.lock.json`: the mirror packs with
+   zero lifecycle scripts, so nothing downstream can rebuild it. Regressions:
+   `test/publish-both.test.ts` (clean-checkout red, incomplete-runtime red,
+   complete-runtime green through the sandboxed publish) and the
+   `test/publish-recovery.test.ts` run-build stub.
 
 ## Consequences
 
