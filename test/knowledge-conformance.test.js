@@ -70,12 +70,13 @@
  *   review-r1 F1                  two identities racing for one canonical or
  *                                 one archive token are serialized (locked,
  *                                 then the sequential refusal)
- *   review-r2/r3                  unlock recovers an ownerless lock and a
+ *   review-r2/r3/r4               unlock recovers an ownerless lock and a
  *                                 dead unlock's claim, removes only the lock
  *                                 incarnations it snapshotted (each claimed
- *                                 exclusively first), refuses a running
- *                                 unlock's claim, and concurrent unlocks
- *                                 remove one stale lock exactly once
+ *                                 exclusively first; a displaced lock is kept
+ *                                 under its claim, never renamed back), refuses
+ *                                 a running unlock's claim, and concurrent
+ *                                 unlocks remove one stale lock exactly once
  *
  * Every case runs in TWO lanes against the same fixtures:
  *   source:   this checkout's bin/ai-catapult.js
@@ -613,6 +614,7 @@ const LANES = ['source', 'packaged'];
 const EXAMPLE_ID = 'example-repo:plan:example';
 const EXAMPLE_DOC = 'docs/plans/example.md';
 const ENTRY_LOCK_REL = '.ai/knowledge/.locks/example-repo__plan__example.json.lock';
+const CLAIM_NAME = /^example-repo__plan__example\.json\.unlocking-[0-9]+-[0-9a-f-]{36}\.lock$/;
 /** The name an unlock run by claimerPid gives a lock it is removing. */
 function claimRel(claimerPid) {
   return `.ai/knowledge/.locks/example-repo__plan__example.json.unlocking-${claimerPid}-${randomUUID()}.lock`;
@@ -1595,8 +1597,13 @@ test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snap
     const locks = join(tmp, '.ai/knowledge/.locks');
     const lockEvents = () => readLedger(tmp, LOCK_EVENTS_REL).map((event) => [event.lock_path, event.result]);
 
+    const claims = () => readdirSync(locks).filter((name) => CLAIM_NAME.test(name));
+
     // (a) The stale entry lock is replaced (another unlock removed it, a new
-    // writer took the path) between snapshot and removal: put back, lock_changed.
+    // writer took the path) between snapshot and removal: lock_changed. The
+    // displaced incarnation is kept, intact, under its claim name and nothing
+    // is renamed back onto the entry lock path (a rename-back could replace a
+    // lock another writer just created there).
     seedLock(tmp, ENTRY_LOCK_REL, deadOwner());
     const replacement = liveOwner();
     const replaced = unlockProbe(lane, tmp, [
@@ -1604,10 +1611,22 @@ test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snap
       { op: 'write', path: `${ENTRY_LOCK_REL}/owner.json`, data: replacement },
     ]);
     assert.deepEqual(replaced, { planned: [ENTRY_LOCK_REL], error: 'lock_changed' });
-    assert.equal(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8'), replacement, 'the replacement is put back intact');
-    assert.deepEqual(readdirSync(locks), [ENTRY_LOCK_REL.split('/').at(-1)]);
-    assert.deepEqual(lockEvents(), [[ENTRY_LOCK_REL, 'prepared'], [ENTRY_LOCK_REL, 'failed']]);
-    rmSync(join(tmp, ENTRY_LOCK_REL), { recursive: true });
+    assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false, 'nothing is restored onto the entry lock path');
+    assert.equal(claims().length, 1);
+    const displaced = `.ai/knowledge/.locks/${claims()[0]}`;
+    assert.equal(readFileSync(join(tmp, displaced, 'owner.json'), 'utf8'), replacement, 'the displaced lock is kept intact');
+    const ledgered = readLedger(tmp, LOCK_EVENTS_REL);
+    assert.deepEqual(ledgered.map((event) => [event.lock_path, event.result]), [[ENTRY_LOCK_REL, 'prepared'], [ENTRY_LOCK_REL, 'failed']]);
+    assert.equal(ledgered[1].claim_path, displaced, 'the failure ledgers where the displaced lock is kept');
+    // The claim still serializes writers, and an explicit unlock recovers it
+    // once the unlock that made it has exited.
+    writeFileSync(join(tmp, 'docs/other.md'), '# Other\n', 'utf8');
+    const held = spawnKnowledge(lane, tmp, ['publish', 'docs/other.md']);
+    assert.deepEqual(JSON.parse(held.stdout), serialized(displaced));
+    const recovered = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
+    assert.equal(recovered.status, 0, `unlock must recover the displaced claim (exit ${recovered.status})\n${recovered.stdout}`);
+    assert.equal(JSON.parse(recovered.stdout).lock_path, displaced);
+    assert.deepEqual(readdirSync(locks), []);
 
     // (b) A claim left by an unlock that died blocks writers. A writer lock that
     // appears after planning (once the claim is gone) is never adopted.
@@ -1622,7 +1641,8 @@ test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snap
     assert.deepEqual(readdirSync(locks), [ENTRY_LOCK_REL.split('/').at(-1)]);
     rmSync(join(tmp, ENTRY_LOCK_REL), { recursive: true });
 
-    // (c) A leftover claim replaced between snapshot and removal is put back.
+    // (c) A leftover claim replaced between snapshot and removal is never
+    // deleted: it is kept intact under a fresh claim name.
     const resumed = claimRel(deadPid());
     seedLock(tmp, resumed, deadOwner());
     const other = liveOwner();
@@ -1630,8 +1650,10 @@ test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snap
       { op: 'rm', path: resumed }, { op: 'mkdir', path: resumed }, { op: 'write', path: `${resumed}/owner.json`, data: other },
     ]);
     assert.deepEqual(resumedRace, { planned: [resumed], error: 'lock_changed' });
-    assert.equal(readFileSync(join(tmp, resumed, 'owner.json'), 'utf8'), other, 'the replaced claim is put back intact');
-    rmSync(join(tmp, resumed), { recursive: true });
+    assert.equal(existsSync(join(tmp, resumed)), false);
+    assert.equal(claims().length, 1);
+    assert.equal(readFileSync(join(locks, claims()[0], 'owner.json'), 'utf8'), other, 'the replaced claim is kept intact');
+    rmSync(join(locks, claims()[0]), { recursive: true });
 
     // (d) A claim held by an unlock that is still running is refused, untouched.
     const running = claimRel(process.pid);
