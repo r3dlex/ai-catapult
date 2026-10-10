@@ -423,7 +423,11 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
       kind: 'surface-pin-parity',
     });
   };
-  if (anchor?.autobahnDir && present.length > 1) {
+  // Parity fires whenever an anchor exists — including the sole-present-
+  // surface case: a lone loaded-cache record's later registrations must
+  // compare against its own first (anchor-carrying) dir. Only the anchor's
+  // own dir is skipped (it is the comparison base).
+  if (anchor?.autobahnDir) {
     for (const record of present) {
       // Every registered dir of this record is checked: the anchor-carrying
       // dir (autobahnDir) plus all later registrations (registrationDirs on
