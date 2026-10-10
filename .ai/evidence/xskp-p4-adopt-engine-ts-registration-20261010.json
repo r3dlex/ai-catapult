@@ -1,0 +1,192 @@
+{
+  "carried_goals": [
+    "XSKP-P4-04",
+    "XSKP-P4-05"
+  ],
+  "generation": "0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+  "goal_id": "XSKP-P4-04",
+  "limits": [
+    "Planning publication only: no approval was requested, minted or implied; execution needs the successor's own future tag approval/xskp-p4-adopt-engine-ts/0baa7a7267dd for this exact generation.",
+    "Local red/green, digests and classifications are lane evidence, not hosted CI, readiness-context admission, merge certification or live authority.",
+    "The predecessor generation, its registry entry and its approval tag approval/xskp-p4-adopt-engine/2ce8dbb7e7e8 remain byte-unchanged.",
+    "The plan-scoped spec copy is byte-unchanged and stays bound to the retained predecessor as well.",
+    "No version, tag or npm fact is produced or inferred; XSKP-P4-05 carries its report-only installed-lane clause and no release semantics.",
+    "No root-workspace repository or root-side spec was touched; the carried umbrella_spec pin was re-verified equal to the root file at this registration and is recorded in the bundle plan_amendments.",
+    "The evidence file is the registration record; the future XSKP-P4-04 execution lane owns test/adopt.test.ts and the fixture tree."
+  ],
+  "migration": {
+    "a2_wave": "PR #61 (repo-wide JS -> strict TypeScript rename)",
+    "base": "f3578cc9fb4d4f3a50f3f03283854f3b170c7dab",
+    "dropped_dependencies": [
+      {
+        "dependency": "XSKP-P4-03",
+        "goal": "XSKP-P4-04",
+        "reason": "delivered by peer PR #59 (merge 364d2565f3d60fc58210eef222ec6a9bed6cc3dc); cross-plan edges are not expressible in a bundle"
+      }
+    ],
+    "goal_revisions_v2": {
+      "XSKP-P4-04": "a11cc6f3b76269f4c4e419d90f1a803c462d180b50afbebead2e3e0e595a0034",
+      "XSKP-P4-05": "7ae1b06bdbb4ae8580cc512453b10ca8125930f8133c4e8b0906212b430d2ceb"
+    },
+    "mechanism_migrated": {
+      "XSKP-P4-05": "the report-only script's shell \"$(npm prefix -g)\" path substitution becomes runtime resolution from \"npm prefix -g\" in the TypeScript port; the resolved package and CLI path facts are unchanged"
+    },
+    "tokens_migrated": {
+      "XSKP-P4-04": {
+        "bin/ai-catapult.js": "bin/ai-catapult.ts",
+        "src/adopt.js": "src/adopt.ts",
+        "test/adopt.test.js": "test/adopt.test.ts"
+      },
+      "XSKP-P4-05": {
+        "scripts/report-installed-knowledge.sh": "scripts/report-installed-knowledge.ts",
+        "src/adopt.js": "src/adopt.ts",
+        "src/knowledge.js": "src/knowledge.ts",
+        "src/scaffold.js": "src/scaffold.ts",
+        "test/adopt.test.js": "test/adopt.test.ts",
+        "test/init.test.js": "test/init.test.ts",
+        "test/packed-init.test.js": "test/packed-init.test.ts"
+      }
+    }
+  },
+  "plan_id": "xskp-p4-adopt-engine-ts",
+  "predecessor": {
+    "approval_tag": "approval/xskp-p4-adopt-engine/2ce8dbb7e7e8 (untouched)",
+    "delivered_goals": {
+      "XSKP-P4-01": "peer PR #55",
+      "XSKP-P4-02": "peer PR #56",
+      "XSKP-P4-03": "peer PR #59"
+    },
+    "generation": "2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8",
+    "namespace_note": "plan id xskp-p4-adopt-engine-ts starts with the predecessor plan id; the canonical goal branches feat|fix|chore/xskp-p4-adopt-engine-ts-XSKP-P4-{04,05} exact-match the successor in observer.route before the predecessor's reserved-namespace check, so routing picks the successor (same shape as the merged ach-catapult-delivery-ts successor in PR #62)",
+    "plan_id": "xskp-p4-adopt-engine",
+    "publication": "PR r3dlex/ai-catapult#54 (v2 migration), merge 587c4ed933289913c724d47fe43abf1a14790f8b",
+    "retained_files_sha256": {
+      "goals.json": "1520414f77b38a4f3001a7ae1c8bb24f29db7085c87835c6c6b8cfa5a4342f80",
+      "graph.json": "f9576318c93d6e4d5fc44eaa4b415db563f0babb38828eb887e20b0ebf20fdfe",
+      "handoff.md": "105a7b75d0f66bac1d13e87d05e5c4fa1be3657306c61ebfc7887a4037a02845",
+      "sidecar.json": "c79c354ada9eb39622ad8aaf54d2da8dfb37468525bcaaf8ca1c308676ed8e73"
+    },
+    "supersession": "add-only: the predecessor registry entry, generation bytes and approval tag are retained unmodified; the remaining chain (XSKP-P4-04/05) moves to plan xskp-p4-adopt-engine-ts with only A2-invalidated path/mechanism facts corrected",
+    "why_add_not_replace": "the pinned publish-v2 replay rule refuses replacing a plan registry entry while that plan has merged or open goal PRs; xskp-p4-adopt-engine has merged goal PRs 55, 56 and 59 (observer.busy_as_of -> [55, 56, 59], pinned driver 28f813bf, probe log retained); the compliant corrected-scope vehicle is a fresh plan (workspace precedents PR #130/#132)"
+  },
+  "publication": {
+    "artifact_sha256": {
+      "goals.json": "4c3904d077fba34b211aca425111417bc47af815aac042ce62f7218a202ddf33",
+      "graph.json": "8e3a6663bcadcb405b9024586e296c99721ec843f1334c5eea19b1fb02f3e10c",
+      "handoff.md": "57dff19cb02e16fb3584589fa224ec45b6ee8133ef0779b9d2fa41897b95a54e",
+      "sidecar.json": "062ea3dbb2432a6b1203d770b7bc6a052b30fa1c61a14608418fe0b1301e755d"
+    },
+    "command": "bash vendor/skills/02-govern-plan/northstar/handoff-write.sh --root . --bundle <authored goals.json> --sidecar <authored sidecar.json> --target main (publish-v2 --admit-planning, pinned vendor 28f813bf)",
+    "entry": {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/goals.json",
+          "sha256": "4c3904d077fba34b211aca425111417bc47af815aac042ce62f7218a202ddf33"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/graph.json",
+          "sha256": "8e3a6663bcadcb405b9024586e296c99721ec843f1334c5eea19b1fb02f3e10c"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/handoff.md",
+          "sha256": "57dff19cb02e16fb3584589fa224ec45b6ee8133ef0779b9d2fa41897b95a54e"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/sidecar.json"
+        }
+      },
+      "generation": "0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "handoff_path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/handoff.md",
+      "id": "northstar-plan-xskp-p4-adopt-engine-ts",
+      "mode": "live",
+      "plan_id": "xskp-p4-adopt-engine-ts",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/cross-surface-knowledge-publication-xskp-p4-adopt-engine.md",
+        "sha256": "8bd078a7ac9dd4cc615db896e2e572645f3736b2dc5b899cccd1b9df6f20b579"
+      },
+      "status": "active"
+    },
+    "gaps": {
+      "approval": 5,
+      "blocking": 0,
+      "deferred": 6
+    },
+    "log": {
+      "receipt": ".omc/plans/receipts-xskp-p4-replan-20261010/evidence/publication.log",
+      "sha256": "d2d91d59329f9a56a8450d58ede2f4469fefa4aa1cd8fa5d2dac18d23dafbee9"
+    },
+    "planning_complete": true
+  },
+  "record": "successor registration (add-only) for XSKP-P4-04/XSKP-P4-05 of plan xskp-p4-adopt-engine - the remaining A2-migrated chain is carried by the fresh plan xskp-p4-adopt-engine-ts",
+  "reserved_path_disposition": {
+    "no_committed_pin_test": "while the tswc goals (b1/b3/b4/b5) and the ach C goals are active their scope entries make any non-goal PR touch of test/** (or src/, scripts/) a v2_scope_outside_goal refusal; the lane-local pin-check and this record carry the assertions, and a durable in-repo pin test belongs to a future goal PR of this plan (same disposition as the C-03 replan, PR #62)",
+    "paths_touched": {
+      ".ai/evidence/xskp-p4-adopt-engine-ts-registration-20261010.json": "no active scope match (this record)",
+      ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/{goals.json,graph.json,handoff.md,sidecar.json}": "fixed reserved; added by the pinned publisher",
+      ".ai/traceability/graph.json": "free planning path; additive nodes/edges only",
+      ".ai/workflows/northstar-readiness-v2.json": "fixed reserved; exact publish-v2 replay (classified)"
+    }
+  },
+  "verification": {
+    "classified": {
+      "at_publication_commit": {
+        "diff_head": "bc98c8e3b1e84df35f7d4cf0971d5e1f2f78be74",
+        "head": "bc98c8e3b1e84df35f7d4cf0971d5e1f2f78be74",
+        "lane": "publish-v2-replay",
+        "notices": [],
+        "refusals": []
+      },
+      "driver": "observer.non_goal_lane (pinned 28f813bf), production gh for the active-scope lookup",
+      "note": "the final-head re-run is recorded in .omc/plans/receipts-xskp-p4-replan-20261010/evidence/classify-final.log"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "log": {
+        "receipt": ".omc/plans/receipts-xskp-p4-replan-20261010/evidence/diff-check.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "generation_recomputed": "generation_v2(bundle_sha256, spec_sha256, policy_sha256, anchor_sha256) == 0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7 (pinned readiness_contract_v2; independently recomputed twice)",
+    "pin_check": {
+      "green": {
+        "command": "node .omc/plans/receipts-xskp-p4-replan-20261010/evidence/pin-check.mjs <registration worktree>",
+        "exit_code": 0,
+        "failing_checks": 0,
+        "log": {
+          "receipt": ".omc/plans/receipts-xskp-p4-replan-20261010/evidence/pin-green.log",
+          "sha256": "88d4f41fc34b1905ac71aad18b7ca90481091cfb2e4c5dcf5f748f5b73500ab2"
+        },
+        "state": "published registration worktree"
+      },
+      "red": {
+        "command": "node .omc/plans/receipts-xskp-p4-replan-20261010/evidence/pin-check.mjs <pre-change checkout>",
+        "exit_code": 1,
+        "failing": [
+          "exactly one successor entry :: found 0",
+          "post-change successor registered",
+          "post-change successor surviving TS owners validate against the base"
+        ],
+        "failing_checks": 3,
+        "log": {
+          "receipt": ".omc/plans/receipts-xskp-p4-replan-20261010/evidence/pin-red.log",
+          "sha256": "276dee1f6f159fda40ab2aa5df52ec1c49a7a319cd9cb56b1b3216e582a54942"
+        },
+        "observed": "registered pre-change XSKP-P4-04 scope paths absent on this base: 4 :: src/adopt.js, bin/ai-catapult.js, test/adopt.test.js, test/fixtures/knowledge-adopt",
+        "state": "pristine git-archive checkout of f3578cc9fb4d4f3a50f3f03283854f3b170c7dab"
+      },
+      "script": ".omc/plans/receipts-xskp-p4-replan-20261010/evidence/pin-check.mjs (lane-local, not committed - see reserved_path_disposition)"
+    },
+    "suite": {
+      "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot npm test",
+      "log": {
+        "receipt": ".omc/plans/receipts-xskp-p4-replan-20261010/evidence/npm-test.log",
+        "sha256": "78cfdf6dcca0b0f20aa5b3c134e171572341471dbd167fc0ddff105b75690061"
+      },
+      "result": "exit 0 - 343 tests / 343 pass / 0 fail (log retained)"
+    }
+  }
+}
