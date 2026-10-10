@@ -1,0 +1,57 @@
+{
+  "contract": "readiness-contract/2",
+  "edges": [
+    {
+      "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-03:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-04:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-06:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
+    }
+  ],
+  "generation": "4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+  "goal_ids": [
+    "ACH-C-03",
+    "ACH-C-04",
+    "ACH-C-06"
+  ],
+  "nodes": [
+    {
+      "id": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/handoff.md",
+      "repo_id": "ai-catapult",
+      "type": "handoff"
+    },
+    {
+      "goal_revision": "204fa565a6fdfb63946055cb31bc6fc16542547e6da84a89623a24b38d0f808a",
+      "id": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-03:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    },
+    {
+      "goal_revision": "69288253723524448e30abeff275731c09203c3b3313818418206b4f85e01fee",
+      "id": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-04:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    },
+    {
+      "goal_revision": "f936135cfb601db89ee5127a3d54f5a59123bab3b88ec0f6befebc67f255e88b",
+      "id": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-06:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    }
+  ],
+  "plan_id": "ach-catapult-delivery-ts",
+  "schema_version": "1.1"
+}

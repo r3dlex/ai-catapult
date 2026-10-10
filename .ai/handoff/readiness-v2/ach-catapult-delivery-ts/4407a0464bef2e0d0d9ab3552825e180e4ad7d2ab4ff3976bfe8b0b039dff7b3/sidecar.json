@@ -1,0 +1,36 @@
+{
+  "goals": {
+    "ACH-C-03": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Touches src/scaffold.ts mechanical copy and the committed test/fixtures/init-standalone fixture that test/init.test.ts and test/packed-init.test.ts compare byte-for-byte; collision and --force behaviour must stay unchanged. Coverage unknown (npm test has no coverage reporter). Revision-2 scope correction: fixture content ownership moves to C-02; C-03 reads it unchanged and retains semantic, N3, validator/gap, collision/force and source/packed conformance. Baseline packed-init has smoke coverage, not exact whole-fixture parity; C-03 must add the specified policy equivalence evidence. Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: TSWC A2 src/scripts/test scopes and template/batch sequencing require acknowledged source-owner/main disposition and an actually reviewed post-rename base. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions. Successor note (2026-10-10): the A2 wave landed at ab539496 (PR #61) and this generation binds that actually reviewed post-rename base; the literal-path re-derivation this disposition demanded is complete.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-04": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Mostly new files (src/backfill.ts, test/backfill.test.ts); the only existing seam is subcommand dispatch in bin/ai-catapult.ts (init, install, graph-hooks, matrix, ci-adapters), whose commands are characterized by their existing tests. Coverage unknown (npm test has no coverage reporter). Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: TSWC A2 bin/src/test scopes and B3's bin/ dispatch claim intersect backfill. Literal .js paths remain baseline-only until actual reviewed post-rename path/runtime/test re-derivation and source-owner/main sequencing acknowledgement. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions. Successor note (2026-10-10): the literal paths are re-derived and bound at the reviewed post-rename base ab539496 (PR #61); the dispatch seam named here is the reviewed bin/ai-catapult.ts.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "ACH-C-06": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Bumps package.json, which drives the generated Claude, Codex and OpenCode plugin manifests (scripts/build-*-plugin.ts read its version) and is pinned in .ai/ci/local-ci.json; characterized by test/version.test.ts, test/claude-plugin.test.ts, test/codex-plugin.test.ts and test/release-0.4.3.test.ts (landed by #50). Coverage unknown (npm test has no coverage reporter). Open disposition (not a machine hold): TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED: A2 package/test/local-CI scopes intersect the release bump. Re-derive actual reviewed post-rename package/build/test paths and declared-source pins after source-owner/main acknowledgement; retain the entire reviewed C-01 workspace unless an explicit source-policy disposition changes it. No release/version fact or tooling grant is inferred. Publication sidecar carries readiness unknown at every stage; DRAFT.json records the clearance criteria for the open dispositions. Successor note (2026-10-10): the package, build and test paths and the declared-source pins are re-derived at the reviewed post-rename base ab539496 (PR #61); this generation binds them, and no release or version fact is inferred by this publication.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "ach-catapult-delivery-ts",
+  "schema": "readiness-sidecar/1"
+}

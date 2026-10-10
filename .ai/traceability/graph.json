@@ -231,6 +231,26 @@
       "source": "handoff:ai-catapult:tswc-ai-catapult:ac3b276da28549b293a68f93058821febe1f7736a1f230a416ddc8c2aa7d2d1d",
       "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:ac3b276da28549b293a68f93058821febe1f7736a1f230a416ddc8c2aa7d2d1d",
       "type": "plans"
+    },
+    {
+      "source": "spec:ai-catapult:ach-catapult-delivery",
+      "target": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-03:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-04:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-06:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "type": "plans"
     }
   ],
   "generated_at": "2026-08-22T00:00:00Z",
@@ -595,7 +615,8 @@
     },
     {
       "backlinks": [
-        "handoff:ai-catapult:ach-catapult-delivery:0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0"
+        "handoff:ai-catapult:ach-catapult-delivery:0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0",
+        "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3"
       ],
       "id": "spec:ai-catapult:ach-catapult-delivery",
       "path": "docs/specifications/ACTIVE/admission-complete-handoffs-ach-catapult-delivery.md",
@@ -828,6 +849,53 @@
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "tswc-ac-b5",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:ach-catapult-delivery",
+        "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-03:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+        "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-04:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+        "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-06:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3"
+      ],
+      "id": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/handoff.md",
+      "repo_id": "ai-catapult",
+      "status": "active",
+      "title": "ach-catapult-delivery-ts",
+      "type": "handoff"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3"
+      ],
+      "id": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-03:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "ACH-C-03",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3"
+      ],
+      "id": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-04:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "ACH-C-04",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3"
+      ],
+      "id": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-06:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "ACH-C-06",
       "type": "plan"
     }
   ],

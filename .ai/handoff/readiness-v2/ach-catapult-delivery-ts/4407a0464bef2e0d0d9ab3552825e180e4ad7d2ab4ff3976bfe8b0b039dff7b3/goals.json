@@ -1,0 +1,100 @@
+{
+  "attachments": {
+    "consensus_plan": "aitool-root .omc/plans/ralplan-admission-complete-handoffs.md (local, non-authoritative); Appendix A.2 projected in handoff-goals/2 style.",
+    "plan_amendments": [
+      "Sitting-1 decisions: D-ACCEPT variant a (accept agent-self, ssh-tag and in-session; default_mode agent); N3 init seeds agent-self, accepted and recorded in this plan-scoped spec copy, never by editing the umbrella. Neither decision confirms the first-policy digest.",
+      "Plan section 9: #46's content landed via #50 (a87c912), lock 26d2510; C-01 annotates autobahn-startup-delivery.md. The publication refresh observes #46's actual owner/state without acting on it. C-06 bumps 0.4.4 only if the npm refresh confirms it remains next unpublished; final tags remain end-of-programme work in a separately authorized release lane.",
+      "O8 re-pointed at publication (2026-10-09): the ACH-S-08 merge landed on skills main as f5e338b92bb754c2bfffdf542b498530258fdbc0 (r3dlex/skills PR #125, merged 2026-10-09T10:55:25Z); it is the skills main tip (compare identical) and is the pinned O8 for this plan. The skill-sha placeholder in every goal record is substituted with that full sha. Neither the provisional head dc91b29 nor the external old-head audit-only merge 6b1e893 is O8. Gate work uses an observer-built isolated workspace, not vendor/build outputs in the observed root.",
+      "C-01 adds .ai/ci/local-ci.json scope and local-ci/2 workspace {bootstrap:[bash setup.sh], dependencies:[vendor], outputs:[dist,dist-snapshot]}; C-02 and C-06 re-pins preserve that entire workspace object. Any post-rename bootstrap, toolchain or output delta needs explicit reviewed source-policy disposition before binding, not an implicit grant here.",
+      "At ai-catapult f31de088 the v1 registry has xskp-p4-adopt-engine AND tswc-ai-catapult. Inventory EVERY current entry, record each fate, retire only inventory-confirmed merged work; C-05 stays P4-only. No TSWC migration is authorized by ACH.",
+      "F1 RE-SLICE PROPOSAL: move exactly test/fixtures/init-standalone/.ai/policies/readiness-policy.json from C-03 to C-02. The lock bump's generic mechanical emission requires it for C-02's own unchanged init parity test and full suite. C-03 retains semantic conformance, fail-closed gaps, N3 and source/packed equivalence; dependencies and verification arrays stay unchanged. Re-derive the exact fixture delta at the actual reviewed base/O8 and stop on any additional path until separately reviewed.",
+      "F2 OPEN DISPOSITION (documented, not a machine hold) TSWC_SOURCE_OWNER_BATCH_UNACKNOWLEDGED concerns all six C goals. Registered tswc-ai-catapult generation 676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112 intersects every C goal; source-owner acknowledgement and scheduler rename/lock-batch disposition are missing. Proposed default: refresh/rederive literal paths, fixtures, local-CI pins, bootstrap, toolchain and outputs from the actual reviewed post-rename base. These .js literals are baseline review data, not an automatic .ts map. Use main's existing D04/D06 and L-ac-source/L-ac-vendor ledger; create no global lane, ownership release, TSWC fold or tooling grant.",
+      "D-TIERS is still PROPOSED pending HUMAN sitting-1 confirmation. policy-candidate.variant-a.json retains the current required-check candidate unchanged. Reconcile the chosen names and actual check evidence before publication; never silently substitute the tier-shaped pair. No human question or digest is requested by this correction.",
+      "2026-10-10 successor amendment (ach-catapult-delivery-ts, add-only): the seven amendment strings above are carried verbatim from predecessor generation 0516ba2c as its historical decision record; this string records the successor delta. A2 delivered at ab539496 (PR #61) and the remaining goals' literal paths are re-derived to the reviewed .ts names (list in predecessor_generation); F2's proposed default (refresh/rederive literal paths from the actually reviewed post-rename base) is executed here, and no other content changes. Observation, not a rewrite: ACH-C-03 AC-1 cites the planning-time O8 target f5e338b92bb754c2bfffdf542b498530258fdbc0; the delivered and accepted O8 pin is 28f813bf9fd767960b96e9d54857964de8181a53 (skills.lock.json; f5e338b9 is its ancestor), and C-03 rechecks the vendored ai-catapult-init template at the delivered pin. Observation, not a rewrite: the carried umbrella_spec pin (root 87274a6, sha e6feb698bde18356f0d49c497b7f368f242f39bc254b12942f7f1902408cee39) is the predecessor's planning-time pin; the current root admission-complete-handoffs.md observed at this registration hashes 2d9a247ace71f21b6b72fb9b852f53b6721f862161791ddc658ec9b9e54337dd. This generation was published through the vendored northstar/handoff-write.sh (publish-v2 --admit-planning) against base ab539496ddd39908879d74a017a7a8720a984018 with planning_complete true and zero blocking gaps."
+    ],
+    "predecessor_generation": "plan ach-catapult-delivery generation 0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0 (readiness-contract/2, mode bootstrap, registered by planning PR r3dlex/ai-catapult#52, merge 959accce9fc04412f1e0f31f866685a101a1e588) is retained byte-unchanged; this successor is an add, never a replacement, so its registry entry, generation files and traceability nodes remain. Delivered goals stay bound to the predecessor: ACH-C-01 (PR #53), ACH-C-02 (PR #57), ACH-C-05 (PR #54). The A2 rename wave (PR #61, merge ab539496ddd39908879d74a017a7a8720a984018) converted the repository to strict TypeScript; the predecessor's remaining goals still name pre-rename .js/.sh paths, and a same-plan registry-entry replacement is refused by the pinned publish-v2 replay rule while merged goal PRs exist (v2_scope_outside_goal: ach-catapult-delivery has merged goal PRs 53, 54, 57), so the remaining chain moves here. Migrated (only A2-invalidated path/mechanism facts; nothing widened or narrowed): ACH-C-03 src/scaffold.js->src/scaffold.ts, scripts/regen-fixture.sh->scripts/regen-fixture.ts, test/init.test.js->test/init.test.ts, test/packed-init.test.js->test/packed-init.test.ts; ACH-C-04 bin/ai-catapult.js->bin/ai-catapult.ts, src/backfill.js->src/backfill.ts, test/backfill.test.js->test/backfill.test.ts; ACH-C-06 test/release-0.4.3.test.js->.ts, test/release-0.4.4.test.js->.ts, scripts/build-{claude,codex,opencode}-plugin.sh->.ts, scripts/release-context.sh->.ts, scripts/publish-both.sh->.ts. Dependency edges: ACH-C-04 keeps in-bundle ACH-C-03; ACH-C-03's delivered dependency ACH-C-02 and ACH-C-06's delivered dependency ACH-C-05 are dropped from the carried arrays (cross-plan edges are not expressible; both are delivered ancestors of this base), recorded here. Acceptance-criteria substance is otherwise verbatim. The successor's plan approval is its own future tag approval/ach-catapult-delivery-ts/<generation[0:12]>; no approval is created by this publication, and the predecessor's approval tag is untouched. Planning publication grants no authority.",
+    "spec_binding": "r3dlex/ai-catapult docs/specifications/ACTIVE/admission-complete-handoffs-ach-catapult-delivery.md sha256 45c3c274d9c891bd1bb49c3d08e520f926d0d6f9f5eb815977d5efa6fc5f1ccd - the successor binds the same plan-scoped specification copy as predecessor generation 0516ba2c; this planning PR does not touch the specification (still bound by the retained predecessor generation), so the registry spec pin is the base bytes re-verified at publication.",
+    "umbrella_spec": "r3dlex/ai-tool-workspace docs/specifications/ACTIVE/admission-complete-handoffs.md sha256 e6feb698bde18356f0d49c497b7f368f242f39bc254b12942f7f1902408cee39 (root 87274a6); pinned source verified, final independently reviewed plan-copy digest unknown"
+  },
+  "goals": [
+    {
+      "acceptance_criteria": [
+        "[Spec Delivery: Init, O2, O5, N3] ai-catapult init writes .ai/policies/readiness-policy.json from the vendored ai-catapult-init template of ACH-S-02 as rechecked at O8 (skills f5e338b92bb754c2bfffdf542b498530258fdbc0): readiness-policy/2, identity_model multi, fail-closed placeholders (anchor_sha256 null and empty required_checks, each a named admission gap); the seeded approval block is the template's verbatim (accept [\"agent-self\", \"ssh-tag\", \"in-session\"], default_mode agent), so a seeded repository is agent-self-capable from its first commit (decision N3, accepted and recorded); an existing file is never overwritten without --force.",
+        "[Fixture conformance after proposed transfer] C-02 supplies the lock-coupled init policy fixture and achieves its own full green first. C-03 leaves that fixture byte-unchanged and retains test/init.test.ts and test/packed-init.test.ts for emitted-policy semantics, exact source/packed policy equality at fixed inputs and policy-specific collision/--force conformance. scripts/regen-fixture.ts remains the canonical regeneration mechanism in C-03 scope; a discovered additional fixture edit needs explicit reviewed scope before implementation, never a silent directory expansion. Both tests run under the complete npm test.",
+        "[Contract] A test validates the emitted policy with the vendored v2 validator (python3 -I -B) and asserts that admission names the anchor_unset and required_checks_unset gaps, and asserts the seeded approval.accept and approval.default_mode exactly as decision N3 fixes them.",
+        "[Lane] Source and packaged: the packed-init path emits the same bytes as the source path."
+      ],
+      "dependencies": [],
+      "id": "ACH-C-03",
+      "issue_ref": "issue:ai-catapult:ach-catapult-delivery",
+      "scope": [
+        "src/scaffold.ts",
+        "scripts/regen-fixture.ts",
+        "test/init.test.ts",
+        "test/packed-init.test.ts",
+        ".ai/evidence/ACH-C-03.json"
+      ],
+      "verification": [
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "[Spec Delivery: Backfill] ai-catapult backfill --policy-v2 --root <repo> runs only when invoked explicitly (never from init or install) and writes the baseline policy/2 candidate only when the repository has no policy, or a v1 policy whose registry has no active plan.",
+        "[Active by ancestry] backfill calls the vendored contract-run.sh inventory-v1 rather than reimplementing it (merged = a hosted-API merged PR whose head branch carries the goal id as a token (case-insensitive, bounded by non-alphanumerics) and whose merge commit is an ancestor of origin/main; commit and title text are never signals); a v1 registry plan is active only when it is in flight (an unmerged goal has an open PR or an unmerged origin branch carrying its token); completed plans are not active, unstarted and partly merged plans are not active but are listed as requiring migration of their unmerged goals (O10), and an unreachable hosted API or an unattributable token match counts as active.",
+        "[Fail closed] While any plan is active it refuses with one consolidated report naming them; it refuses when a policy/2 with different bytes exists; it never writes approvals, anchors or readiness contexts, writes nothing outside --root, and refuses symlinked or out-of-root targets.",
+        "[Idempotent, ledgered] A second run with the same inputs is a no-op that exits 0; every run appends {schema, command, repository id, before_sha256, after_sha256, at, result} to .ai/drift/backfill-ledger.jsonl; --dry-run prints the diff without writing; test/backfill.test.ts (discovered by node --test under npm test) covers fresh, active, completed, unstarted, partly merged, policy/2-present, rerun and dry-run fixtures, including a two-plan P4/TSWC registry so an in-flight second entry cannot be missed."
+      ],
+      "dependencies": [
+        "ACH-C-03"
+      ],
+      "id": "ACH-C-04",
+      "issue_ref": "issue:ai-catapult:ach-catapult-delivery",
+      "scope": [
+        "bin/ai-catapult.ts",
+        "src/backfill.ts",
+        "test/backfill.test.ts",
+        ".ai/evidence/ACH-C-04.json"
+      ],
+      "verification": [
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "[Release, F2, F6] package.json version is set to 0.4.4, subject to publication refresh confirming it remains the next unpublished version above npm latest for both ai-catapult and @r3dlex/ai-catapult; a changed registry baseline blocks this version binding rather than inventing release facts. The plugin manifests generated by scripts/build-claude-plugin.ts, build-codex-plugin.ts and build-opencode-plugin.ts carry it.",
+        "[Test] test/release-0.4.4.test.ts (discovered by node --test under npm test) asserts package.json, dist claude plugin.json and marketplace.json, codex plugin.json and the opencode build agree on the version, that the version is greater than the npm latest recorded in .ai/evidence/release-0.4.4.json, and that the packed tarball carries the pinned v2 contract files; test/release-0.4.3.test.ts (from #50) is updated only where it pins the old version.",
+        "[Release timing, user decision 2026-10-04; replaces P-C2] This goal bumps the version only: the PR pushes no tag and publishes nothing. Only after every ACH plan (skills, ai-catapult, root, ai-factory) is complete does a background agent confirm this goal's merge commit is on origin/main with every required check SUCCESS, create the annotated tag v<package.json version> (v0.4.4; scripts/release-context.ts refuses any other) at that exact merge commit, and push it; .github/workflows/release.yml then validates the exact tag and scripts/publish-both.ts publishes ai-catapult and @r3dlex/ai-catapult through OIDC trusted publishing with provenance. The agent watches the run to completion, verifies npm latest and provenance for both names and reports the run URL, tag sha, versions, provenance and installed-lane status; on any failure it stops and reports, never deletes, moves or re-tags a published version, and uses the workflow_dispatch package input only after a verified partial release. Lane: packaged; installed report-only. This staging authorizes none of those future actions.",
+        "[Hygiene] .ai/ci/local-ci.json re-pins package.json and test/release-0.4.3.test.ts and any other changed declared source while preserving C-01's entire local-ci/2 workspace object exactly; work happens in a linked worktree from origin/main."
+      ],
+      "dependencies": [
+        "ACH-C-04"
+      ],
+      "id": "ACH-C-06",
+      "issue_ref": "issue:ai-catapult:ach-catapult-delivery",
+      "scope": [
+        "package.json",
+        "test/release-0.4.3.test.ts",
+        "test/release-0.4.4.test.ts",
+        ".ai/evidence/release-0.4.4.json",
+        ".ai/ci/local-ci.json",
+        ".ai/evidence/ACH-C-06.json"
+      ],
+      "verification": [
+        "npm test",
+        "git diff --check"
+      ]
+    }
+  ],
+  "id": "ach-catapult-delivery-ts",
+  "issue_ref": "issue:ai-catapult:ach-catapult-delivery",
+  "repository": {
+    "id": "ai-catapult"
+  },
+  "schema": "handoff-goals/2",
+  "spec": {
+    "path": "docs/specifications/ACTIVE/admission-complete-handoffs-ach-catapult-delivery.md"
+  }
+}
