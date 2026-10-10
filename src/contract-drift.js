@@ -13,8 +13,9 @@
  *   2-4. dist/<harness>-plugin  (flat payload layout: skills/autobahn +
  *                                skills/northstar)
  *   5. installed marketplace ~/.claude/plugins/ai-catapult (flat layout)
- *   6. the loaded cache resolved from ~/.claude/plugins/installed_plugins.json
- *      installPath for the ai-catapult@* entry (flat layout)
+ *   6. the loaded cache: every ai-catapult@* entry in
+ *      ~/.claude/plugins/installed_plugins.json is inspected (all keys, all
+ *      registered installPaths, deduplicated; flat layout)
  *   7. the Codex plugin cache ${CODEX_HOME}/plugins/cache/ai-catapult-local/…
  *      (flat layout)
  *   8. the OpenCode skills directory ${XDG_CONFIG_HOME:-~/.config}/opencode/skills
@@ -26,11 +27,15 @@
  * surface's autobahn copy (producer/consumer fingerprint parity), and every
  * present surface's manifests must be byte-identical to the vendored pin
  * (vendor absent — packaged contexts — fall back to the first present payload
- * surface). Absent surfaces are skipped and reported as `absent`; a surface
- * whose bytes or manifests disagree names path/expected/actual and the sweep
- * exits non-zero. Loaded-cache drift additionally carries the two refresh
- * hints (`claude plugin marketplace update`, `claude plugin update`) because
- * that surface is reloaded from the marketplace, not re-copied.
+ * surface). Absent surfaces are skipped and reported as `absent`; a surface is
+ * absent only when its installation root itself is missing — an existing
+ * installation whose contract directories are gone drifts (missing-contract-dir)
+ * instead of being silently skipped. A surface whose bytes or manifests
+ * disagree names path/expected/actual and the sweep exits non-zero; unreadable
+ * pinned files fail closed with structured `unreadable` findings. Loaded-cache
+ * drift additionally carries the two refresh hints (`claude plugin marketplace
+ * update`, `claude plugin update`) because that surface is reloaded from the
+ * marketplace, not re-copied.
  */
 
 import { createHash } from 'node:crypto';
@@ -106,14 +111,36 @@ function hashSurface(autobahnDir, northstarDir) {
         });
         continue;
       }
-      const actual = sha256(readFileSync(pinnedPath));
+      let actual;
+      try {
+        actual = sha256(readFileSync(pinnedPath));
+      } catch (err) {
+        findings.push({
+          path: pinnedPath,
+          expected: digest,
+          actual: `unreadable (${err?.code ?? 'unknown'})`,
+          kind: 'unreadable',
+        });
+        continue;
+      }
       if (actual !== digest) {
         findings.push({ path: pinnedPath, expected: digest, actual, kind: 'digest' });
       }
     }
     // Producer/consumer fingerprint parity inside this surface: the northstar
     // peer's manifest copy must be byte-identical to the autobahn copy.
-    const nsBytes = readFileSync(nsCopy);
+    let nsBytes;
+    try {
+      nsBytes = readFileSync(nsCopy);
+    } catch (err) {
+      findings.push({
+        path: nsCopy,
+        expected: sha256(abBytes),
+        actual: `unreadable (${err?.code ?? 'unknown'})`,
+        kind: 'manifest-parity',
+      });
+      continue;
+    }
     if (nsBytes.equals(abBytes) === false) {
       findings.push({
         path: nsCopy,
@@ -127,36 +154,50 @@ function hashSurface(autobahnDir, northstarDir) {
 }
 
 /**
- * Resolve the loaded-cache payload dir from ~/.claude/plugins/
- * installed_plugins.json: the installPath of the first ai-catapult@* entry.
- * Absent when the file is missing or carries no ai-catapult@* entry; corrupt
- * manifests fail closed.
+ * Resolve the loaded-cache payload dirs from ~/.claude/plugins/
+ * installed_plugins.json: every ai-catapult@* entry is inspected (later keys,
+ * later array records), deduplicated by resolved payload dir. Absent when the
+ * file is missing or carries no ai-catapult@* entry; corrupt manifests fail
+ * closed; registrations with invalid installPaths are reported for scanning.
  */
-function resolveLoadedCachePath(env) {
+function resolveLoadedCachePaths(env) {
   const pluginsFile = join(env.HOME, '.claude', 'plugins', 'installed_plugins.json');
-  if (!existsSync(pluginsFile)) return { kind: 'absent', path: pluginsFile };
+  if (!existsSync(pluginsFile)) return { kind: 'absent', path: pluginsFile, registrations: [], invalidKeys: [] };
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(pluginsFile, 'utf8'));
   } catch {
-    return { kind: 'corrupt', path: pluginsFile };
+    return { kind: 'corrupt', path: pluginsFile, registrations: [], invalidKeys: [] };
   }
   const plugins = (parsed && typeof parsed === 'object' && parsed.plugins) ?? {};
   const ownKeys = Object.keys(plugins).filter((key) => key.startsWith('ai-catapult@'));
-  if (ownKeys.length === 0) return { kind: 'absent', path: pluginsFile };
-  const record = plugins[ownKeys[0]];
-  const installPath = (
-    Array.isArray(record) ? record[0] : record
-  )?.installPath;
-  if (typeof installPath !== 'string' || installPath.length === 0) {
-    return { kind: 'corrupt', path: pluginsFile };
+  if (ownKeys.length === 0) return { kind: 'absent', path: pluginsFile, registrations: [], invalidKeys: [] };
+  const registrations = [];
+  const invalidKeys = [];
+  const seen = new Set();
+  for (const key of ownKeys) {
+    const recordField = plugins[key];
+    const records = Array.isArray(recordField) ? recordField : [recordField];
+    for (const record of records) {
+      const installPath = record?.installPath;
+      if (typeof installPath !== 'string' || installPath.length === 0) {
+        invalidKeys.push(key);
+        continue;
+      }
+      // Real installs store either an absolute path, a ~/… path or a path
+      // relative to HOME; all three resolve against the sweep's HOME.
+      const payloadDir = installPath.startsWith('/')
+        ? installPath
+        : join(env.HOME, installPath.replace(/^~\/?/, ''));
+      if (seen.has(payloadDir)) continue;
+      seen.add(payloadDir);
+      registrations.push({ pluginsFile, payloadDir });
+    }
   }
-  // Real installs store either an absolute path, a ~/… path or a path relative
-  // to HOME; all three resolve against the sweep's HOME.
-  const resolved = installPath.startsWith('/')
-    ? installPath
-    : join(env.HOME, installPath.replace(/^~\/?/, ''));
-  return { kind: 'ok', path: pluginsFile, payloadDir: resolved };
+  if (registrations.length === 0 && invalidKeys.length === 0) {
+    return { kind: 'absent', path: pluginsFile, registrations, invalidKeys };
+  }
+  return { kind: 'ok', path: pluginsFile, registrations, invalidKeys };
 }
 
 /**
@@ -190,30 +231,38 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
   const xdgConfig = env.XDG_CONFIG_HOME ?? join(home, '.config');
 
   // spec.autobahnDir/northstarDir: null when the surface cannot exist here.
+  // spec.installRoot is the directory whose existence proves the surface is
+  // installed: a surface is only reported `absent` when that root is missing.
+  // An existing installation whose contract directories are missing drifts.
   const specs = [
     {
       label: 'vendor/skills',
+      installRoot: vendorRoot ?? null,
       autobahnDir: vendorRoot ? join(vendorRoot, '04-validate-handoff', 'autobahn') : null,
       northstarDir: vendorRoot ? join(vendorRoot, '02-govern-plan', 'northstar') : null,
     },
     ...['claude-plugin', 'codex-plugin', 'opencode-plugin'].map((harness) => ({
       label: `dist/${harness}`,
+      installRoot: distRoot ? join(distRoot, harness) : null,
       autobahnDir: distRoot ? join(distRoot, harness, 'skills', 'autobahn') : null,
       northstarDir: distRoot ? join(distRoot, harness, 'skills', 'northstar') : null,
     })),
     {
       label: 'marketplace ~/.claude/plugins/ai-catapult',
+      installRoot: join(home, '.claude', 'plugins', 'ai-catapult'),
       autobahnDir: join(home, '.claude', 'plugins', 'ai-catapult', 'skills', 'autobahn'),
       northstarDir: join(home, '.claude', 'plugins', 'ai-catapult', 'skills', 'northstar'),
     },
     { label: 'loaded cache', loadedCache: true },
     {
       label: 'codex cache',
+      installRoot: join(codexHome, 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local'),
       autobahnDir: join(codexHome, 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local', 'skills', 'autobahn'),
       northstarDir: join(codexHome, 'plugins', 'cache', 'ai-catapult-local', 'ai-catapult', 'local', 'skills', 'northstar'),
     },
     {
       label: 'opencode skills',
+      installRoot: join(xdgConfig, 'opencode', 'skills'),
       autobahnDir: join(xdgConfig, 'opencode', 'skills', 'autobahn'),
       northstarDir: join(xdgConfig, 'opencode', 'skills', 'northstar'),
     },
@@ -224,38 +273,64 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
   const records = [];
   for (const spec of specs) {
     if (spec.loadedCache) {
-      const resolved = resolveLoadedCachePath(env);
+      const resolved = resolveLoadedCachePaths(env);
       if (resolved.kind === 'absent') {
         records.push({ label: spec.label, status: 'absent', findings: [], refreshHints: [], autobahnDir: null });
         continue;
       }
+      const findings = [];
       if (resolved.kind === 'corrupt') {
-        records.push({
-          label: spec.label,
-          status: 'drift',
-          findings: [
-            { path: resolved.path, expected: 'valid installed_plugins.json JSON', actual: 'unreadable', kind: 'unreadable-installed-plugins' },
-          ],
-          refreshHints: LOADED_CACHE_REFRESH_HINTS,
-          autobahnDir: null,
-        });
-        continue;
+        findings.push(
+          { path: resolved.path, expected: 'valid installed_plugins.json JSON', actual: 'unreadable', kind: 'unreadable-installed-plugins' },
+        );
       }
-      const scanned = hashSurface(
-        join(resolved.payloadDir, 'skills', 'autobahn'),
-        join(resolved.payloadDir, 'skills', 'northstar'),
-      );
+      // Every registration is hashed (deduplicated dirs once). The first
+      // registration dir anchors cross-surface parity; extra registrations get
+      // the full in-surface manifest+file sweep.
+      for (const { payloadDir } of resolved.registrations) {
+        const scanned = hashSurface(
+          join(payloadDir, 'skills', 'autobahn'),
+          join(payloadDir, 'skills', 'northstar'),
+        );
+        findings.push(...scanned.findings);
+      }
+      for (const key of resolved.invalidKeys) {
+        findings.push(
+          { path: resolved.path, expected: `valid installPath under ${key}`, actual: 'missing-or-invalid-installPath', kind: 'unreadable-installed-plugins' },
+        );
+      }
+      const firstPayloadDir = resolved.registrations[0]?.payloadDir ?? null;
       records.push({
         label: spec.label,
-        status: scanned.findings.length > 0 ? 'drift' : 'ok',
-        findings: scanned.findings,
-        refreshHints: scanned.findings.length > 0 ? LOADED_CACHE_REFRESH_HINTS : [],
-        autobahnDir: join(resolved.payloadDir, 'skills', 'autobahn'),
+        status: findings.length > 0 ? 'drift' : 'ok',
+        findings,
+        refreshHints: findings.length > 0 ? LOADED_CACHE_REFRESH_HINTS : [],
+        autobahnDir: firstPayloadDir === null ? null : join(firstPayloadDir, 'skills', 'autobahn'),
       });
       continue;
     }
-    if (!spec.autobahnDir || !existsSync(spec.autobahnDir)) {
+    if (!spec.installRoot) {
+      // The surface cannot exist here (no root provided): absent by
+      // construction, not an installed payload.
       records.push({ label: spec.label, status: 'absent', findings: [], refreshHints: [], autobahnDir: null });
+      continue;
+    }
+    if (!existsSync(spec.installRoot)) {
+      records.push({ label: spec.label, status: 'absent', findings: [], refreshHints: [], autobahnDir: null });
+      continue;
+    }
+    if (!existsSync(spec.autobahnDir)) {
+      // The surface is installed (its root exists) but the contract dir is
+      // gone: fail closed instead of silently skipping the surface.
+      records.push({
+        label: spec.label,
+        status: 'drift',
+        findings: [
+          { path: spec.autobahnDir, expected: 'autobahn contract dir', actual: 'missing-contract-dir', kind: 'missing' },
+        ],
+        refreshHints: [],
+        autobahnDir: null,
+      });
       continue;
     }
     if (!existsSync(spec.northstarDir)) {
@@ -286,6 +361,18 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
   // (packaged contexts) the first present surface anchors instead.
   const present = records.filter((r) => r.status === 'ok' || r.status === 'drift');
   const anchor = present.find((r) => r.label === 'vendor/skills') ?? present[0];
+  const pushCopyReadFailure = (record, failedPath, err) => {
+    record.status = 'drift';
+    if (record.label === 'loaded cache' && record.refreshHints.length === 0) {
+      record.refreshHints = LOADED_CACHE_REFRESH_HINTS;
+    }
+    record.findings.push({
+      path: failedPath,
+      expected: 'readable manifest copy',
+      actual: `unreadable (${err?.code ?? 'unknown'})`,
+      kind: 'surface-pin-parity',
+    });
+  };
   if (anchor?.autobahnDir && present.length > 1) {
     for (const record of present) {
       if (record === anchor || !record.autobahnDir) continue;
@@ -293,8 +380,20 @@ export function sweepContractDrift({ env, vendorRoot, distRoot } = {}) {
         const copy = join(record.autobahnDir, manifestName);
         const anchorCopy = join(anchor.autobahnDir, manifestName);
         if (!existsSync(copy) || !existsSync(anchorCopy)) continue;
-        const bytes = readFileSync(copy);
-        const anchorBytes = readFileSync(anchorCopy);
+        let bytes;
+        let anchorBytes;
+        try {
+          bytes = readFileSync(copy);
+        } catch (err) {
+          pushCopyReadFailure(record, copy, err);
+          continue;
+        }
+        try {
+          anchorBytes = readFileSync(anchorCopy);
+        } catch (err) {
+          pushCopyReadFailure(record, anchorCopy, err);
+          continue;
+        }
         if (bytes.equals(anchorBytes) === false) {
           record.status = 'drift';
           if (record.label === 'loaded cache' && record.refreshHints.length === 0) {

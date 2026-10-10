@@ -328,3 +328,125 @@ test('contract drift: tampered northstar v2 manifest copy fails producer/consume
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Review-round red legs (omc ask codex round 1, 2026-10-10): silent-skip and
+// diagnostics holes found by the independent reviewer at head f68c28c.
+// ---------------------------------------------------------------------------
+
+test('contract drift: an installed marketplace payload missing its autobahn contract directory drifts instead of being skipped', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-root-'));
+  try {
+    const fixtures = buildFixtures(base);
+    // The installation EXISTS (payload root present) but its autobahn
+    // contract dir was removed: this must fail closed, not report `absent`.
+    rmSync(join(fixtures.marketplace, 'skills', 'autobahn'), { recursive: true, force: true });
+    const result = sweep(fixtures);
+    const surface = result.surfaces.find((s) => s.label === 'marketplace ~/.claude/plugins/ai-catapult');
+    assert.equal(surface.status, 'drift', `installed-but-incomplete payload must drift, got ${JSON.stringify(surface)}`);
+    const finding = surface.findings.find((f) => f.path.endsWith(join('skills', 'autobahn')));
+    assert.ok(finding, `a finding naming the missing contract dir must be present; got ${JSON.stringify(surface.findings)}`);
+    assert.ok(!finding.path.includes(join(root, 'vendor').slice(1)), 'finding path must stay in the fixture tree');
+    assert.equal(result.ok, false);
+    assert.notEqual(result.exitCode, 0);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: an installed dist payload missing its autobahn contract directory drifts instead of being skipped', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-distroot-'));
+  try {
+    const fixtures = buildFixtures(base);
+    rmSync(join(fixtures.dist, 'claude-plugin', 'skills', 'autobahn'), { recursive: true, force: true });
+    const result = sweep(fixtures);
+    const surface = result.surfaces.find((s) => s.label === 'dist/claude-plugin');
+    assert.equal(surface.status, 'drift', `installed-but-incomplete dist payload must drift, got ${JSON.stringify(surface)}`);
+    assert.ok(surface.findings.some((f) => f.path.endsWith(join('skills', 'autobahn'))));
+    assert.equal(result.ok, false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: every registered loaded-cache install path is inspected, including later array records', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-registrations-'));
+  try {
+    const fixtures = buildFixtures(base);
+    // A second registration (project scope) carries drifted bytes; the first
+    // (user scope) is fresh. Insertion-order-only scanning must not hide it.
+    const second = join(base, 'loaded-cache-payload-project');
+    copyPayloadLayout(second);
+    mutate(join(second, 'skills', 'autobahn', PROBE_FILE));
+    const pluginsFile = join(fixtures.home, '.claude/plugins/installed_plugins.json');
+    const parsed = JSON.parse(readFileSync(pluginsFile, 'utf8'));
+    parsed.plugins['ai-catapult@ai-catapult'].push({
+      scope: 'project',
+      installPath: second,
+      version: '0.4.3',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      lastUpdated: '2026-01-01T00:00:00.000Z',
+    });
+    writeFileSync(pluginsFile, JSON.stringify(parsed));
+    const result = sweep(fixtures);
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift', `later registration must be inspected; got ${JSON.stringify(loaded)}`);
+    const finding = loaded.findings.find((f) => f.path.endsWith(join('skills', 'autobahn', PROBE_FILE)) && f.path.startsWith(second));
+    assert.ok(finding, `a finding naming the second payload's drifted file must be present; got ${JSON.stringify(loaded.findings)}`);
+    assert.equal(result.ok, false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: every ai-catapult@* registration key is inspected', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-keys-'));
+  try {
+    const fixtures = buildFixtures(base);
+    const second = join(base, 'loaded-cache-payload-marketplace');
+    copyPayloadLayout(second);
+    mutate(join(second, 'skills', 'northstar', NORTHSTAR_PROBE_FILE));
+    const pluginsFile = join(fixtures.home, '.claude/plugins/installed_plugins.json');
+    const parsed = JSON.parse(readFileSync(pluginsFile, 'utf8'));
+    parsed.plugins['ai-catapult@other-marketplace'] = [
+      { scope: 'user', installPath: second, version: '0.4.3', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' },
+    ];
+    writeFileSync(pluginsFile, JSON.stringify(parsed));
+    const result = sweep(fixtures);
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift', `a later registration key must be inspected; got ${JSON.stringify(loaded)}`);
+    const finding = loaded.findings.find((f) => f.path.startsWith(second) && f.path.endsWith(NORTHSTAR_PROBE_FILE));
+    assert.ok(finding, `the second key's drifted file must be named; got ${JSON.stringify(loaded.findings)}`);
+    assert.equal(result.ok, false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: unreadable pinned files report structured findings instead of throwing', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-unreadable-'));
+  try {
+    const fixtures = buildFixtures(base);
+    // Replace a registered payload's pinned file with a directory: the read
+    // fails (EISDIR) — the sweep must convert that into a named finding and
+    // keep the loaded-cache refresh hints, not throw.
+    const probe = join(fixtures.loadedCache, 'skills', 'autobahn', PROBE_FILE);
+    rmSync(probe);
+    mkdirSync(probe, { recursive: true });
+    const result = sweep(fixtures);
+    assert.equal(result.ok, false, 'an unreadable pinned file must fail the sweep');
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift');
+    const finding = loaded.findings.find((f) => f.path.endsWith(join('skills', 'autobahn', PROBE_FILE)));
+    assert.ok(finding, `a structured finding must replace the throw; got ${JSON.stringify(loaded.findings)}`);
+    assert.match(finding.actual, /^unreadable/, `actual must report the read failure; got ${finding.actual}`);
+    assert.deepEqual(loaded.refreshHints.sort(), ['claude plugin marketplace update', 'claude plugin update']);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
