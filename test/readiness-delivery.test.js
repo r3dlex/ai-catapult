@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, process.env.AI_CATAPULT_DIST_ROOT || 'dist-snapshot');
@@ -109,4 +110,140 @@ test('readiness resources and public behavior survive both builds, packing and t
       assert.deepEqual(first, tree(join(dist, `${harness}-plugin`)), `${harness} build must match stable snapshot`);
     }
   } finally { rmSync(temp, { recursive: true, force: true }); }
+});
+
+function lockedBytes(pathInLock) {
+  const r = spawnSync('git', ['-C', vendor, 'cat-file', 'blob', `${lock.sha}:${pathInLock}`], { maxBuffer: 10 * 1024 * 1024 });
+  assert.equal(r.status, 0, `locked source ${pathInLock} unreadable: ${r.stderr}`);
+  return r.stdout;
+}
+
+/**
+ * ACH-C-02 packaged lane: after the v2 lock bump the vendored peer trees must
+ * carry readiness-contract/2 machinery, and every file pinned by the vendored
+ * readiness-dependency.json (v1) and readiness-dependency-v2.json (v2) — the
+ * northstar/approve.sh producer/consumer pair among them — must ride the lock
+ * bytes through vendor and the npm pack tarball byte-identically.
+ *
+ * The resolution rule mirrors the pinned contract-run-v2.sh verification loop:
+ * path keys starting with "northstar/" resolve against the northstar peer dir
+ * (prefix stripped); every other key resolves against the autobahn dir.
+ */
+test('readiness-contract/2 pinned bytes ride the lock, the vendored trees and the npm pack tarball byte-identically', () => {
+  const ab = join(vendor, peers.autobahn);
+  const ns = join(vendor, peers.northstar);
+  const v2Bytes = readFileSync(join(ab, 'readiness-dependency-v2.json'));
+  assert.ok(v2Bytes.length > 0, 'vendored readiness-dependency-v2.json must exist after the O8 lock bump (red at the pre-bump lock)');
+  const v2 = JSON.parse(v2Bytes.toString('utf8'));
+  assert.equal(v2.schema, 'readiness-contract/2', 'v2 manifest must declare readiness-contract/2');
+  assert.deepEqual(readFileSync(join(ns, 'readiness-dependency-v2.json')), v2Bytes, 'northstar v2 manifest copy must be byte-identical to the autobahn copy');
+  const v1Bytes = readFileSync(join(ab, 'readiness-dependency.json'));
+  const v1 = JSON.parse(v1Bytes.toString('utf8'));
+  assert.equal(v1.schema, 'readiness-contract/1');
+  assert.deepEqual(readFileSync(join(ns, 'readiness-dependency.json')), v1Bytes, 'northstar v1 manifest copy must be byte-identical to the autobahn copy');
+  assert.ok(v2.files['northstar/approve.sh'], 'the v2 manifest must pin northstar/approve.sh');
+  assert.ok(v2.files['northstar/handoff-write.sh'], 'the v2 manifest must pin northstar/handoff-write.sh');
+
+  // Pinned bytes equal the lock commit bytes (vendored tree lane).
+  const resolvePinned = (key) => key.startsWith('northstar/')
+    ? { lockPath: `${peers.northstar}/${key.slice('northstar/'.length)}`, vendorPath: join(ns, key.slice('northstar/'.length)) }
+    : { lockPath: `${peers.autobahn}/${key}`, vendorPath: join(ab, key) };
+  const pinnedEntries = [];
+  for (const manifest of [v1, v2]) {
+    for (const [key, digest] of Object.entries(manifest.files)) pinnedEntries.push({ key, digest });
+  }
+  for (const { key, digest } of pinnedEntries) {
+    const { lockPath, vendorPath } = resolvePinned(key);
+    const locked = lockedBytes(lockPath);
+    assert.deepEqual(readFileSync(vendorPath), locked, `vendored pinned bytes differ from lock for ${key}`);
+    assert.equal(createHash('sha256').update(locked).digest('hex'), digest, `pinned sha256 digest mismatch vs manifest for ${key}`);
+  }
+  assert.ok(pinnedEntries.length >= 22, `expected 22 pinned file entries across v1+v2 manifests, found ${pinnedEntries.length}`);
+
+  // npm pack lane: the tarball ships package.json files only — the flat ready
+  // payloads ride dist/<harness>-plugin/skills/{autobahn,northstar}/ — and every
+  // pinned byte must arrive there from the staged dist identical to the lock.
+  const temp = mkdtempSync(join(tmpdir(), 'readiness-v2-pack-'));
+  try {
+    const stage = join(temp, 'stage');
+    mkdirSync(stage);
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json')));
+    for (const path of ['package.json', ...pkg.files]) {
+      const source = path === 'dist/' ? dist : join(root, path);
+      if (existsSync(source)) cpSync(source, join(stage, path), { recursive: true });
+    }
+    const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], { cwd: stage }));
+    run('tar', ['-xzf', join(temp, packed[0].filename), '-C', temp]);
+    const extracted = join(temp, 'package');
+    for (const harness of ['claude-plugin', 'codex-plugin']) {
+      assert.ok(existsSync(join(extracted, 'dist', harness, 'skills/autobahn/readiness-dependency-v2.json')), `packed tarball must carry the ${harness} autobahn v2 manifest`);
+      assert.ok(existsSync(join(extracted, 'dist', harness, 'skills/northstar/readiness-dependency-v2.json')), `packed tarball must carry the ${harness} northstar v2 manifest`);
+      assert.deepEqual(readFileSync(join(extracted, 'dist', harness, 'skills/autobahn/readiness-dependency-v2.json')), v2Bytes, `packed ${harness} autobahn v2 manifest must be byte-identical to vendored`);
+      assert.deepEqual(readFileSync(join(extracted, 'dist', harness, 'skills/northstar/readiness-dependency-v2.json')), v2Bytes, `packed ${harness} northstar v2 manifest must be byte-identical to vendored`);
+      for (const { key } of pinnedEntries) {
+        const flat = key.startsWith('northstar/') ? join('skills', 'northstar', key.slice('northstar/'.length)) : join('skills', 'autobahn', key);
+        assert.deepEqual(readFileSync(join(extracted, 'dist', harness, ...flat.split('/'))), lockedBytes(resolvePinned(key).lockPath), `packed ${harness} pinned bytes differ from lock for ${key}`);
+      }
+      assert.ok(existsSync(join(extracted, 'dist', harness, 'skills/northstar/approve.sh')), `packed tarball must ship the ${harness} northstar/approve.sh`);
+    }
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+/**
+ * ACH-C-02 F1, as amended (PARALLEL-LANES.md 2026-10-10T04:31Z, SOLE
+ * COORDINATOR DECISION — ACH-C-02 fixture-scope amendment): bumping the lock
+ * re-renders the init fixture mechanically and the amended delta is exactly
+ *
+ *   + test/fixtures/init-standalone/.ai/policies/readiness-policy.json
+ *   + test/fixtures/init-standalone/.ai/knowledge/registry.json
+ *   + test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep
+ *   M test/fixtures/init-standalone/.ai/workflows/repo-workflow.json (local_ci)
+ *
+ * with the vendored boundary-manifest mechanical entries going 40 (lock
+ * 26d25105) to 42 (this lock) — the originally registered "40 to 41" was
+ * factually wrong at the goal's own anchor (the knowledge-registry template
+ * #121 and the readiness-policy template #102 are both already ancestors).
+ * Red before the regen output is bound: none of the four fixture paths render
+ * and the vendored manifest does not yet match the bumped lock. Green once
+ * `npm run regen:fixture` output is bound in this PR (determinism digests in
+ * .ai/evidence/ACH-C-02.json).
+ */
+test('F1 amended fixture delta renders with the bump; boundary-manifest mechanical entries are 42 (amended, not the registered 41)', () => {
+  const initTemplates = '03-configure-generate/ai-catapult-init/templates';
+  const manifestPath = `${initTemplates}/boundary-manifest.json`;
+  const locked = JSON.parse(lockedBytes(manifestPath).toString('utf8'));
+  const vendored = JSON.parse(readFileSync(join(vendor, manifestPath), 'utf8'));
+  assert.deepEqual(vendored, locked, 'vendored boundary-manifest must be the pinned template manifest');
+  assert.equal(locked.mechanical_count, 42, 'pinned manifest mechanical_count must be the amended 42 (40 at pre-bump 26d25105)');
+  assert.equal(vendored.mechanical_count, 42, 'vendored template must agree with the amended count');
+  const mech = locked.paths.filter((p) => p.classification === 'mechanical');
+  assert.equal(mech.length, 42, 'manifest must self-consistently list 42 mechanical paths');
+  assert.ok(mech.some((p) => p.path === '.ai/knowledge/registry.json'), '42-count includes the knowledge registry template (#121)');
+  assert.ok(mech.some((p) => p.path === '.ai/policies/readiness-policy.json'), '42-count includes the readiness policy template (#102)');
+  assert.ok(existsSync(join(vendor, initTemplates, 'dot-ai/knowledge/registry.json')), 'vendored knowledge registry template present');
+  assert.ok(existsSync(join(vendor, initTemplates, 'dot-ai/knowledge/entries/.gitkeep')), 'vendored knowledge entries .gitkeep present');
+  assert.ok(existsSync(join(vendor, initTemplates, 'dot-ai/policies/readiness-policy.json')), 'vendored readiness policy template present');
+
+  // Fixture lane — the amended mechanical delta is bound.
+  const fix = join(root, 'test/fixtures/init-standalone');
+  const policy = JSON.parse(readFileSync(join(fix, '.ai/policies/readiness-policy.json'), 'utf8'));
+  assert.equal(policy.schema, 'readiness-policy/2', 'fixture policy must be the template render');
+  assert.equal(policy.repository.id, 'example-repo', 'only {{REPO_ID}} is substituted (canonical regen input)');
+  assert.equal(policy.identity_model, 'multi');
+  assert.deepEqual(policy.approval.accept, ['agent-self', 'ssh-tag', 'in-session']);
+  assert.equal(policy.approval.default_mode, 'agent');
+  assert.equal(policy.approval.anchor_sha256, null, 'fail-closed anchor placeholder preserved');
+  assert.deepEqual(policy.required_checks, [], 'fail-closed required_checks placeholder preserved');
+
+  const registry = JSON.parse(readFileSync(join(fix, '.ai/knowledge/registry.json'), 'utf8'));
+  assert.equal(registry.schema, 'knowledge-registry/1');
+  assert.equal(registry.repo_id, 'example-repo');
+  assert.deepEqual(registry.entries, []);
+  assert.equal(registry.generated_from, '.ai/knowledge/entries');
+  assert.ok(existsSync(join(fix, '.ai/knowledge/entries/.gitkeep')), 'entries/.gitkeep renders');
+
+  const workflow = JSON.parse(readFileSync(join(fix, '.ai/workflows/repo-workflow.json'), 'utf8'));
+  assert.deepEqual(workflow.local_ci, { surfaces: [], sole_source_of_truth: false }, '#105 local_ci block rides the bump render');
 });

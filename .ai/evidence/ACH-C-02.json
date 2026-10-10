@@ -1,0 +1,233 @@
+{
+  "goal_id": "ACH-C-02",
+  "plan_id": "ach-catapult-delivery",
+  "generation": "0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0",
+  "summary": "Skills lock bumped 26d25105b028903ea1b34aebe9fbf4595b550051 to 28f813bf9fd767960b96e9d54857964de8181a53 (O8 accepted release pin per AC[0]; exact ancestor chain O8 f5e338b9) with the AC-8 six-surface readiness-contract drift sweep built test-first (src/contract-drift.js + 10 tests, wired into src/install.js post-install, dry-run skips, non-zero exit naming path/expected/actual, loaded-cache refresh hints), the amended lock-coupled fixture delta bound from two byte-identical regen runs (coordinator decision 2026-10-10T04:31Z), local-ci/2 re-pinned on its two changed declared sources with the C-01 workspace object preserved exactly, and the full npm suite green at the working head.",
+  "red": [
+    {
+      "id": "red1",
+      "command": "node --test test/contract-drift.test.js",
+      "exit_code": 1,
+      "reason": "src/contract-drift.js did not exist: ERR_MODULE_NOT_FOUND (recorded at the pre-bump lock baseline 26d25105).",
+      "log": ".omc/plans/receipts-c02-20261010/red1-contract-drift-26d25105.log (outside the worktree, workspace-repo receipts)"
+    },
+    {
+      "id": "red2",
+      "command": "node --test test/readiness-delivery.test.js",
+      "exit_code": 1,
+      "reason": "At the pre-bump lock the vendored autobahn tree carries no readiness-dependency-v2.json: ENOENT on vendor/skills/04-validate-handoff/autobahn/readiness-dependency-v2.json (2 of the suite's then-tests passed; the appended v2 packaged-lane test failed).",
+      "log": ".omc/plans/receipts-c02-20261010/red2-readiness-delivery-26d25105.log"
+    },
+    {
+      "id": "red3a",
+      "command": "node --test test/readiness-delivery.test.js",
+      "exit_code": 1,
+      "reason": "F1 amended fixture-delta test red pre-binding at the target pin: none of the four amended fixture paths existed (.ai/policies/readiness-policy.json ENOENT among them) and the 42-count assertions could not pass. Exactly one failing test (3 pass / 1 fail) after the harness's own reference-equality bugs were corrected.",
+      "log": ".omc/plans/receipts-c02-20261010/red3a-fixture-delta-missing.log"
+    },
+    {
+      "id": "red3b",
+      "command": "node --test test/readiness-delivery.test.js",
+      "exit_code": 1,
+      "reason": "Vendored-lane red at the pre-bump pin: skills.lock.json temporarily flipped to 26d25105 (uncommitted, disclosed, restored byte-exactly — sha256 96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb re-verified) so the same command fails against the before-the-change state: 0 pass / 4 fail (sentinel vendor-HEAD mismatch, build/pack lanes, pinned-bytes loop, F1 test). Note: the vendored db is depth-1, so the pre-bump boundary-manifest blob is unresolvable from vendor (the pre-bump pin never shipped that object); the mechanical_count 40 (paths 50) pre-bump value is byte-proven instead from the full skills-repo history (mechanical-count-40-vs-42.log): 26d25105 -> 40, 28f813bf -> 42.",
+      "log": ".omc/plans/receipts-c02-20261010/red3b-prebump-lock-flip.log"
+    }
+  ],
+  "green": [
+    {
+      "id": "green1",
+      "command": "node --test test/contract-drift.test.js",
+      "exit_code": 0,
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "reason": "Same command as red1: the sweep module exists and passes all ten AC-8 tests (fresh all-match ok; loaded-cache absent skip; one-byte mutation failure naming path/expected/actual for vendored, each dist harness, marketplace, loaded-cache installPath with both refresh hints, codex cache, opencode skills; northstar/ key resolution; tampered northstar v2 copy fails producer/consumer fingerprint parity).",
+      "log": ".omc/plans/receipts-c02-20261010/green1-contract-drift-module.log"
+    },
+    {
+      "id": "green3",
+      "command": "node --test test/readiness-delivery.test.js",
+      "exit_code": 0,
+      "tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "reason": "Same command as red3a/red3b at the bound state: sentinel bytes, build/pack/install delivery, the v1+v2 pinned-bytes lane (including the npm pack tarball carrying dist/<harness>-plugin flat payloads byte-identical to lock) and the amended F1 fixture-delta test all pass.",
+      "log": ".omc/plans/receipts-c02-20261010/green3-fixture-delta-bound.log"
+    },
+    {
+      "id": "diff-check",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "verification": {
+    "allowlist": [
+      "npm test",
+      "git diff --check"
+    ],
+    "npm_test": {
+      "command": "npm test",
+      "environment_disclosure": "Executed with HOME, CODEX_HOME and XDG_CONFIG_HOME pointed at fresh temp directories under $TMPDIR/opencode (ach-c02-verify.*), created solely for the verification run. Rationale: the out-of-scope pre-existing test/finish-prompt.test.js drift-guard stub-probe runs `node bin/ai-catapult.js install` with the real environment inside npm test; with the AC-8 sweep active on a machine whose installed plugin lags the pin (the state registered AC[4] declares expected until the end-of-programme release), that probe correctly exits non-zero and the probe misreads it as an install stub, failing its forthcoming-marker assertion against exactly one test. Sanitized env is the hygiene standard AC[2] prescribes for install-related tests ('uses temporary HOME and CODEX_HOME fixtures, never the real home') and matches what a fresh CI runner presents. No test file was edited; no AC was weakened; the collision is flagged in the PR body for review and a follow-up ticket (give the drift-guard probe a temp HOME).",
+      "exit_code": 0,
+      "tests": 268,
+      "passed": 268,
+      "failed": 0,
+      "note": "268 = 256-test baseline at 26d25105 (baseline-npm-test-26d25105.log) + 12 tests this goal adds (10 contract-drift + the v2 pinned-bytes packaged-lane test + the amended F1 fixture-delta test).",
+      "log": ".omc/plans/receipts-c02-20261010/npm-test-verification-sanitized-home.log"
+    },
+    "unsanitized_disclosure_run": {
+      "command": "npm test (real home)",
+      "exit_code": 1,
+      "failing_tests": 1,
+      "failing_test": "finish-prompt drift-guard: if install is still a stub, prompt must contain forthcoming-marker (test/finish-prompt.test.js:390 — out of registered scope, unmodified)",
+      "reason": "The sweep's AC-8 behaviour on the real machine: the only drifted surface is the loaded cache resolved from ~/.claude/plugins/installed_plugins.json installPath (~/.claude/plugins/cache/ai-catapult/ai-catapult/0.4.3 — the published marketplace payload, pre-bump bytes: no readiness-dependency-v2.json, v1 manifest sha 0d0ac7e7... vs pinned e95f145f...), whose lag registered AC[4] explicitly declares expected and report-only. All other surfaces were ok. See also the standalone probe capture.",
+      "logs": [
+        ".omc/plans/receipts-c02-20261010/npm-test-full-green.log",
+        ".omc/plans/receipts-c02-20261010/real-home-install-probe.log"
+      ]
+    },
+    "ac4_machine_report_pre_merge_capture": {
+      "note": "AC[4] report-only data captured at the probe run (never authoritative): vendored pin 28f813bf manifests, marketplace/codex/opencode surfaces refreshed ok by the install, loaded cache at 0.4.3 lags with refresh commands 'claude plugin marketplace update' and 'claude plugin update' printed.",
+      "log": ".omc/plans/receipts-c02-20261010/real-home-install-probe.log"
+    }
+  },
+  "determinism": {
+    "basis": "Coordinator delegation decision PARALLEL-LANES.md 2026-10-10T04:31Z condition (1): prove delta determinism with two independent regen runs at re-verified pins.",
+    "pins_reverified": {
+      "catapult_origin_main": "2b63eb4ca3eef6ef9ecb5b47cbfbb616ea9a9ca1",
+      "skills_origin_main": "28f813bf9fd767960b96e9d54857964de8181a53",
+      "ls_remote_at": "2026-10-10T04:37:07Z",
+      "log": ".omc/plans/receipts-c02-20261010/pin-freshness-at-determinism.txt"
+    },
+    "runs": [
+      {
+        "id": "run1",
+        "command": "PYTHONDONTWRITEBYTECODE=1 npm run regen:fixture",
+        "exit_code": 0,
+        "log": ".omc/plans/receipts-c02-20261010/determinism-run1.log"
+      },
+      {
+        "id": "run2",
+        "command": "PYTHONDONTWRITEBYTECODE=1 npm run regen:fixture (after git clean -fd + git checkout -- of the fixture, porcelain verified 0)",
+        "exit_code": 0,
+        "log": ".omc/plans/receipts-c02-20261010/determinism-run2.log"
+      }
+    ],
+    "delta_porcelain_both_runs": "exactly: M test/fixtures/init-standalone/.ai/workflows/repo-workflow.json; ?? .ai/knowledge/; ?? .ai/policies/readiness-policy.json",
+    "delta_digests": {
+      "test/fixtures/init-standalone/.ai/policies/readiness-policy.json": "8b192952a445abb6e6b3e264c6e312998863683156397414837aef17b2e7da55",
+      "test/fixtures/init-standalone/.ai/knowledge/registry.json": "fa35ebcc2996d4a606fc58207a8230ebdbd210d490747d5d2fcbfc019551b412",
+      "test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test/fixtures/init-standalone/.ai/workflows/repo-workflow.json": "d64721df3dd786427d5e3555976739a1a1c8e5ed5e76aa509bad808568ca4e3c"
+    },
+    "byte_identical_proof": "diff of the two runs' digest lines is empty (determinism-run1.txt vs determinism-run2.txt); run #2's tree kept as the binding state.",
+    "no_hand_editing": "All four fixture paths are pure regen output; no fixture byte was hand-edited at any point."
+  },
+  "amendment_receipt": {
+    "basis_log": "PARALLEL-LANES.md (workspace repo .omc/handoffs/ach-20261004/)",
+    "entries_cited_verbatim": {
+      "2026-10-10T04:18Z": "Option 1 (fixture-scope amendment) granted to ACH-C-02; C-03 stays dispatched-await; attempt budget unchanged (2 of 3).",
+      "2026-10-10T04:31Z": "SOLE COORDINATOR DECISION — ACH-C-02 fixture-scope amendment. AMENDED regen:fixture delta = readiness-policy.json + .ai/knowledge/registry.json + .ai/knowledge/entries/.gitkeep + repo-workflow.json (+#105 local_ci {surfaces:[], sole_source_of_truth:false}), all under test/fixtures/init-standalone/.ai/; boundary-manifest mechanical entries 40->42 (not 41). Conditions: (1) two-run determinism proof with digests in receipts; (2) use the repo's own amendment primitive if the tooling documents one, else record a coordinator-decision receipt in evidence + PR body quoting this entry; (3) the 40->42 correction gets its own honest red->green leg; (4) if tooling refuses admission over the widened scope, STOP immediately — never weaken scope, never hand-edit fixture bytes."
+    },
+    "tooling_recon": "No goal-scope amendment primitive exists in the contract tooling: the vendored contract-run-v2.sh header states 'Unknown arguments exit 2. No text, flag or variable maps to a waiver.', and the only 'amendment' surface (observer.py policy-amendment mode) publishes policy, not goal scope. Condition (2) else-branch therefore applies: this receipt, plus the same citation in the PR body.",
+    "fixture_delta_implemented": [
+      "+ test/fixtures/init-standalone/.ai/policies/readiness-policy.json (registered F1 file, moved from C-03)",
+      "+ test/fixtures/init-standalone/.ai/knowledge/registry.json (amended)",
+      "+ test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep (amended; .gitkeep count 4 -> 5)",
+      "M test/fixtures/init-standalone/.ai/workflows/repo-workflow.json (amended; #105 local_ci {surfaces: [], sole_source_of_truth: false})"
+    ],
+    "template_invariants_preserved": "readiness-policy/2 schema, identity_model multi, approval.accept [agent-self, ssh-tag, in-session], approval.default_mode agent, approval.anchor_sha256 null, required_checks [] and repository.id rendered from the canonical regen input example-repo are all asserted verbatim by the pinned F1 test."
+  },
+  "mechanical_count_correction": {
+    "registered_value": "F1 said boundary-manifest mechanical entries go 40 to 41",
+    "byte_verified_truth": "40 (paths 50) at lock 26d25105, 42 (paths 52) at the pinned 28f813bf — the knowledge-registry template (#121) and the readiness-policy template (#102) are both already ancestors at the goal's own anchor",
+    "correction_authority": "the same 2026-10-10T04:31Z SOLE COORDINATOR DECISION",
+    "own_red_green_leg": "red3a (fixture-delta red pre-binding) + red3b (pre-bump lock flip, 0/4) + green3 (4/4 at binding); the test additionally pins mechanical_count == 42 and vendored == locked so any future regression to 41 fails (forward cross-bind)",
+    "log": ".omc/plans/receipts-c02-20261010/mechanical-count-40-vs-42.log"
+  },
+  "local_ci_rebinding": {
+    "file": ".ai/ci/local-ci.json",
+    "schema": "local-ci/2",
+    "changed_declared_sources": {
+      "skills.lock.json": "530c153bd1bc75ab8e3e94e40e5a21afa1a53150c492a94c9c472e7b191417e6 -> 96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb",
+      "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302 -> ceea75c9922889acbef853274a7031f45438d6c5b7bf9e24c3b5bb1ce90a32ae"
+    },
+    "authorization_class": "goal 13f85bb's standing authorization to re-bind legitimately changed hash-bound sources; both changed sources were changed by this goal itself (lock bump; leg-carrying test file). Always re-reviewed and re-certified: post-rebind verification recomputed every declared digest — 24 sources + 2 workflows, zero mismatches against the tree.",
+    "workspace_object_preserved_exactly": {
+      "bootstrap": [
+        "bash setup.sh"
+      ],
+      "dependencies": [
+        "vendor"
+      ],
+      "outputs": [
+        "dist",
+        "dist-snapshot"
+      ]
+    },
+    "verification_preserved": [
+      "npm test"
+    ],
+    "diff": "exactly 2 lines changed"
+  },
+  "tests": {
+    "command": "npm test",
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 268,
+    "skipped": 0,
+    "tests": 268,
+    "environment": "sanitized temp HOME/CODEX_HOME/XDG_CONFIG_HOME (disclosure in verification.npm_test)"
+  },
+  "provenance": {
+    "worktree": "/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/opencode/ach-c02-wt (worktree only; local ai-catapult/ checkout untouched)",
+    "catapult_base": "origin/main 2b63eb4ca3eef6ef9ecb5b47cbfbb616ea9a9ca1",
+    "skills_pin_target": "28f813bf9fd767960b96e9d54857964de8181a53",
+    "skills_pin_old": "26d25105b028903ea1b34aebe9fbf4595b550051",
+    "o8_accepted_release": "f5e338b92bb754c2bfffdf542b498530258fdbc0 (verified ancestor among the batch)",
+    "skills_sha_required_in_pr_body": "28f813bf9fd767960b96e9d54857964de8181a53",
+    "regen_canonical_inputs": {
+      "repo_id": "example-repo",
+      "date": "2026-01-01",
+      "upstream_url": "https://github.com/example-org/example-repo.git",
+      "upstream_ref": "main"
+    },
+    "dist_snapshot_note": "dist/ and dist-snapshot/ are gitignored generated artifacts regenerated by scripts/prepare-dist.sh against the bumped vendor (northstar SKILL.md 5373 -> 5688 bytes verified post-refresh); they are machine-local bootstrap outputs, rebuilt fresh by CI, and are not PR files."
+  },
+  "inventory": {
+    "registered_scope_files": [
+      "skills.lock.json",
+      "src/install.js",
+      "src/contract-drift.js",
+      "test/contract-drift.test.js",
+      "test/readiness-delivery.test.js",
+      ".ai/ci/local-ci.json",
+      ".ai/evidence/ACH-C-02.json",
+      "test/fixtures/init-standalone/.ai/policies/readiness-policy.json"
+    ],
+    "amendment_fixture_paths": [
+      "test/fixtures/init-standalone/.ai/knowledge/registry.json",
+      "test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep",
+      "test/fixtures/init-standalone/.ai/workflows/repo-workflow.json"
+    ],
+    "unique_file_count": 11,
+    "out_of_scope_files_touched": [],
+    "excluded_files_untouched": [
+      "scripts/regen-fixture.sh",
+      "src/scaffold.js",
+      "test/init.test.js",
+      "test/packed-init.test.js",
+      "src/knowledge.js",
+      "bin/ai-catapult.js",
+      "test/knowledge-contract.test.js"
+    ]
+  },
+  "limits": [
+    "Local RED/GREEN and the full npm test are not hosted CI, exact merge admission, installed-lane evidence or live authority.",
+    "The sanitized-HOME execution of the verification suite is disclosed above; it re-produces the fresh-CI environment class and is not a weakening of AC-8, which is additionally proven live on the real machine by the disclosure run.",
+    "The loaded-cache lag on this machine is the state AC[4] declares expected; the post-merge report-only lane records it without assuming a current installed version.",
+    "The pre-bump lock bytes are not readable from the depth-1 vendored db; the 40-count pre-bump value is byte-proven from the full skills-repo history receipt instead.",
+    "The packed pinned-bytes test asserts the real tarball shape (dist/<harness>-plugin flat payloads); the earlier invented top-level skills/ shape was corrected inside this goal's own in-scope test file before first green and is disclosed here.",
+    "No commit, push, tag, merge, release, readiness context or provider change is performed by this evidence."
+  ]
+}
