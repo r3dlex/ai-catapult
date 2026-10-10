@@ -31,13 +31,16 @@
  *   `locked` naming it, and only `unlock <id> --confirm-no-writer` removes it
  *   (claimed by an atomic rename and re-validated first, ledgered). Nothing
  *   removes a lock automatically.
- * - Ledgers. A record is committed by its trailing newline, written whole or
- *   not at all (short writes retried; a failure truncates the uncommitted
- *   bytes before any caller acts). publish.py's ledger_lines fails on any
- *   damaged line; here an interrupted tail is repaired by the next append on
- *   its own line (fragment + knowledge-ledger-repair/1 record, committed by
- *   one newline, so recovery is restartable at every byte), and unlock never
- *   reads the lock-event ledger, so no damaged audit line blocks recovery.
+ * - Ledgers. publish.py appends every audit to a JSONL file. Here the
+ *   contract's archive ledgers (.ai/knowledge/migration/*.jsonl) stay JSONL;
+ *   they have one appender at a time (archive runs serialized), a record is
+ *   committed by its trailing newline and written whole, and an interrupted
+ *   tail is repaired by the next append on its own line (fragment +
+ *   knowledge-ledger-repair/1 record under one newline), so recovery restarts
+ *   at any byte. Lock events, whose writers (unlocks) run concurrently, are
+ *   one file each under .ai/knowledge/lock-events/, published atomically by
+ *   link(): no shared tail, no partial record. Unlock never reads them, so no
+ *   damaged audit blocks lock recovery.
  * - Secret patterns. JavaScript has no leading inline-flag group and Node
  *   rejects the policy's `(?i)`, so compileSecretPattern turns it into the i
  *   flag. Every pattern compiles with u, for Python's code-point semantics.
@@ -59,6 +62,7 @@ import {
   fstatSync,
   fsyncSync,
   ftruncateSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -685,7 +689,8 @@ function cmdSerialize(root, args) {
 // sha256 of the frozen contract.lock.json: the lock cannot pin itself.
 export const CONTRACT_LOCK_SHA256 = '9f5d7edfc17554c383b06aa4726dfffe564ecc8d657b16baa89ce72098d5e102';
 export const PROFILE_FILE = '.ai/init/repo-profile.json';
-export const LOCK_EVENTS = '.ai/knowledge/lock-events.jsonl';
+// One file per lock event (see recordLockEvent), not a shared JSONL tail.
+export const LOCK_EVENTS_DIR = '.ai/knowledge/lock-events';
 export const MIGRATION_LEDGER = '.ai/knowledge/migration/ledger.jsonl';
 export const CONFIRMATIONS = '.ai/knowledge/migration/confirmations.jsonl';
 // Operator-supplied archive run manifest (publish.py reads the same variable).
@@ -1183,7 +1188,9 @@ function ledgerLine(value) {
 }
 
 /**
- * Append one record, durably and whole. An interrupted record left at the
+ * Append one record to a JSONL ledger with one appender at a time (the
+ * archive ledgers: archive runs serialized), durably and whole. An
+ * interrupted record left at the
  * tail is repaired first, on its own line: the repair record is written right
  * after the fragment and the newline that follows commits both at once, so a
  * crash at any byte leaves either an uncommitted tail (repaired by the next
@@ -1490,16 +1497,52 @@ export function planUnlock(root, identity) {
 }
 
 /**
+ * Ledger one lock event as its own file, whole or not at all: written to a
+ * unique temporary file (every byte, then fsync), then published under a
+ * unique name with link(), which is atomic and never replaces. Concurrent
+ * unlocks therefore never share a tail, and a short write or a crash leaves
+ * only an ignored temporary file, never a partial record. Names sort by time.
+ */
+function recordLockEvent(root, event, seq) {
+  const directory = writerPath(root, LOCK_EVENTS_DIR);
+  mkdirSync(directory, { recursive: true });
+  const name = `${event.at.replace(/[-:.]/g, '')}-${event.run_id}-${String(seq).padStart(2, '0')}.json`;
+  const final = writerPath(root, `${LOCK_EVENTS_DIR}/${name}`);
+  const temp = writerPath(root, `${LOCK_EVENTS_DIR}/.${name}.${randomUUID()}.tmp`);
+  const bytes = Buffer.from(canonical(event), 'utf8');
+  try {
+    const fd = openSync(temp, 'wx');
+    try {
+      for (let written = 0; written < bytes.length;) {
+        const count = writeSync(fd, bytes, written, bytes.length - written);
+        if (count <= 0) throw new Error(`short lock-event write: ${written} of ${bytes.length} bytes`);
+        written += count;
+      }
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    linkSync(temp, final);
+  } finally {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // Nothing was created, or it is already gone.
+    }
+  }
+}
+
+/**
  * Remove exactly the planned lock incarnations, each claimed exclusively
  * first: prepared is ledgered before, applied after; a lost race ledgers
- * failed and fails lock_changed.
+ * failed and fails lock_changed. Unlock never reads the lock events, so no
+ * damaged audit file can block lock recovery.
  */
 export function executeUnlock(root, identity, targets) {
   if (!targets.length) throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
-  // Unlock only appends: it never needs the audit's content, so a damaged
-  // ledger line can never block lock recovery.
-  const ledger = ledgerPath(root, LOCK_EVENTS);
   const runId = randomUUID();
+  let seq = 0;
+  const ledger = (event) => recordLockEvent(root, event, (seq += 1));
   let applied = null;
   for (const { relative, snapshot } of targets) {
     const prepared = {
@@ -1513,7 +1556,7 @@ export function executeUnlock(root, identity, targets) {
       result: 'prepared',
     };
     // A durable intent precedes removal.
-    appendEvent(ledger, prepared);
+    ledger(prepared);
     const claimRelative = claimLockRel(identity);
     try {
       claimLock(root, relative, claimRelative, snapshot);
@@ -1523,12 +1566,12 @@ export function executeUnlock(root, identity, targets) {
     } catch (error) {
       const failed = { ...prepared, at: now(), result: 'failed' };
       if (existsSync(writerPath(root, claimRelative))) failed.claim_path = claimRelative;
-      appendEvent(ledger, failed);
+      ledger(failed);
       throw lockChanged(error);
     }
     applied = { ...prepared, at: now(), result: 'applied' };
     try {
-      appendEvent(ledger, applied);
+      ledger(applied);
     } catch (error) {
       // A failed final audit restores the marker where it was.
       const restored = writerPath(root, relative);
