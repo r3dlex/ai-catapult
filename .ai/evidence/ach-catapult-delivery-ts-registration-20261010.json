@@ -1,0 +1,188 @@
+{
+  "carried_goals": [
+    "ACH-C-03",
+    "ACH-C-04",
+    "ACH-C-06"
+  ],
+  "generation": "4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+  "goal_id": "ACH-C-03",
+  "limits": [
+    "Planning publication only: no approval was requested, minted or implied; execution needs the successor own future tag approval/ach-catapult-delivery-ts/4407a0464bef for this exact generation.",
+    "Local red/green, digests and classifications are lane evidence, not hosted CI, readiness-context admission, merge certification or live authority.",
+    "The predecessor generation, its registry entry and its approval tag remain byte-unchanged.",
+    "The plan-scoped spec copy is byte-unchanged and stays bound to the retained predecessor as well.",
+    "No version, tag or npm fact is produced or inferred; ACH-C-06 carries the 0.4.4 no-tag/no-publish timing clause verbatim.",
+    "No root-workspace repository or root-side spec was touched; the carried umbrella_spec pin is the predecessor planning-time pin and the observed current root digest is recorded in the bundle plan_amendments.",
+    "The evidence file is the registration record; the future ACH-C-03 execution lane owns .ai/evidence/ACH-C-03.json."
+  ],
+  "migration": {
+    "a2_wave": "PR #61 (repo-wide JS -> strict TypeScript rename)",
+    "base": "ab539496ddd39908879d74a017a7a8720a984018",
+    "dropped_dependencies": [
+      {
+        "dependency": "ACH-C-02",
+        "goal": "ACH-C-03",
+        "reason": "delivered by PR #57; cross-plan edges are not expressible in a bundle"
+      },
+      {
+        "dependency": "ACH-C-05",
+        "goal": "ACH-C-06",
+        "reason": "delivered by PR #54; cross-plan edges are not expressible in a bundle"
+      }
+    ],
+    "goal_revisions_v2": {
+      "ACH-C-03": "204fa565a6fdfb63946055cb31bc6fc16542547e6da84a89623a24b38d0f808a",
+      "ACH-C-04": "69288253723524448e30abeff275731c09203c3b3313818418206b4f85e01fee",
+      "ACH-C-06": "f936135cfb601db89ee5127a3d54f5a59123bab3b88ec0f6befebc67f255e88b"
+    },
+    "tokens_migrated": {
+      "ACH-C-03": {
+        "scripts/regen-fixture.sh": "scripts/regen-fixture.ts",
+        "src/scaffold.js": "src/scaffold.ts",
+        "test/init.test.js": "test/init.test.ts",
+        "test/packed-init.test.js": "test/packed-init.test.ts"
+      },
+      "ACH-C-04": {
+        "bin/ai-catapult.js": "bin/ai-catapult.ts",
+        "src/backfill.js": "src/backfill.ts",
+        "test/backfill.test.js": "test/backfill.test.ts"
+      },
+      "ACH-C-06": {
+        "build-codex-plugin.sh": "build-codex-plugin.ts",
+        "build-opencode-plugin.sh": "build-opencode-plugin.ts",
+        "scripts/build-*-plugin.sh": "scripts/build-*-plugin.ts",
+        "scripts/build-claude-plugin.sh": "scripts/build-claude-plugin.ts",
+        "scripts/publish-both.sh": "scripts/publish-both.ts",
+        "scripts/release-context.sh": "scripts/release-context.ts",
+        "test/claude-plugin.test.js": "test/claude-plugin.test.ts",
+        "test/codex-plugin.test.js": "test/codex-plugin.test.ts",
+        "test/release-0.4.3.test.js": "test/release-0.4.3.test.ts",
+        "test/release-0.4.4.test.js": "test/release-0.4.4.test.ts",
+        "test/version.test.js": "test/version.test.ts"
+      }
+    }
+  },
+  "plan_id": "ach-catapult-delivery-ts",
+  "predecessor": {
+    "delivered_goals": {
+      "ACH-C-01": "PR #53",
+      "ACH-C-02": "PR #57",
+      "ACH-C-05": "PR #54"
+    },
+    "generation": "0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0",
+    "plan_id": "ach-catapult-delivery",
+    "publication": "planning PR r3dlex/ai-catapult#52, merge 959accce9fc04412f1e0f31f866685a101a1e588",
+    "retained_files_sha256": {
+      "goals.json": "4dab06e6b9d98a34af0fd2fd9bcfc210b8a9eb9b6c67d14612347a37ef6496fd",
+      "graph.json": "3e1cf54a7d1089d5fb564468b0777a7c5c09c1172f6b8b2c56defbd8b49efa77",
+      "handoff.md": "d428e2e0c1cf951c4fb151ff963ecb4e2b72cc6fe7007af19eb97abcb1ad39b6",
+      "policy-candidate.json": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "sidecar.json": "f1352a72c5aeea2265a6a61861e681a8e421d6f89781211bf355b06f31660db7"
+    },
+    "supersession": "add-only: the predecessor registry entry and generation bytes are retained unmodified; the remaining chain (ACH-C-03/04/06) moves to plan ach-catapult-delivery-ts with only A2-invalidated path/mechanism facts corrected; its approval tag is untouched",
+    "why_add_not_replace": "the pinned publish-v2 replay rule refuses replacing a plan registry entry while that plan has merged or open goal PRs; ach-catapult-delivery has merged goal PRs 53, 54 and 57 (observer.busy_as_of -> [53, 54, 57], pinned driver 28f813bf); the compliant corrected-scope vehicle is a fresh plan (workspace precedents PR #130/#132)"
+  },
+  "publication": {
+    "artifact_sha256": {
+      "goals.json": "327ea33c20071ab519a289b61aef7ee164d7601768b9837252878e3559fd4081",
+      "graph.json": "8bb5454efeee13a3356ea62459914ea786beb4d4eca96347225139f6059af80b",
+      "handoff.md": "b3e16509a80bbe046266d26ae4db23addf91ff3a82cd53ab12d926455a34a91e",
+      "sidecar.json": "4f0fe6dea8dff5844998c4dfb93403aee942db13972137f0beefd0bee0778bb4"
+    },
+    "command": "bash vendor/skills/02-govern-plan/northstar/handoff-write.sh --root . --bundle <authored goals.json> --sidecar <authored sidecar.json> --target main (publish-v2 --admit-planning, pinned vendor 28f813bf)",
+    "entry": {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "generation": "4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "id": "northstar-plan-ach-catapult-delivery-ts",
+      "mode": "live",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/admission-complete-handoffs-ach-catapult-delivery.md",
+        "sha256": "45c3c274d9c891bd1bb49c3d08e520f926d0d6f9f5eb815977d5efa6fc5f1ccd"
+      },
+      "status": "active"
+    },
+    "gaps": {
+      "approval": 5,
+      "blocking": 0,
+      "deferred": 8
+    },
+    "log": {
+      "receipt": ".omc/plans/receipts-c03-replan-20261010/evidence/publication.log",
+      "sha256": "f05fab9409838ad2b1d6d0a6fba7fc84af4ebca1ce1edfc4baff8cac818820fc"
+    },
+    "planning_complete": true,
+    "provenance": "source-lane",
+    "schema": "northstar-publication/2",
+    "target": "refs/remotes/origin/main",
+    "target_revision": "ab539496ddd39908879d74a017a7a8720a984018"
+  },
+  "record": "successor registration (add-only) for ACH-C-03 of plan ach-catapult-delivery \u2014 the remaining A2-migrated chain is carried by the fresh plan ach-catapult-delivery-ts",
+  "reserved_path_disposition": {
+    "no_committed_pin_test": "while tswc-ac-b1/b3/b4/b5 are active their `test` scope entries make any non-goal PR touch of test/** a v2_scope_outside_goal refusal (active_scopes query with the pinned driver on 2026-10-10: 76 active scope entries; the four named goals match test/ach-catapult-delivery-ts.test.ts). The pre-change goal evidence path .ai/evidence/ACH-C-03.json is likewise inside the active predecessor ACH-C-03 scope and is intentionally not touched. The lane-local pin-check and this record carry the assertions; a durable in-repo pin test belongs to a future goal PR of this plan.",
+    "paths_touched": {
+      ".ai/evidence/ach-catapult-delivery-ts-registration-20261010.json": "no active scope match (this record)",
+      ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/{goals.json,graph.json,handoff.md,sidecar.json}": "fixed reserved; added by the pinned publisher",
+      ".ai/traceability/graph.json": "free planning path; additive nodes/edges only",
+      ".ai/workflows/northstar-readiness-v2.json": "fixed reserved; exact publish-v2 replay (classified)"
+    }
+  },
+  "verification": {
+    "classified": {
+      "at_publication_commit": {
+        "diff_head": "5cd00f751f0aa4ebe225a9ba4b923cbc2f03ca08",
+        "head": "5cd00f751f0aa4ebe225a9ba4b923cbc2f03ca08",
+        "lane": "publish-v2-replay",
+        "notices": [],
+        "refusals": []
+      },
+      "driver": "observer.non_goal_lane (pinned 28f813bf), production gh for the active-scope lookup",
+      "note": "the final-head re-run is recorded in .omc/plans/receipts-c03-replan-20261010/evidence/classify-final.log"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "exit_code": 0,
+      "log": {
+        "receipt": ".omc/plans/receipts-c03-replan-20261010/evidence/diff-check.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "generation_recomputed": "generation_v2(bundle_sha256, spec_sha256, policy_sha256, anchor_sha256) == 4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+    "pin_check": {
+      "green": {
+        "command": "node .omc/plans/receipts-c03-replan-20261010/pin-check.mjs <registration worktree>",
+        "exit_code": 0,
+        "failing_checks": 0,
+        "log": {
+          "receipt": ".omc/plans/receipts-c03-replan-20261010/evidence/pin-green.log",
+          "sha256": "d129b13f62c0f3839f74d27f208081b4c97babb1f97aacf9e7917fd3636eb759"
+        },
+        "state": "published registration worktree"
+      },
+      "red": {
+        "command": "node .omc/plans/receipts-c03-replan-20261010/pin-check.mjs <pre-change checkout>",
+        "exit_code": 1,
+        "failing": [
+          "exactly one successor entry :: found 0",
+          "post-change successor registered and its C-03 scope validates against the TS base"
+        ],
+        "failing_checks": 2,
+        "log": {
+          "receipt": ".omc/plans/receipts-c03-replan-20261010/evidence/pin-red.log",
+          "sha256": "345ea8dca329487071031ca2add3775a02dd14105c7b0293998ba05af83140db"
+        },
+        "observed": "the registered pre-change ACH-C-03 scope names four paths absent from the TS base (src/scaffold.js, scripts/regen-fixture.sh, test/init.test.js, test/packed-init.test.js)",
+        "state": "pre-change checkout of ab539496ddd39908879d74a017a7a8720a984018"
+      },
+      "script": ".omc/plans/receipts-c03-replan-20261010/pin-check.mjs (lane-local, not committed \u2014 see reserved_path_disposition)"
+    },
+    "suite": {
+      "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot npm test",
+      "log": {
+        "receipt": ".omc/plans/receipts-c03-replan-20261010/evidence/npm-test.log",
+        "sha256": "a020119bdf18f46d4f7d1ebe26a5f954811727e294c16bc5be94f1983403ce4d"
+      },
+      "result": "exit 0 \u2014 336 tests / 336 pass / 0 fail (log retained)"
+    }
+  }
+}
