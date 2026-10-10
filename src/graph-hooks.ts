@@ -1,5 +1,5 @@
 /**
- * graph-hooks.js — `ai-catapult graph-hooks install <target>` subcommand.
+ * graph-hooks.ts — `ai-catapult graph-hooks install <target>` subcommand.
  *
  * Wires git hooks (post-commit, post-checkout) and copies the graph-refresh
  * wrapper script into a target repo. Reads templates from the vendored
@@ -7,7 +7,7 @@
  * graph-automation/ in dev; dist/skill-templates/graph-automation/ in the
  * published tarball).
  *
- * Safety patterns mirror src/install.js:
+ * Safety patterns mirror src/install.ts:
  *   - --dry-run: early-return before any writes
  *   - non-git target: exit 1 with clear message
  *   - marker-managed idempotence in hook files
@@ -42,11 +42,8 @@ const MARKER_END = '# END ai-catapult graph-hooks';
 /**
  * Resolve the hooks directory for a git repo, honoring core.hooksPath.
  * Mirrors graphify's _hooks_dir() pattern.
- *
- * @param {string} repoRoot - absolute path to the git repo root
- * @returns {string} absolute path to the hooks directory
  */
-function resolveHooksDir(repoRoot) {
+function resolveHooksDir(repoRoot: string): string {
   const result = spawnSync('git', ['-C', repoRoot, 'config', 'core.hooksPath'], {
     encoding: 'utf8',
   });
@@ -64,11 +61,8 @@ function resolveHooksDir(repoRoot) {
 /**
  * Install or update the ai-catapult marker block inside a hook file.
  * Preserves any pre-existing content outside the markers (idempotent replace).
- *
- * @param {string} hookPath  - absolute path to the hook file
- * @param {string} blockBody - content to place between the markers (no trailing newline needed)
  */
-function installMarkerBlock(hookPath, blockBody) {
+function installMarkerBlock(hookPath: string, blockBody: string): void {
   let existing = '';
   if (existsSync(hookPath)) {
     existing = readFileSync(hookPath, 'utf8');
@@ -76,11 +70,11 @@ function installMarkerBlock(hookPath, blockBody) {
 
   const block = `${MARKER_START}\n${blockBody}\n${MARKER_END}\n`;
 
-  let updated;
+  let updated: string;
   if (existing.includes(MARKER_START)) {
     // Replace the existing marker block (idempotent)
     const re = new RegExp(
-      escapeRegExp(MARKER_START) + '[\\s\\S]*?' + escapeRegExp(MARKER_END) + '\\n?',
+      `${escapeRegExp(MARKER_START)}[\\s\\S]*?${escapeRegExp(MARKER_END)}\\n?`,
     );
     updated = existing.replace(re, block);
   } else {
@@ -91,7 +85,7 @@ function installMarkerBlock(hookPath, blockBody) {
       // Find the end of the first line (shebang or first content)
       const firstNewline = existing.indexOf('\n');
       if (firstNewline === -1) {
-        updated = existing + '\n' + block;
+        updated = `${existing}\n${block}`;
       } else {
         updated = existing.slice(0, firstNewline + 1) + block + existing.slice(firstNewline + 1);
       }
@@ -102,7 +96,7 @@ function installMarkerBlock(hookPath, blockBody) {
   chmodSync(hookPath, 0o755);
 }
 
-function escapeRegExp(s) {
+function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -111,11 +105,9 @@ function escapeRegExp(s) {
  * looking for a directory that contains both scripts/graph-refresh.sh and .git.
  * Stops when reaching $HOME or the filesystem root.
  *
- * @param {string} startDir - directory whose PARENT is the first candidate
- * @param {string} home     - path to stop at (exclusive)
- * @returns {string|null}   ancestor path if found, null otherwise
+ * @returns ancestor path if found, null otherwise
  */
-function findAncestorWrapper(startDir, home) {
+function findAncestorWrapper(startDir: string, home: string): string | null {
   let dir = dirname(startDir);
   while (dir !== home && dir !== dirname(dir)) {
     if (
@@ -134,11 +126,8 @@ function findAncestorWrapper(startDir, home) {
 /**
  * Strip a leading shebang line from a shell template string.
  * Avoids embedding a duplicate shebang inside the marker block.
- *
- * @param {string} content - raw file content
- * @returns {string}
  */
-function stripLeadingShebang(content) {
+function stripLeadingShebang(content: string): string {
   if (content.startsWith('#!')) {
     const firstNewline = content.indexOf('\n');
     if (firstNewline !== -1) {
@@ -174,18 +163,19 @@ Options:
   --dry-run                      Print what would happen without writing any files
   -h, --help                     Show this help`;
 
+type GraphHookFlags = Map<string, string | boolean>;
+
 /**
- * Main graph-hooks install handler.
- * @param {string[]} argv - arguments after "graph-hooks install" (already sliced)
- * @param {string} templatesDir - resolved path to the templates directory
+ * Parse `graph-hooks install` flags: `--key value`, `--bool`, `-x` short
+ * flags, and a `--` positional stop.
  */
-export function runGraphHooksInstall(argv, templatesDir) {
-  // Parse flags
-  const flags = new Map();
-  const positionals = [];
+function parseGraphHookArgs(argv: string[]): { flags: GraphHookFlags; positionals: string[] } {
+  const flags: GraphHookFlags = new Map();
+  const positionals: string[] = [];
   let i = 0;
   while (i < argv.length) {
     const arg = argv[i];
+    if (arg === undefined) break; // unreachable: loop guard ensures a defined arg
     if (arg === '--') { positionals.push(...argv.slice(i + 1)); break; }
     if (arg.startsWith('--')) {
       const key = arg.slice(2);
@@ -205,31 +195,29 @@ export function runGraphHooksInstall(argv, templatesDir) {
       i += 1;
     }
   }
+  return { flags, positionals };
+}
 
-  if (flags.has('help') || flags.has('h')) {
-    process.stdout.write(GRAPH_HOOKS_INSTALL_HELP + '\n');
-    process.exit(0);
-  }
-
-  const dryRun = flags.has('dry-run');
-  const force = flags.has('force');
+/**
+ * Validate and resolve the --engine flag. Must be one of the allowed values
+ * (mirrors graph-automation/config.json's engine_options field). If --engine
+ * was given without a value, the flag is `true` (boolean) — also invalid.
+ */
+function resolveGraphHookEngine(flags: GraphHookFlags): string {
   const engineRaw = flags.get('engine');
-  const targetArg = positionals[0];
-  const targetDir = targetArg ? resolve(targetArg) : process.cwd();
-
-  // Validate --engine: must be one of the allowed values.
-  // Allowed set mirrors config.json's engine_options field.
-  // If --engine was given without a value, engineRaw is `true` (boolean) — also invalid.
-  const ALLOWED_ENGINES = ['graphify', 'graphwiki']; // see graph-automation/config.json engine_options
   const engine = engineRaw === undefined ? 'graphify' : String(engineRaw);
+  const ALLOWED_ENGINES = ['graphify', 'graphwiki'];
   if (engineRaw !== undefined && !ALLOWED_ENGINES.includes(engine)) {
     process.stderr.write(
       `Error: invalid --engine value: "${engine}". Must be one of: ${ALLOWED_ENGINES.join(', ')}.\n`,
     );
     process.exit(1);
   }
+  return engine;
+}
 
-  // Validate: must be a git repo
+/** Validate that targetDir is a git repo (exit 1 with message when not). */
+function ensureGitTarget(targetDir: string): void {
   const gitCheck = spawnSync('git', ['-C', targetDir, 'rev-parse', '--git-dir'], {
     encoding: 'utf8',
   });
@@ -237,11 +225,16 @@ export function runGraphHooksInstall(argv, templatesDir) {
     process.stderr.write(`Error: ${targetDir} is not a git repo (no .git found).\n`);
     process.exit(1);
   }
+}
 
-  // Ancestor-wrapper guard: refuse to install if an ancestor repo already has a
-  // wrapper (scripts/graph-refresh.sh + .git), which would mean this target is a
-  // workspace child — silently forking the graph contradicts the one-root-graph
-  // contract. Walk from the TARGET's PARENT upward, stop at $HOME / root.
+/**
+ * Ancestor-wrapper guard: refuse to install if an ancestor repo already has a
+ * wrapper (scripts/graph-refresh.sh + .git), which would mean this target is a
+ * workspace child — silently forking the graph contradicts the one-root-graph
+ * contract. Walk from the TARGET's PARENT upward, stop at $HOME / root.
+ * Honors --force with a warning line.
+ */
+function checkAncestorWrapper(targetDir: string, force: boolean): void {
   const home = process.env.HOME ?? homedir();
   const ancestorWithWrapper = findAncestorWrapper(targetDir, home);
   if (ancestorWithWrapper) {
@@ -257,8 +250,21 @@ export function runGraphHooksInstall(argv, templatesDir) {
       `Warning: proceeding despite ancestor wrapper at ${ancestorWithWrapper} (--force).\n`,
     );
   }
+}
 
-  // Load templates from the graph-automation/ subdir
+/** Resolved, substituted templates ready for writing. */
+type GraphHookTemplates = {
+  wrapperContent: string;
+  hookBodyTemplate: string;
+  harnessConfig: HarnessHooksConfig;
+  configContent: string;
+};
+
+/**
+ * Load templates from the vendored graph-automation/ subdir and substitute
+ * the {{ENGINE}} token. Exits 1 when the vendored templates are missing.
+ */
+function readGraphHookTemplates(templatesDir: string, engine: string): GraphHookTemplates {
   const gaDir = join(templatesDir, 'graph-automation');
   if (!existsSync(gaDir)) {
     process.stderr.write(
@@ -276,31 +282,38 @@ export function runGraphHooksInstall(argv, templatesDir) {
 
   // Substitute {{ENGINE}} token
   const wrapperContent = wrapperTemplate.replaceAll('{{ENGINE}}', engine);
-  const harnessConfig = JSON.parse(harnessTemplate.replaceAll('{{ENGINE}}', engine));
+  const harnessConfig = JSON.parse(harnessTemplate.replaceAll('{{ENGINE}}', engine)) as HarnessHooksConfig;
 
   // Build config.json with the chosen engine
-  const configObj = JSON.parse(configTemplate);
+  const configObj = JSON.parse(configTemplate) as Record<string, unknown>;
   configObj.engine = engine;
   const configContent = JSON.stringify(configObj, null, 2);
 
-  if (dryRun) {
-    const hooksDir = resolveHooksDir(targetDir);
-    process.stdout.write('[dry-run] No changes will be made.\n');
-    process.stdout.write(`[dry-run] Would write: ${join(hooksDir, 'post-commit')}\n`);
-    process.stdout.write(`[dry-run] Would write: ${join(hooksDir, 'post-checkout')}\n`);
-    process.stdout.write(`[dry-run] Would write: ${join(targetDir, 'scripts', 'graph-refresh.sh')}\n`);
-    process.stdout.write(`[dry-run] Would write: ${join(targetDir, 'graph-automation', 'config.json')}\n`);
-    process.stdout.write(`[dry-run] Would print: harness hook NEXT-STEPS\n`);
-    return;
-  }
+  return { wrapperContent, hookBodyTemplate, harnessConfig, configContent };
+}
 
-  // Resolve hooks directory (honors core.hooksPath)
+/** Print the dry-run plan (no writes). */
+function printDryRunPlan(targetDir: string): void {
   const hooksDir = resolveHooksDir(targetDir);
+  process.stdout.write('[dry-run] No changes will be made.\n');
+  process.stdout.write(`[dry-run] Would write: ${join(hooksDir, 'post-commit')}\n`);
+  process.stdout.write(`[dry-run] Would write: ${join(hooksDir, 'post-checkout')}\n`);
+  process.stdout.write(`[dry-run] Would write: ${join(targetDir, 'scripts', 'graph-refresh.sh')}\n`);
+  process.stdout.write(`[dry-run] Would write: ${join(targetDir, 'graph-automation', 'config.json')}\n`);
+  process.stdout.write('[dry-run] Would print: harness hook NEXT-STEPS\n');
+}
+
+/** Write git hooks, wrapper script, and graph-automation/config.json. */
+function writeGraphHookFiles(
+  targetDir: string,
+  hooksDir: string,
+  templates: GraphHookTemplates,
+): void {
   mkdirSync(hooksDir, { recursive: true });
 
   // Strip leading shebang from hook-body template before embedding in the
   // marker block — the hook file already has its own shebang at the top.
-  const hookBodyContent = stripLeadingShebang(hookBodyTemplate);
+  const hookBodyContent = stripLeadingShebang(templates.hookBodyTemplate);
 
   // Install git hooks (marker-managed)
   for (const hookName of ['post-commit', 'post-checkout']) {
@@ -312,22 +325,56 @@ export function runGraphHooksInstall(argv, templatesDir) {
   const scriptsDir = join(targetDir, 'scripts');
   mkdirSync(scriptsDir, { recursive: true });
   const wrapperPath = join(scriptsDir, 'graph-refresh.sh');
-  writeFileSync(wrapperPath, wrapperContent, 'utf8');
+  writeFileSync(wrapperPath, templates.wrapperContent, 'utf8');
   chmodSync(wrapperPath, 0o755);
 
   // Write graph-automation/config.json
   const graphAutoDir = join(targetDir, 'graph-automation');
   mkdirSync(graphAutoDir, { recursive: true });
-  writeFileSync(join(graphAutoDir, 'config.json'), configContent + '\n', 'utf8');
+  writeFileSync(join(graphAutoDir, 'config.json'), `${templates.configContent}\n`, 'utf8');
+}
+
+/**
+ * Main graph-hooks install handler.
+ * @param argv - arguments after "graph-hooks install" (already sliced)
+ * @param templatesDir - resolved path to the templates directory
+ */
+export function runGraphHooksInstall(argv: string[], templatesDir: string): void {
+  const { flags, positionals } = parseGraphHookArgs(argv);
+
+  if (flags.has('help') || flags.has('h')) {
+    process.stdout.write(`${GRAPH_HOOKS_INSTALL_HELP}\n`);
+    process.exit(0);
+  }
+
+  const dryRun = flags.has('dry-run');
+  const force = flags.has('force');
+  const targetArg = positionals[0];
+  const targetDir = targetArg ? resolve(targetArg) : process.cwd();
+
+  const engine = resolveGraphHookEngine(flags);
+  ensureGitTarget(targetDir);
+  checkAncestorWrapper(targetDir, force);
+
+  const templates = readGraphHookTemplates(templatesDir, engine);
+
+  if (dryRun) {
+    printDryRunPlan(targetDir);
+    return;
+  }
+
+  // Resolve hooks directory (honors core.hooksPath)
+  const hooksDir = resolveHooksDir(targetDir);
+  writeGraphHookFiles(targetDir, hooksDir, templates);
 
   process.stdout.write(`graph-hooks install: wired git hooks and wrapper in ${targetDir}\n`);
   process.stdout.write(`  engine: ${engine}\n`);
   process.stdout.write(`  hooks dir: ${hooksDir}\n`);
-  process.stdout.write(`  wrapper: ${wrapperPath}\n`);
-  process.stdout.write(`\n`);
+  process.stdout.write(`  wrapper: ${join(targetDir, 'scripts', 'graph-refresh.sh')}\n`);
+  process.stdout.write('\n');
 
   // Print harness NEXT-STEPS (never write to harness dirs)
-  printHarnessNextSteps(harnessConfig, engine, targetDir);
+  printHarnessNextSteps(templates.harnessConfig, engine);
 }
 
 // ---------------------------------------------------------------------------
@@ -344,14 +391,14 @@ Options:
 
 /**
  * Dispatch graph-hooks subcommands.
- * @param {string[]} argv - arguments after "graph-hooks" (already sliced)
- * @param {string} templatesDir - resolved templates directory
+ * @param argv - arguments after "graph-hooks" (already sliced)
+ * @param templatesDir - resolved templates directory
  */
-export function runGraphHooks(argv, templatesDir) {
+export function runGraphHooks(argv: string[], templatesDir: string): void {
   const sub = argv[0];
 
   if (!sub || sub === '--help' || sub === '-h') {
-    process.stdout.write(GRAPH_HOOKS_HELP + '\n');
+    process.stdout.write(`${GRAPH_HOOKS_HELP}\n`);
     process.exit(0);
   }
 
@@ -368,10 +415,41 @@ export function runGraphHooks(argv, templatesDir) {
 // NEXT-STEPS printer
 // ---------------------------------------------------------------------------
 
-function printHarnessNextSteps(harnessConfig, engine, targetDir) {
-  const claudeEntry = harnessConfig?.hooks?.claude_code;
-  const codexEntry = harnessConfig?.hooks?.codex;
+// ---------------------------------------------------------------------------
+// NEXT-STEPS printer types (harness-hooks.json shape)
+// ---------------------------------------------------------------------------
 
+type HarnessHookEntry = { event: string; command: string; description?: string };
+type ClaudeHookEntry = { config_file: string; note: string; entries?: HarnessHookEntry[] };
+type CodexHookEntry = { config_file: string; note: string; entries?: Record<string, HarnessHookEntry[]> };
+type HarnessHooksConfig = { hooks?: { claude_code?: ClaudeHookEntry; codex?: CodexHookEntry } };
+
+function printClaudeNextSteps(claudeEntry: ClaudeHookEntry): void {
+  process.stdout.write(`Claude Code — ${claudeEntry.config_file}:\n`);
+  process.stdout.write(`  ${claudeEntry.note}\n`);
+  for (const entry of claudeEntry.entries ?? []) {
+    process.stdout.write(`\n  Event: ${entry.event}\n`);
+    process.stdout.write(`  Command: ${entry.command}\n`);
+    if (entry.description) {
+      process.stdout.write(`  # ${entry.description}\n`);
+    }
+  }
+  process.stdout.write('\n');
+}
+
+function printCodexNextSteps(codexEntry: CodexHookEntry): void {
+  process.stdout.write(`Codex — ${codexEntry.config_file}:\n`);
+  process.stdout.write(`  ${codexEntry.note}\n`);
+  for (const [event, entries] of Object.entries(codexEntry.entries ?? {})) {
+    for (const entry of entries) {
+      process.stdout.write(`\n  Event: ${event}\n`);
+      process.stdout.write(`  Command: ${entry.command}\n`);
+    }
+  }
+  process.stdout.write('\n');
+}
+
+function printHarnessNextSteps(harnessConfig: HarnessHooksConfig, engine: string): void {
   process.stdout.write('── Harness hook NEXT-STEPS ─────────────────────────────────────\n');
   process.stdout.write('\n');
   process.stdout.write('The git hooks are installed. To also wire the harness hooks\n');
@@ -379,29 +457,14 @@ function printHarnessNextSteps(harnessConfig, engine, targetDir) {
   process.stdout.write('snippets to the respective config files in your repo.\n');
   process.stdout.write('\n');
 
+  const claudeEntry = harnessConfig?.hooks?.claude_code;
   if (claudeEntry) {
-    process.stdout.write(`Claude Code — ${claudeEntry.config_file}:\n`);
-    process.stdout.write(`  ${claudeEntry.note}\n`);
-    for (const entry of claudeEntry.entries ?? []) {
-      process.stdout.write(`\n  Event: ${entry.event}\n`);
-      process.stdout.write(`  Command: ${entry.command}\n`);
-      if (entry.description) {
-        process.stdout.write(`  # ${entry.description}\n`);
-      }
-    }
-    process.stdout.write('\n');
+    printClaudeNextSteps(claudeEntry);
   }
 
+  const codexEntry = harnessConfig?.hooks?.codex;
   if (codexEntry) {
-    process.stdout.write(`Codex — ${codexEntry.config_file}:\n`);
-    process.stdout.write(`  ${codexEntry.note}\n`);
-    for (const [event, entries] of Object.entries(codexEntry.entries ?? {})) {
-      for (const entry of entries) {
-        process.stdout.write(`\n  Event: ${event}\n`);
-        process.stdout.write(`  Command: ${entry.command}\n`);
-      }
-    }
-    process.stdout.write('\n');
+    printCodexNextSteps(codexEntry);
   }
 
   process.stdout.write(`Engine: ${engine} (change in graph-automation/config.json, then re-run install)\n`);

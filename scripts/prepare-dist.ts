@@ -8,6 +8,7 @@ import { run as buildCodexPlugin } from './build-codex-plugin.ts';
 import { run as buildOpencodePlugin } from './build-opencode-plugin.ts';
 import { run as snapshotDist } from './snapshot-dist.ts';
 import { run as stageCiAdaptersRuntime } from './stage-ci-adapters-runtime.ts';
+import { run as stageKnowledgeContract } from './stage-knowledge-contract.ts';
 import { run as stageMatrixRuntime } from './stage-matrix-runtime.ts';
 import { run as stageReadmeContract } from './stage-readme-contract.ts';
 import { run as stageSkillTemplates } from './stage-skill-templates.ts';
@@ -18,6 +19,7 @@ export function run(): void {
   buildOpencodePlugin();
   stageSkillTemplates();
   stageReadmeContract();
+  stageKnowledgeContract();
   stageMatrixRuntime();
   stageCiAdaptersRuntime();
   snapshotDist();

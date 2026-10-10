@@ -1,44 +1,44 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve, basename } from 'node:path';
-import { scaffold } from '../src/scaffold.js';
-import { runInstall } from '../src/install.js';
-import { runGraphHooks } from '../src/graph-hooks.js';
-import { resolveVendorSkill } from '../src/skill-resolver.js';
-import { runMatrixRuntime } from '../src/matrix-runtime.js';
-import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.js';
-import { runKnowledge } from '../src/knowledge.js';
+import { basename, dirname, join, resolve } from 'node:path';
+import { scaffold } from '../src/scaffold.ts';
+import { runInstall } from '../src/install.ts';
+import { runGraphHooks } from '../src/graph-hooks.ts';
+import { resolveVendorSkill } from '../src/skill-resolver.ts';
+import { runMatrixRuntime } from '../src/matrix-runtime.ts';
+import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.ts';
+import { runKnowledge } from '../src/knowledge.ts';
+import type { ReadmeContract } from '../src/readme-contract.ts';
 import {
   assertReadmeWriteAllowed,
   generateScaffoldReadme,
   preflightScaffoldReadme,
   resolveReadmeContract,
   reviewedReadmeSha,
-} from '../src/readme-contract.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8'));
+} from '../src/readme-contract.ts';
+import { moduleDir, packageRoot } from '../src/paths.ts';
 
 // Resolve the templates directory.
 //   1. catalog-resolved vendored skill templates — present in dev checkouts (after setup.sh)
 //   2. dist/skill-templates/                      — staged by prepack; ships in the npm tarball
 // vendor/ is intentionally excluded from the published package so only (2) is available
 // when the CLI is installed via npx or npm install.
-const _VENDOR_SKILLS = process.env.AI_CATAPULT_VENDOR_SKILLS || join(__dirname, '..', 'vendor/skills');
-const _DIST_TEMPLATES   = join(__dirname, '..', 'dist/skill-templates');
-const _DIST_DIR = join(__dirname, '..', 'dist');
+const VENDOR_SKILLS = process.env.AI_CATAPULT_VENDOR_SKILLS || join(packageRoot(moduleDir(import.meta.url)), 'vendor/skills');
+const DIST_TEMPLATES = join(packageRoot(moduleDir(import.meta.url)), 'dist/skill-templates');
+const DIST_DIR = join(packageRoot(moduleDir(import.meta.url)), 'dist');
+const TEMPLATES_DIR = resolveTemplatesDir();
 
-function resolveTemplatesDir() {
-  if (existsSync(_VENDOR_SKILLS)) {
+function resolveTemplatesDir(): string {
+  if (existsSync(VENDOR_SKILLS)) {
     try {
-      return join(resolveVendorSkill(_VENDOR_SKILLS), 'templates');
+      return join(resolveVendorSkill(VENDOR_SKILLS), 'templates');
     } catch (error) {
-      process.stderr.write(`Error: ${error.message}\n`);
+      process.stderr.write(`Error: ${(error as Error).message}\n`);
       process.exit(1);
     }
   }
-  if (existsSync(_DIST_TEMPLATES))   return _DIST_TEMPLATES;
+  if (existsSync(DIST_TEMPLATES)) return DIST_TEMPLATES;
   process.stderr.write(
     'Error: template directory not found.\n' +
     '  For a dev checkout: run  bash setup.sh  to populate vendor/\n' +
@@ -46,8 +46,6 @@ function resolveTemplatesDir() {
   );
   process.exit(1);
 }
-
-const TEMPLATES_DIR = resolveTemplatesDir();
 
 const HELP = `Usage: ai-catapult <command> [options]
 
@@ -83,35 +81,44 @@ Options:
 // Argument parsing
 // ---------------------------------------------------------------------------
 
+type ParsedArgs = {
+  positionals: string[];
+  flags: Map<string, string | boolean>;
+  firstPositionalIdx: number;
+};
+
+/** Consume a `--flag [value]` token at position i, returning the next index. */
+function consumeLongFlag(argv: string[], arg: string, i: number, flags: Map<string, string | boolean>): number {
+  const next = argv[i + 1];
+  if (next !== undefined && !next.startsWith('-')) {
+    flags.set(arg.slice(2), next);
+    return i + 2;
+  }
+  flags.set(arg.slice(2), true);
+  return i + 1;
+}
+
 /**
  * Parse flags from an argv array (already sliced past [node, script]).
- * Returns { positionals: string[], flags: Map<string, string|boolean>, firstPositionalIdx: number }
  * --foo bar   → flags.get('foo') === 'bar'
  * --foo       → flags.get('foo') === true
  * -h          → flags.get('h') === true
  */
-function parseArgs(argv) {
-  const positionals = [];
-  const flags = new Map();
+function parseArgs(argv: string[]): ParsedArgs {
+  const positionals: string[] = [];
+  const flags = new Map<string, string | boolean>();
   // Track the raw index of the first positional in argv (for subcommand slicing)
   let firstPositionalIdx = -1;
   let i = 0;
   while (i < argv.length) {
     const arg = argv[i];
+    if (arg === undefined) break; // unreachable: loop guard ensures a defined token
     if (arg === '--') {
       positionals.push(...argv.slice(i + 1));
       break;
     }
     if (arg.startsWith('--')) {
-      const key = arg.slice(2);
-      const next = argv[i + 1];
-      if (next !== undefined && !next.startsWith('-')) {
-        flags.set(key, next);
-        i += 2;
-      } else {
-        flags.set(key, true);
-        i += 1;
-      }
+      i = consumeLongFlag(argv, arg, i, flags);
     } else if (arg.startsWith('-') && arg.length === 2) {
       flags.set(arg.slice(1), true);
       i += 1;
@@ -132,21 +139,17 @@ function parseArgs(argv) {
  * Build the structured next-steps block shown to the user after a successful
  * scaffold. Content is deterministic given same inputs.
  *
- * @param {object} opts
- * @param {string}   opts.targetDir           - resolved absolute target path (used in "scaffolded into" line)
- * @param {string}   opts.pathDisplay         - base used for anchor path bullet lines (e.g. targetDir for
- *                                              stdout, '.' for the file so it stays machine-independent)
- * @param {string[]} opts.emittedPaths         - relative paths actually written
- * @param {string[]} opts.judgmentLadenPaths   - from boundary-manifest.json
- * @returns {string}
+ * `pathDisplay` is the base for anchor path bullet lines (targetDir so stdout
+ * shows real openable paths; '.' so the file stays machine-independent).
  */
-function buildFinishPrompt({ targetDir, pathDisplay, emittedPaths, judgmentLadenPaths }) {
+function buildFinishPrompt(opts: { targetDir: string; pathDisplay: string; emittedPaths: string[]; judgmentLadenPaths: string[] }): string {
+  const { pathDisplay, emittedPaths, judgmentLadenPaths } = opts;
   // Pick two anchor paths that are always mechanical (existence already verified
   // by scaffold — if they are missing scaffold would have failed earlier).
   const matrixPath = emittedPaths.includes('.ai/matrix.json') ? '.ai/matrix.json' : emittedPaths[0] ?? null;
   const agentsPath = emittedPaths.includes('AGENTS.md') ? 'AGENTS.md' : null;
 
-  const anchorLines = [];
+  const anchorLines: string[] = [];
   if (matrixPath) anchorLines.push(`  • ${pathDisplay}/${matrixPath}`);
   if (agentsPath) anchorLines.push(`  • ${pathDisplay}/${agentsPath}`);
 
@@ -189,11 +192,11 @@ function buildFinishPrompt({ targetDir, pathDisplay, emittedPaths, judgmentLaden
 // Subcommand: init
 // ---------------------------------------------------------------------------
 
-function runInit(argv) {
+function runInit(argv: string[]): void {
   const { positionals, flags } = parseArgs(argv);
 
   if (flags.has('help') || flags.has('h')) {
-    console.log(INIT_HELP);
+    process.stdout.write(`${INIT_HELP}\n`);
     process.exit(0);
   }
 
@@ -206,13 +209,13 @@ function runInit(argv) {
   const upstreamRef = String(flags.get('upstream-ref') || 'main');
   const force = flags.has('force');
 
-  let readmeContract;
+  let readmeContract: ReadmeContract;
   try {
-    readmeContract = resolveReadmeContract({ vendorSkillsDir: _VENDOR_SKILLS, distDir: _DIST_DIR });
+    readmeContract = resolveReadmeContract({ vendorSkillsDir: VENDOR_SKILLS, distDir: DIST_DIR });
     assertReadmeWriteAllowed(targetDir, force);
     preflightScaffoldReadme({ contract: readmeContract, targetDir, repoId });
   } catch (error) {
-    process.stderr.write(`Error: ${error.message}\n`);
+    process.stderr.write(`Error: ${(error as Error).message}\n`);
     process.exit(1);
   }
   const sourceSha = reviewedReadmeSha(targetDir);
@@ -225,7 +228,7 @@ function runInit(argv) {
     generateScaffoldReadme({ contract: readmeContract, targetDir, repoId, force, sourceSha });
     emittedPaths.push('README.md');
   } catch (error) {
-    process.stderr.write(`Error: ${error.message}\n`);
+    process.stderr.write(`Error: ${(error as Error).message}\n`);
     process.exit(1);
   }
 
@@ -234,7 +237,7 @@ function runInit(argv) {
   const finishPromptStdout = buildFinishPrompt({ targetDir, pathDisplay: targetDir, emittedPaths, judgmentLadenPaths });
 
   // Emit to stdout.
-  process.stdout.write(finishPromptStdout + '\n');
+  process.stdout.write(`${finishPromptStdout}\n`);
 
   // Build finish prompt for the file — uses '.' as the path base so the file
   // contains only relative paths and is byte-identical across machines/CI runs.
@@ -248,64 +251,62 @@ function runInit(argv) {
   writeFileSync(nextStepsPath, finishPromptFile, 'utf8');
 }
 
-// runInstall is imported from src/install.js
-
 // ---------------------------------------------------------------------------
 // Main dispatch
 // ---------------------------------------------------------------------------
 
-const rawArgv = process.argv.slice(2);
-const { positionals: topPositionals, flags: topFlags, firstPositionalIdx } = parseArgs(rawArgv);
-
-if (topFlags.has('version') || topFlags.has('v')) {
-  console.log(pkg.version);
-  process.exit(0);
+/** Known verb dispatch; anything else fails with the unknown-argument contract line. */
+function dispatchVerb(verb: string, rest: string[]): void {
+  if (verb === 'init') {
+    // rest is sliced from firstPositionalIdx (the index of 'init' in rawArgv)
+    // rather than rawArgv.indexOf('init'), which would match the first literal
+    // 'init' anywhere — e.g. `ai-catapult --date init init <target>` would
+    // mis-dispatch to ./init.
+    runInit(rest);
+    process.exit(0);
+  }
+  if (verb === 'install') {
+    runInstall(rest);
+    process.exit(0);
+  }
+  if (verb === 'graph-hooks') {
+    runGraphHooks(rest, TEMPLATES_DIR);
+    process.exit(0);
+  }
+  if (verb === 'matrix') process.exit(runMatrixRuntime(rest));
+  if (verb === 'ci-adapters') process.exit(runCiAdaptersRuntime(rest));
+  if (verb === 'knowledge') process.exit(runKnowledge(rest));
+  process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);
+  process.exit(1);
 }
 
-const verb = topPositionals[0];
+function run(): void {
+  const pkg = JSON.parse(readFileSync(join(packageRoot(moduleDir(import.meta.url)), 'package.json'), 'utf8')) as { version: string };
 
-// Global --help/-h only when no verb is given; with a verb the subcommand
-// handles its own --help flag.
-if (!verb && (topFlags.has('help') || topFlags.has('h') || rawArgv.length === 0)) {
-  console.log(HELP);
-  process.exit(0);
+  const rawArgv = process.argv.slice(2);
+  const { positionals: topPositionals, flags: topFlags, firstPositionalIdx } = parseArgs(rawArgv);
+
+  if (topFlags.has('version') || topFlags.has('v')) {
+    process.stdout.write(`${pkg.version}\n`);
+    process.exit(0);
+  }
+
+  const verb = topPositionals[0];
+
+  // Global --help/-h only when no verb is given; with a verb the subcommand
+  // handles its own --help flag.
+  if (!verb && (topFlags.has('help') || topFlags.has('h') || rawArgv.length === 0)) {
+    process.stdout.write(`${HELP}\n`);
+    process.exit(0);
+  }
+
+  // No verb and no global flag already handled above; bare invocation → help.
+  if (!verb) {
+    process.stdout.write(`${HELP}\n`);
+    process.exit(0);
+  }
+
+  dispatchVerb(verb, rawArgv.slice(firstPositionalIdx + 1));
 }
 
-// No verb and no global flag already handled above; bare invocation → help.
-if (!verb) {
-  console.log(HELP);
-  process.exit(0);
-}
-
-if (verb === 'init') {
-  // Fix #2: use firstPositionalIdx (the index of 'init' in rawArgv) rather than
-  // rawArgv.indexOf('init'), which would match the first literal 'init' anywhere
-  // — e.g. `ai-catapult --date init init <target>` would mis-dispatch to ./init.
-  runInit(rawArgv.slice(firstPositionalIdx + 1));
-  process.exit(0);
-}
-
-if (verb === 'install') {
-  runInstall(rawArgv.slice(firstPositionalIdx + 1));
-  process.exit(0);
-}
-
-if (verb === 'graph-hooks') {
-  runGraphHooks(rawArgv.slice(firstPositionalIdx + 1), TEMPLATES_DIR);
-  process.exit(0);
-}
-
-if (verb === 'matrix') {
-  process.exit(runMatrixRuntime(rawArgv.slice(firstPositionalIdx + 1)));
-}
-
-if (verb === 'ci-adapters') {
-  process.exit(runCiAdaptersRuntime(rawArgv.slice(firstPositionalIdx + 1)));
-}
-
-if (verb === 'knowledge') {
-  process.exit(runKnowledge(rawArgv.slice(firstPositionalIdx + 1)));
-}
-
-process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);
-process.exit(1);
+if (process.argv[1] === fileURLToPath(import.meta.url)) run();

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveVendorSkill } from './skill-resolver.js';
+import { resolveVendorSkill } from './skill-resolver.ts';
 
 // The canonical generator validates the whole rendered README. Keep the user
 // repository identifier opaque during that validation so names such as TODO or
@@ -11,42 +11,53 @@ import { resolveVendorSkill } from './skill-resolver.js';
 const REPO_ID_MARKER = 'ai-catapult-repository-id';
 const UNRESOLVED_TEMPLATE_PATTERN = /@@[A-Z_]+@@|\{\{[^}]+\}\}|\[\[[^\]]+\]\]|<(?:your|insert|replace)[^>]*>|<(?:project[_ -]?name|tagline|install[_ -]?command|first[_ -]?success|success[_ -]?evidence)>/i;
 
-function contractPaths(root) {
+export type ReadmeContract = { generator: string; template: string };
+
+function contractPaths(root: string): ReadmeContract {
   return {
     generator: join(root, 'scripts', 'readme-generate.sh'),
     template: join(root, 'assets', 'readme', 'template.md'),
   };
 }
 
-export function resolveReadmeContract({ vendorSkillsDir, distDir }) {
+export function resolveReadmeContract({ vendorSkillsDir, distDir }: { vendorSkillsDir: string; distDir: string }): ReadmeContract {
   if (existsSync(vendorSkillsDir)) {
     const vendored = contractPaths(resolveVendorSkill(vendorSkillsDir));
     if (existsSync(vendored.generator) && existsSync(vendored.template)) return vendored;
-    throw new Error('vendored ai-catapult-init skill is missing the canonical README contract; run bash setup.sh');
+    throw new Error('vendored ai-catapult-init skill is missing the canonical README contract; run node scripts/setup.ts');
   }
 
   const staged = contractPaths(join(distDir, 'readme-contract'));
   if (existsSync(staged.generator) && existsSync(staged.template)) return staged;
 
   throw new Error(
-    'canonical README contract not found; run bash setup.sh and bash scripts/stage-readme-contract.sh',
+    'canonical README contract not found; run node scripts/setup.ts and node scripts/stage-readme-contract.ts',
   );
 }
 
-export function reviewedReadmeSha(targetDir) {
+export function reviewedReadmeSha(targetDir: string): string {
   const readmePath = join(targetDir, 'README.md');
   if (!existsSync(readmePath)) return '';
   return createHash('sha256').update(readFileSync(readmePath)).digest('hex');
 }
 
-export function assertReadmeWriteAllowed(targetDir, force) {
+export function assertReadmeWriteAllowed(targetDir: string, force: boolean): void {
   const readmePath = join(targetDir, 'README.md');
   if (existsSync(readmePath) && !force) {
     throw new Error(`init would overwrite existing file ${readmePath}; pass --force to overwrite`);
   }
 }
 
-function generatorArgs({ contract, targetDir, project, force, sourceSha, out }) {
+type GeneratorArgOptions = {
+  contract: ReadmeContract;
+  targetDir: string;
+  project: string;
+  force?: boolean;
+  sourceSha?: string;
+  out?: string;
+};
+
+function generatorArgs({ contract, targetDir, project, force, sourceSha, out }: GeneratorArgOptions): string[] {
   const args = [
     contract.generator,
     '--mode', 'template',
@@ -70,7 +81,7 @@ function generatorArgs({ contract, targetDir, project, force, sourceSha, out }) 
   return args;
 }
 
-function runGenerator(args, targetDir) {
+function runGenerator(args: string[], targetDir: string): void {
   const result = spawnSync('bash', args, {
     cwd: existsSync(targetDir) ? targetDir : undefined,
     encoding: 'utf8',
@@ -83,14 +94,14 @@ function runGenerator(args, targetDir) {
   }
 }
 
-function injectRepoId(generated, repoId) {
+function injectRepoId(generated: string, repoId: string): string {
   if (!generated.includes(REPO_ID_MARKER)) {
     throw new Error('canonical README generator omitted the repository identifier marker');
   }
   return generated.replaceAll(REPO_ID_MARKER, () => repoId);
 }
 
-function assertSafeRepoId(repoId) {
+function assertSafeRepoId(repoId: string): void {
   if (!repoId.trim()) throw new Error('repository identifier must not be empty');
   if (/[\0\r\n]/.test(repoId)) {
     throw new Error('repository identifier must be a single line');
@@ -100,7 +111,7 @@ function assertSafeRepoId(repoId) {
   }
 }
 
-export function preflightScaffoldReadme({ contract, targetDir, repoId }) {
+export function preflightScaffoldReadme({ contract, targetDir, repoId }: { contract: ReadmeContract; targetDir: string; repoId: string }): void {
   // Run the immutable contract before scaffold() performs its first write. The
   // candidate is intentionally discarded; the real render still owns guarded
   // replacement, backup, and audit behavior after the scaffold succeeds.
@@ -122,14 +133,22 @@ export function preflightScaffoldReadme({ contract, targetDir, repoId }) {
   }
 }
 
-export function generateScaffoldReadme({ contract, targetDir, repoId, force, sourceSha }) {
+export function generateScaffoldReadme({ contract, targetDir, repoId, force, sourceSha }: {
+  contract: ReadmeContract;
+  targetDir: string;
+  repoId: string;
+  force?: boolean;
+  sourceSha?: string;
+}): void {
   assertSafeRepoId(repoId);
   runGenerator(generatorArgs({
     contract,
     targetDir,
     project: REPO_ID_MARKER,
-    force,
-    sourceSha,
+    // exactOptionalPropertyTypes: absent keys must stay absent (parity with
+    // the JS original, where passing force/sourceSha through was a no-op).
+    ...(force !== undefined ? { force } : {}),
+    ...(sourceSha !== undefined ? { sourceSha } : {}),
   }), targetDir);
 
   const readmePath = join(targetDir, 'README.md');

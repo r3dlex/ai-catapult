@@ -1,5 +1,5 @@
 /**
- * scaffold.js — deterministic v3 .ai/ scaffold engine (Slice 3).
+ * scaffold.ts — deterministic v3 .ai/ scaffold engine (Slice 3).
  *
  * Reads vendored ai-catapult-init/templates/ + boundary-manifest.json and
  * emits all MECHANICAL paths into a target directory. Judgment-laden paths
@@ -25,8 +25,16 @@
  *   (everything else maps 1:1)
  */
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
+
+type BoundaryManifestEntry = {
+  path?: string;
+  classification?: string;
+  template?: string | null;
+};
+
+type BoundaryManifest = { paths: BoundaryManifestEntry[] };
 
 /**
  * Map a template-relative path to its real output path.
@@ -34,7 +42,7 @@ import { dirname, join, resolve, sep } from 'node:path';
  *      "dot-github/workflows/ci.yml" → ".github/workflows/ci.yml"
  *      "dot-rules.ts" → ".rules.ts"
  */
-function templatePathToRealPath(templatePath) {
+function templatePathToRealPath(templatePath: string): string {
   if (templatePath.startsWith('dot-ai/')) {
     return '.ai/' + templatePath.slice('dot-ai/'.length);
   }
@@ -48,17 +56,12 @@ function templatePathToRealPath(templatePath) {
   return templatePath;
 }
 
-function manifestPathToRealPath(manifestPath) {
+function manifestPathToRealPath(manifestPath: string): string {
   return manifestPath;
 }
 
-/**
- * Substitute all {{TOKEN}} placeholders in content.
- * @param {string} content - raw template content
- * @param {object} tokens  - { REPO_ID, DATE, UPSTREAM_URL, UPSTREAM_REF }
- * @returns {string}
- */
-function substituteTokens(content, tokens) {
+/** Substitute all {{TOKEN}} placeholders in content. */
+function substituteTokens(content: string, tokens: Tokens): string {
   return content
     .replaceAll('{{REPO_ID}}', tokens.REPO_ID)
     .replaceAll('{{DATE}}', tokens.DATE)
@@ -66,13 +69,18 @@ function substituteTokens(content, tokens) {
     .replaceAll('{{UPSTREAM_REF}}', tokens.UPSTREAM_REF);
 }
 
+type Tokens = {
+  REPO_ID: string;
+  DATE: string;
+  UPSTREAM_URL: string;
+  UPSTREAM_REF: string;
+};
+
 /**
  * Assert that destPath is strictly inside targetDir.
  * Throws a clear error if a path traversal is detected.
- * @param {string} destPath  - absolute destination path
- * @param {string} targetDir - absolute target root
  */
-function assertNoTraversal(destPath, targetDir) {
+function assertNoTraversal(destPath: string, targetDir: string): void {
   const resolvedDest = resolve(destPath);
   const resolvedRoot = resolve(targetDir) + sep;
   if (!resolvedDest.startsWith(resolvedRoot)) {
@@ -84,15 +92,16 @@ function assertNoTraversal(destPath, targetDir) {
 
 /**
  * Recursively copy any .gitkeep files from the template tree into targetDir,
- * using the same dot-* path mapping as templatePathToRealPath.
- *
- * @param {string} baseTemplatesDir - absolute path to templates root (for computing relative paths)
- * @param {string} currentDir       - current directory being walked
- * @param {string} targetDir        - absolute output root
- * @param {boolean} force           - overwrite existing files
- * @param {string[]} collisions     - accumulator for collision paths (when force=false)
+ * using the same dot-* path mapping as templatePathToRealPath. Collisions
+ * (when force=false) accumulate into `collisions` as real relative paths.
  */
-function emitGitkeeps(baseTemplatesDir, currentDir, targetDir, force, collisions) {
+function emitGitkeeps(
+  baseTemplatesDir: string,
+  currentDir: string,
+  targetDir: string,
+  force: boolean,
+  collisions: string[],
+): void {
   const entries = readdirSync(currentDir, { withFileTypes: true });
   // Sort for determinism
   entries.sort((a, b) => a.name.localeCompare(b.name));
@@ -118,65 +127,90 @@ function emitGitkeeps(baseTemplatesDir, currentDir, targetDir, force, collisions
 }
 
 /**
+ * Mechanical manifest entries in manifest order (deterministic — not
+ * filesystem readdir order): the destinations the scaffold writes and the
+ * templates it renders them from. Judgment-laden entries are skipped.
+ */
+function mechanicalEntries(manifest: BoundaryManifest): Array<{ path: string; template: string }> {
+  return manifest.paths
+    .filter((entry) => entry.classification === 'mechanical' && entry.template !== null)
+    .map((entry) => ({ path: entry.path as string, template: entry.template as string }));
+}
+
+/**
+ * First pass (Fix #3): collect collisions before writing anything — resolve
+ * every mechanical destination and run the defensive traversal check up front.
+ */
+function collectCollisions(manifest: BoundaryManifest, targetDir: string, force: boolean): string[] {
+  const collisions: string[] = [];
+  for (const entry of mechanicalEntries(manifest)) {
+    const realRelPath = manifestPathToRealPath(entry.path);
+    const destPath = join(targetDir, realRelPath);
+    // Fix #4: defense-in-depth traversal check
+    assertNoTraversal(destPath, targetDir);
+    if (!force && existsSync(destPath)) {
+      collisions.push(realRelPath);
+    }
+  }
+  return collisions;
+}
+
+/** Second pass: render and write every mechanical file, returning the emitted paths. */
+function writeMechanicalFiles(manifest: BoundaryManifest, templatesDir: string, targetDir: string, tokens: Tokens): string[] {
+  const emittedPaths: string[] = [];
+  for (const entry of mechanicalEntries(manifest)) {
+    const realRelPath = manifestPathToRealPath(entry.path);
+    const destPath = join(targetDir, realRelPath);
+
+    const raw = readFileSync(join(templatesDir, entry.template), 'utf8');
+    const rendered = substituteTokens(raw, tokens);
+
+    mkdirSync(dirname(destPath), { recursive: true });
+    writeFileSync(destPath, rendered, 'utf8');
+    emittedPaths.push(realRelPath);
+  }
+  return emittedPaths;
+}
+
+/**
  * Scaffold the mechanical v3 .ai/ skeleton into targetDir.
  *
- * @param {object} opts
- * @param {string} opts.targetDir      - absolute path to emit into
- * @param {string} opts.templatesDir   - absolute path to vendored templates/
- * @param {string} opts.repoId         - {{REPO_ID}} substitution value
- * @param {string} opts.date           - {{DATE}} substitution value (YYYY-MM-DD)
- * @param {string} opts.upstreamUrl    - {{UPSTREAM_URL}} substitution value
- * @param {string} opts.upstreamRef    - {{UPSTREAM_REF}} substitution value
- * @param {boolean} [opts.force]       - overwrite existing files without error
- * @returns {{ emittedPaths: string[], judgmentLadenPaths: string[] }}
+ * Returns the emitted paths and the judgment-laden manifest paths (for the
+ * finish prompt).
  */
-export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, upstreamRef, force = false }) {
+export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, upstreamRef, force = false }: {
+  targetDir: string;
+  templatesDir: string;
+  repoId: string;
+  date: string;
+  upstreamUrl: string;
+  upstreamRef: string;
+  force?: boolean;
+}): { emittedPaths: string[]; judgmentLadenPaths: string[] } {
   const manifestPath = join(templatesDir, 'boundary-manifest.json');
 
   // Fix #8: friendly error when vendor/manifest is missing
-  let manifest;
+  let manifest: BoundaryManifest;
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as BoundaryManifest;
   } catch (err) {
-    if (err.code === 'ENOENT') {
-      process.stderr.write('vendor/ missing or stale — run: bash setup.sh\n');
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      process.stderr.write('vendor/ missing or stale — run: node scripts/setup.ts\n');
       process.exit(1);
     }
     throw err;
   }
 
-  const tokens = {
+  const tokens: Tokens = {
     REPO_ID: repoId,
     DATE: date,
     UPSTREAM_URL: upstreamUrl,
     UPSTREAM_REF: upstreamRef,
   };
 
-  // Fix #3: collect collisions before writing anything
-  const collisions = [];
-
-  // Iterate in manifest order (deterministic — not filesystem readdir order).
-  for (const entry of manifest.paths) {
-    if (entry.classification !== 'mechanical' || entry.template === null) {
-      // Judgment-laden: do not emit any file.
-      continue;
-    }
-
-    const templateRelPath = entry.template; // e.g. "dot-ai/matrix.json"
-    const realRelPath = manifestPathToRealPath(entry.path); // manifest destination is authoritative
-
-    const srcPath = join(templatesDir, templateRelPath);
-    const destPath = join(targetDir, realRelPath);
-
-    // Fix #4: defense-in-depth traversal check
-    assertNoTraversal(destPath, targetDir);
-
-    if (!force && existsSync(destPath)) {
-      collisions.push(realRelPath);
-    }
-  }
-
-  // Fix #3: refuse if collisions exist and --force not passed
+  // Fix #3: collect collisions before writing anything, then refuse if any
+  // exist and --force was not passed.
+  const collisions = collectCollisions(manifest, targetDir, force);
   if (collisions.length > 0) {
     process.stderr.write(
       `error: init would overwrite existing files in ${targetDir}:\n` +
@@ -187,30 +221,12 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   }
 
   // All clear — write files
-  const emittedPaths = [];
-  for (const entry of manifest.paths) {
-    if (entry.classification !== 'mechanical' || entry.template === null) {
-      continue;
-    }
-
-    const templateRelPath = entry.template;
-    const realRelPath = manifestPathToRealPath(entry.path);
-
-    const srcPath = join(templatesDir, templateRelPath);
-    const destPath = join(targetDir, realRelPath);
-
-    const raw = readFileSync(srcPath, 'utf8');
-    const rendered = substituteTokens(raw, tokens);
-
-    mkdirSync(dirname(destPath), { recursive: true });
-    writeFileSync(destPath, rendered, 'utf8');
-    emittedPaths.push(realRelPath);
-  }
+  const emittedPaths = writeMechanicalFiles(manifest, templatesDir, targetDir, tokens);
 
   // Emit .gitkeep files so tracked empty directories land in the target.
   // These are not listed in the boundary-manifest (they are git artifacts),
   // so we walk the template tree for .gitkeep files and mirror them verbatim.
-  const gitkeepCollisions = [];
+  const gitkeepCollisions: string[] = [];
   emitGitkeeps(templatesDir, templatesDir, targetDir, force, gitkeepCollisions);
   // .gitkeep collisions are non-fatal — they are empty marker files; silently
   // skip them if --force was not given (the directory already exists).
@@ -218,7 +234,7 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   // Collect judgment-laden paths from manifest (for finish prompt).
   const judgmentLadenPaths = manifest.paths
     .filter((e) => e.classification === 'judgment_laden')
-    .map((e) => e.path);
+    .map((e) => e.path as string);
 
   return { emittedPaths, judgmentLadenPaths };
 }
