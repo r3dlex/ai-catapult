@@ -77,12 +77,12 @@
  *                                 under its claim, never renamed back), refuses
  *                                 a running unlock's claim, and concurrent
  *                                 unlocks remove one stale lock exactly once
- *   review-r5/r6                  ledger appends are whole (short writes
- *                                 retried or truncated away before any
- *                                 removal); an interrupted tail is repaired on
+ *   review-r5/r6/r7               lock events are one whole file each
+ *                                 (atomic link; nothing published when a write
+ *                                 fails; no damaged event blocks unlock); the
+ *                                 archive ledgers repair an interrupted tail on
  *                                 its own line, restartable at every crash
- *                                 boundary, for the archive ledgers too; no
- *                                 damaged audit line blocks unlock
+ *                                 boundary
  *
  * Every case runs in TWO lanes against the same fixtures:
  *   source:   this checkout's bin/ai-catapult.js
@@ -629,7 +629,17 @@ function claimRel(claimerPid) {
 function serialized(lockRel) {
   return { error: 'locked', detail: `${lockRel}: held by another writer; writers are serialized (unlock it if stale)` };
 }
-const LOCK_EVENTS_REL = '.ai/knowledge/lock-events.jsonl';
+const LOCK_EVENTS_DIR_REL = '.ai/knowledge/lock-events';
+
+/** Published lock-event records in name (time, run, sequence) order; each file is whole JSON. */
+function lockEvents(dir) {
+  const base = join(dir, LOCK_EVENTS_DIR_REL);
+  if (!existsSync(base)) return [];
+  return readdirSync(base)
+    .filter((name) => name.endsWith('.json') && !name.startsWith('.'))
+    .sort()
+    .map((name) => JSON.parse(readFileSync(join(base, name), 'utf8')));
+}
 const LOCKED = { error: 'locked', detail: 'entry lock already exists; explicit unlock required' };
 const POLICY = JSON.parse(readFileSync(join(SOURCE_CONTRACT, 'publication-policy.json'), 'utf8'));
 
@@ -1259,7 +1269,7 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     assert.equal(refused.status, 2, `unlock without --confirm-no-writer must exit 2 (exit ${refused.status})`);
     assert.ok(refused.stderr.startsWith('ai-catapult knowledge: the following arguments are required: --confirm-no-writer'), refused.stderr);
     assert.deepEqual(readFileSync(join(lockDir, 'owner.json')), ownerBytes);
-    assert.equal(existsSync(join(tmp, LOCK_EVENTS_REL)), false, 'a refused unlock writes no ledger line');
+    assert.deepEqual(lockEvents(tmp), [], 'a refused unlock ledgers nothing');
 
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(unlock.status, 0, `confirmed unlock must exit 0 (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
@@ -1268,11 +1278,9 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     const event = JSON.parse(unlock.stdout);
     assert.equal(event.schema, 'knowledge-lock-event/1');
     assert.equal(event.result, 'applied');
-    const lines = readFileSync(join(tmp, LOCK_EVENTS_REL), 'utf8').split('\n').filter(Boolean);
-    assert.equal(lines.length, 2, 'ledgered as prepared, then applied');
-    // Python json.dumps(sort_keys=True) line shape, shared with the root writer.
-    for (const line of lines) assert.ok(line.startsWith('{"action": "unlock", "at": '), line);
-    const [prepared, applied] = lines.map((line) => JSON.parse(line));
+    const events = lockEvents(tmp);
+    assert.equal(events.length, 2, 'ledgered as prepared, then applied');
+    const [prepared, applied] = events;
     assert.deepEqual(applied, event);
     assert.deepEqual({ ...prepared, at: applied.at, result: 'applied' }, applied);
     assert.equal(prepared.result, 'prepared');
@@ -1292,7 +1300,7 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     const again = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(again.status, 1);
     assert.deepEqual(JSON.parse(again.stdout), { error: 'not_locked', detail: 'entry lock directory does not exist' });
-    assert.equal(readFileSync(join(tmp, LOCK_EVENTS_REL), 'utf8').split('\n').filter(Boolean).length, 2);
+    assert.equal(lockEvents(tmp).length, 2);
   });
 });
 
@@ -1553,7 +1561,7 @@ test('XSKP-P4-03 review-r2 F2: a lock without owner.json (writer killed before w
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(unlock.status, 0, `confirmed unlock must exit 0 (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
     assert.deepEqual(readdirSync(join(tmp, '.ai/knowledge/.locks')), []);
-    assert.deepEqual(readLedger(tmp, LOCK_EVENTS_REL).map((event) => [event.lock_path, event.result]), [
+    assert.deepEqual(lockEvents(tmp).map((event) => [event.lock_path, event.result]), [
       [ENTRY_LOCK_REL, 'prepared'], [ENTRY_LOCK_REL, 'applied'],
     ]);
     const published = spawnKnowledge(lane, tmp, ['publish', 'docs/other.md']);
@@ -1601,7 +1609,6 @@ const deadOwner = () => `${JSON.stringify({ pid: deadPid() })}\n`;
 test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snapshotted, each claimed exclusively first (source + packaged)', async () => {
   await writeCase('r3-claims', {}, (lane, tmp) => {
     const locks = join(tmp, '.ai/knowledge/.locks');
-    const lockEvents = () => readLedger(tmp, LOCK_EVENTS_REL).map((event) => [event.lock_path, event.result]);
 
     const claims = () => readdirSync(locks).filter((name) => CLAIM_NAME.test(name));
 
@@ -1621,7 +1628,7 @@ test('XSKP-P4-03 review-r2/r3: unlock removes only the lock incarnations it snap
     assert.equal(claims().length, 1);
     const displaced = `.ai/knowledge/.locks/${claims()[0]}`;
     assert.equal(readFileSync(join(tmp, displaced, 'owner.json'), 'utf8'), replacement, 'the displaced lock is kept intact');
-    const ledgered = readLedger(tmp, LOCK_EVENTS_REL);
+    const ledgered = lockEvents(tmp);
     assert.deepEqual(ledgered.map((event) => [event.lock_path, event.result]), [[ENTRY_LOCK_REL, 'prepared'], [ENTRY_LOCK_REL, 'failed']]);
     assert.equal(ledgered[1].claim_path, displaced, 'the failure ledgers where the displaced lock is kept');
     // The claim still serializes writers, and an explicit unlock recovers it
@@ -1701,7 +1708,7 @@ test('XSKP-P4-03 review-r2 F1: concurrent confirmed unlocks of one stale lock re
     }
     assert.deepEqual(results.map((result) => result.status).sort(), [0, 1, 1, 1],
       results.map((result) => result.stdout + result.stderr).join('\n'));
-    assert.equal(readLedger(tmp, LOCK_EVENTS_REL).filter((event) => event.result === 'applied').length, 1);
+    assert.equal(lockEvents(tmp).filter((event) => event.result === 'applied').length, 1);
     assert.deepEqual(readdirSync(join(tmp, '.ai/knowledge/.locks')), []);
   });
 });
@@ -1710,77 +1717,47 @@ test('XSKP-P4-03 review-r2 F1: concurrent confirmed unlocks of one stale lock re
 // Ledger durability (review round 5)
 // ---------------------------------------------------------------------------
 
-test('XSKP-P4-03 review-r5: an interrupted audit tail is terminated and ledgered; no damaged audit line blocks unlock (source + packaged)', async () => {
-  await writeCase('r5-ledger', {}, (lane, tmp) => {
-    const ledger = join(tmp, LOCK_EVENTS_REL);
-    // (a) An append cut short left an unterminated record.
+test('XSKP-P4-03 review-r5/r7: lock events are whole files; an interrupted or damaged event never blocks unlock (source + packaged)', async () => {
+  await writeCase('r7-events', {}, (lane, tmp) => {
+    const events = join(tmp, LOCK_EVENTS_DIR_REL);
+    mkdirSync(events, { recursive: true });
+    // What a short write or a crash of a concurrent unlock can leave: an
+    // unpublished temporary file. And a damaged published record.
+    const interrupted = '.20261010T000000000Z-interrupted-01.json.0000.tmp';
+    writeFileSync(join(events, interrupted), '{"action": "unl', 'utf8');
+    writeFileSync(join(events, '20261010T000000000Z-damaged-01.json'), 'not json', 'utf8');
     seedLock(tmp, ENTRY_LOCK_REL, deadOwner());
-    const fragment = '{"action": "unlock", "at": "2026-10';
-    mkdirSync(dirname(ledger), { recursive: true });
-    writeFileSync(ledger, `{"note": "committed"}\n${fragment}`, 'utf8');
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
-    assert.equal(unlock.status, 0, `unlock must succeed past an interrupted tail (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
+    assert.equal(unlock.status, 0, `unlock must not read the audit (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
     assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
-    const [committed, repairedLine, prepared, applied, end] = readFileSync(ledger, 'utf8').split('\n');
-    assert.equal(committed, '{"note": "committed"}');
-    assert.ok(repairedLine.startsWith(fragment), 'the fragment is kept, repaired on its own line');
-    const { at, ...repaired } = JSON.parse(repairedLine.slice(fragment.length));
-    assert.match(at, /^\d{4}-\d{2}-\d{2}T/);
-    assert.deepEqual(repaired, {
-      action: 'terminate_interrupted_record',
-      fragment_bytes: Buffer.byteLength(fragment),
-      fragment_sha256: createHash('sha256').update(fragment).digest('hex'),
-      schema: 'knowledge-ledger-repair/1',
-    });
-    assert.deepEqual([JSON.parse(prepared).result, JSON.parse(applied).result], ['prepared', 'applied']);
-    assert.equal(end, '', 'every record is newline-terminated');
-
-    // (b) A damaged committed line: unlock never reads the audit, so it still recovers.
-    seedLock(tmp, ENTRY_LOCK_REL, deadOwner());
-    appendFileSync(ledger, 'not json\n', 'utf8');
-    const again = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
-    assert.equal(again.status, 0, `a damaged audit line must not block unlock (exit ${again.status})\n${again.stdout}`);
-    assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
+    const published = readdirSync(events).filter((name) => name.endsWith('.json') && !name.startsWith('.') && !name.includes('damaged'));
+    assert.equal(published.length, 2, 'prepared and applied, one whole file each');
+    const records = published.sort().map((name) => JSON.parse(readFileSync(join(events, name), 'utf8')));
+    assert.deepEqual(records.map((event) => event.result), ['prepared', 'applied']);
+    assert.deepEqual(records[1], JSON.parse(unlock.stdout));
+    assert.deepEqual(readdirSync(events).filter((name) => name.endsWith('.tmp')), [interrupted], 'no temporary file is left behind');
   });
 });
 
-test('XSKP-P4-03 review-r5: under a file-size limit, unlock either completes with a whole audit or keeps the lock (source + packaged)', async () => {
-  await writeCase('r5-fsize', {}, (lane, tmp) => {
-    const ledger = join(tmp, LOCK_EVENTS_REL);
+test('XSKP-P4-03 review-r5/r7: when an event cannot be written whole, unlock keeps the lock and publishes nothing (source + packaged)', async () => {
+  await writeCase('r7-fsize', {}, (lane, tmp) => {
     const owner = deadOwner();
     seedLock(tmp, ENTRY_LOCK_REL, owner);
-    // Just under one 1024-byte block, so the next record crosses `ulimit -f 1`.
-    mkdirSync(dirname(ledger), { recursive: true });
-    writeFileSync(ledger, `${JSON.stringify({ note: 'x'.repeat(1000 - 12) })}\n`, 'utf8');
-    assert.equal(readFileSync(ledger).length, 1000);
     const env = { ...process.env, AI_CATAPULT_DIST_ROOT: lane === 'source' ? DIST_SNAPSHOT : join(packaged.dir, 'dist') };
     delete env.NODE_COMPILE_CACHE;
+    // `ulimit -f 0`: no file can grow, so the first event write fails.
     const limited = spawnSync('bash', [
-      '-c', 'ulimit -f 1 && exec "$@"', 'bash',
+      '-c', 'ulimit -f 0 && exec "$@"', 'bash',
       process.execPath, join(laneRoot(lane), 'bin/ai-catapult.js'), 'knowledge', '--root', tmp, 'unlock', EXAMPLE_ID, '--confirm-no-writer',
     ], { encoding: 'utf8', timeout: 30_000, env });
-    const text = readFileSync(ledger, 'utf8');
-    const terminated = text.slice(0, text.lastIndexOf('\n') + 1).split('\n').filter(Boolean);
-    for (const line of terminated) JSON.parse(line);
-    if (limited.status === 0) {
-      // The whole audit was written: the lock may go.
-      assert.ok(text.endsWith('\n'), 'a completed unlock leaves no partial record');
-      assert.deepEqual(terminated.slice(-2).map((line) => JSON.parse(line).result), ['prepared', 'applied']);
-      assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
-    } else {
-      // The audit could not be written whole: the lock stays, byte for byte.
-      assert.equal(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8'), owner,
-        `a failed audit must keep the lock\n${limited.stdout}${limited.stderr}`);
-    }
-    // Without the limit, recovery always completes.
+    assert.notEqual(limited.status, 0, `an unwritable audit must fail the unlock\n${limited.stdout}${limited.stderr}`);
+    assert.equal(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8'), owner, 'the lock stays, byte for byte');
+    const events = join(tmp, LOCK_EVENTS_DIR_REL);
+    assert.deepEqual(existsSync(events) ? readdirSync(events) : [], [], 'no partial or temporary record is left');
     const recovered = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
-    if (limited.status === 0) {
-      assert.deepEqual(JSON.parse(recovered.stdout), { error: 'not_locked', detail: 'entry lock directory does not exist' });
-    } else {
-      assert.equal(recovered.status, 0, `recovery must succeed (exit ${recovered.status})\n${recovered.stdout}${recovered.stderr}`);
-      assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
-      assert.ok(readFileSync(ledger, 'utf8').endsWith('\n'));
-    }
+    assert.equal(recovered.status, 0, `recovery must succeed (exit ${recovered.status})\n${recovered.stdout}${recovered.stderr}`);
+    assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
+    assert.deepEqual(lockEvents(tmp).map((event) => event.result), ['prepared', 'applied']);
   });
 });
 
