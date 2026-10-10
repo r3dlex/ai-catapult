@@ -182,8 +182,8 @@ surface entries above (verified by `git ls-files | grep -E "\\.(js|sh|py)$"`).
 `.ai/ci/local-ci.json` stays `schema: local-ci/2`, hash-pinned per file for
 every touched source and workflow (AC-7: "refreshed for every touched file"),
 and `verification` stays `["npm test"]` per the repo's documented local
-verification (README). Bootstrap is `["npm ci --ignore-scripts"]`. Disclosure
-trail:
+verification (README). Bootstrap is `["npm ci"]` (re-approval amendment below).
+Disclosure trail:
 
 - The vendored byte-locked contract allows bootstrap only in three forms:
   `npm ci`, `npm ci --ignore-scripts`, or `bash <pinned source>`. Post-wave,
@@ -207,6 +207,26 @@ trail:
   (`bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root .`),
   which verifies every pin's presence and sha256 before executing bootstrap +
   verification; the S4 negative fixture proves the same driver refuses drift.
+- **Round-5 amendment (review round 4 gap, 2026-10-10):** the
+  `npm ci --ignore-scripts` bootstrap never populated `vendor/skills` —
+  `--ignore-scripts` skips all root lifecycle hooks, so a fresh gate workspace
+  failed at pretest/build with `ERROR: vendor/skills not found`. The declared
+  bootstrap is now plain `["npm ci"]` and `package.json` gained a root
+  `"prepare": "node scripts/setup.ts"` lifecycle hook that provisions the
+  vendor checkout (empirically: `npm ci` runs root `prepare`; `npm ci
+  --ignore-scripts` skips it, which is exactly why the old form left the
+  workspace empty). The lockfile is byte-unchanged by adding the hook (no
+  `hasInstallScript` churn; `npm ci` does not rewrite the lock), and no
+  third-party dependency in the lock carries install scripts, so the plain
+  form runs no foreign lifecycle code. Consumer exposure of the published
+  hook was measured, not assumed: a registry-faithful install (packument +
+  tarball fetched over HTTP) of a prepare-only package runs **no** scripts at
+  consumer install time, with and without a `hasInstallScript` packument
+  flag — npm runs `prepare` for git/folder installs, not registry installs.
+  Belt-and-suspenders: `stageScopedPackage` now deletes `prepare` alongside
+  prepack/pretest/test so the staged scoped pack still runs zero scripts, the
+  staged-lifecycle regression filter gained `prepare`, and prepack keeps its
+  explicit `node scripts/setup.ts` for the publish lanes.
 
 ### D6 — Gate wiring and the lint decision (AC-6)
 
@@ -310,8 +330,11 @@ failing-first test (captures under the session receipts, `phase-g/`).
 
 - Consumers and contributors need Node ≥ 22.18 (engines-enforced), matching the
   default-on type-stripping floor the shipped `.ts` entrypoints require.
-- `npm ci --ignore-scripts` bootstrap obliges a committed, in-sync
-  `package-lock.json`; it is pinned in the local-ci record.
+- `npm ci` bootstrap (root `prepare` vendors `vendor/skills`) obliges a
+  committed, in-sync `package-lock.json`; it is pinned in the local-ci record.
+  The published tarball's `prepare` never runs at registry consumer installs
+  (measured, see the round-5 amendment in D5); the staged scoped mirror strips
+  it so its pack runs zero scripts.
 - Sibling lanes (tswc-ac-b1/b3/b4/b5) and downstream external gates rebase on
   this tree and ship in TypeScript; this ADR is their packaging baseline.
 - Golden fixtures stay byte-exact: the two graph-automation `.sh` fixtures and

@@ -234,11 +234,14 @@ export function stageScopedPackage(
   // reopened a sibling through `npm run build` inside prepack (tsc and
   // prepare-dist.ts are never staged, review round 1 F3 — the static
   // prepack-vs-files checks only see literal scripts/* invocations). Removing
-  // prepack/pretest/test closes the whole class: pack here runs zero scripts.
+  // prepack/pretest/test/prepare closes the whole class: pack here runs zero
+  // scripts (prepare would vendor from the network into the staging tree when
+  // it packs).
   const scripts = { ...(scoped.scripts as Record<string, string>) };
   delete scripts.prepack;
   delete scripts.pretest;
   delete scripts.test;
+  delete scripts.prepare;
   scoped.scripts = scripts;
 
   writeFileSync(join(dest, 'package.json'), JSON.stringify(scoped, null, 2) + '\n', 'utf8');

@@ -176,10 +176,21 @@ void test('the local CI contract is local-ci/2 with the declared isolated worksp
     ['schema', 'sources', 'verification', 'workflows', 'workspace']);
   assert.equal(record.schema, 'local-ci/2');
   assert.deepEqual(record.workspace, {
-    bootstrap: ['npm ci --ignore-scripts'],
+    bootstrap: ['npm ci'],
     dependencies: ['node_modules', 'vendor'],
     outputs: ['dist', 'dist-snapshot'],
   });
   assert.deepEqual(record.verification, ['npm test']);
   assert.ok('package-lock.json' in record.sources, 'the npm bootstrap form pins its lockfile');
+});
+
+void test('the plain-npm-ci bootstrap is backed by a prepare hook that vendors skills', () => {
+  const pkg = JSON.parse(read('package.json').toString('utf8')) as {
+    scripts: Record<string, string>;
+  };
+  assert.equal(
+    pkg.scripts.prepare,
+    'node scripts/setup.ts',
+    'npm ci runs no build steps; the root prepare lifecycle must provision vendor/skills for the gate workspace',
+  );
 });

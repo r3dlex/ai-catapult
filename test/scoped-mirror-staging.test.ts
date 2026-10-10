@@ -101,7 +101,7 @@ void test('the staged scoped artifact packs on its own — no lifecycle prerequi
       scripts?: Record<string, string>;
     };
     const stagedLifecycle = Object.keys(stagedPkg.scripts ?? {}).filter((name) =>
-      /^(pre|post)?(pack|publish|install|test).*$/.test(name),
+      /^(pre|post)?(pack|publish|install|test|prepare).*$/.test(name),
     );
     assert.deepEqual(
       stagedLifecycle,

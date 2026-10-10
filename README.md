@@ -74,8 +74,8 @@ npm install -g ai-catapult@latest
 Source checkouts refresh the pinned skill and rebuild artifacts with:
 
 ```sh
-node scripts/setup.ts
-node scripts/prepare-dist.ts
+npm ci
+npm run build
 ```
 
 ## Local verification

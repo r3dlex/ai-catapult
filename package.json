@@ -32,6 +32,7 @@
     "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "prepare": "node scripts/setup.ts",
     "prepack": "node scripts/setup.ts && npm run build",
     "pretest": "npm run build",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/*.test.ts",
