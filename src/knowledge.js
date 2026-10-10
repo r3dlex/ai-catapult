@@ -31,6 +31,12 @@
  *   `locked` naming it, and only `unlock <id> --confirm-no-writer` removes it
  *   (claimed by an atomic rename and re-validated first, ledgered). Nothing
  *   removes a lock automatically.
+ * - Ledgers. A record is committed by its trailing newline, written whole or
+ *   not at all (short writes retried; a failure truncates the uncommitted
+ *   bytes before any caller acts). publish.py's ledger_lines fails on any
+ *   damaged line; here an interrupted tail is terminated and ledgered as a
+ *   knowledge-ledger-repair/1 record by the next append, and unlock never
+ *   reads the lock-event ledger, so no damaged audit line blocks recovery.
  * - Secret patterns. JavaScript has no leading inline-flag group and Node
  *   rejects the policy's `(?i)`, so compileSecretPattern turns it into the i
  *   flag. Every pattern compiles with u, for Python's code-point semantics.
@@ -49,11 +55,14 @@ import { spawnSync } from 'node:child_process';
 import {
   closeSync,
   existsSync,
+  fstatSync,
   fsyncSync,
+  ftruncateSync,
   lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   readdirSync,
   realpathSync,
   renameSync,
@@ -1100,13 +1109,51 @@ function withEntryLock(root, identity, policy, body) {
   });
 }
 
-function ledgerLines(root, relative) {
+// Ledger line commit marker: a record is committed once its newline is written.
+const LEDGER_REPAIR = 'knowledge-ledger-repair/1';
+
+function ledgerPath(root, relative) {
   const path = writerPath(root, relative);
   checkDestination(root, path);
-  const values = existsSync(path) ? splitLines(UTF8.decode(readFileSync(path))).map((line) => JSON.parse(line)) : [];
-  if (!values.every((value) => value !== null && typeof value === 'object' && !Array.isArray(value))) {
-    throw new KnowledgeError('invalid_ledger', 'ledger lines must be objects');
+  return path;
+}
+
+function parseLedgerLine(bytes) {
+  try {
+    const value = JSON.parse(UTF8.decode(bytes));
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  } catch {
+    return null;
   }
+}
+
+/**
+ * The committed records of an append-only JSONL ledger. An unterminated final
+ * line is an interrupted append, not a record: the next append terminates it
+ * and ledgers a repair record, after which that fragment line is skipped only
+ * because its repair record (matching sha256) follows it. Any other line that
+ * is not a JSON object fails closed.
+ */
+function ledgerLines(root, relative) {
+  const path = ledgerPath(root, relative);
+  if (!existsSync(path)) return { path, values: [] };
+  const data = readFileSync(path);
+  const lines = [];
+  for (let start = 0, end = data.indexOf(0x0a); end >= 0; start = end + 1, end = data.indexOf(0x0a, start)) {
+    lines.push(data.subarray(start, end));
+  }
+  const values = [];
+  lines.forEach((line, index) => {
+    const value = parseLedgerLine(line);
+    if (value) {
+      values.push(value);
+      return;
+    }
+    const repair = index + 1 < lines.length ? parseLedgerLine(lines[index + 1]) : null;
+    if (!repair || repair.schema !== LEDGER_REPAIR || repair.fragment_sha256 !== sha256(line)) {
+      throw new KnowledgeError('invalid_ledger', `${relative}:${index + 1}: ledger lines must be objects`);
+    }
+  });
   return { path, values };
 }
 
@@ -1120,12 +1167,50 @@ function ledgerLine(value) {
   return dumpJson(value, 0);
 }
 
+/**
+ * Append one record, durably and whole. An interrupted record left at the
+ * tail is first terminated and ledgered as a repair, so the new record starts
+ * on its own line. A short or failed write is retried until complete or fails;
+ * on failure the uncommitted bytes are truncated away when nothing else was
+ * appended since, and the error propagates before any caller acts on it.
+ */
 function appendEvent(path, event) {
   mkdirSync(dirname(path), { recursive: true });
-  const fd = openSync(path, 'a');
+  const fd = openSync(path, 'a+');
   try {
-    writeSync(fd, `${ledgerLine(event)}\n`);
-    fsyncSync(fd);
+    const size = fstatSync(fd).size;
+    let text = '';
+    if (size > 0) {
+      const existing = Buffer.alloc(size);
+      readSync(fd, existing, 0, size, 0);
+      const fragment = existing.subarray(existing.lastIndexOf(0x0a) + 1);
+      if (fragment.length) {
+        text += `\n${ledgerLine({
+          schema: LEDGER_REPAIR,
+          at: now(),
+          action: 'terminate_interrupted_record',
+          fragment_bytes: fragment.length,
+          fragment_sha256: sha256(fragment),
+        })}\n`;
+      }
+    }
+    const bytes = Buffer.from(`${text}${ledgerLine(event)}\n`, 'utf8');
+    let written = 0;
+    try {
+      while (written < bytes.length) {
+        const count = writeSync(fd, bytes, written, bytes.length - written);
+        if (count <= 0) throw new Error(`short ledger write: ${written} of ${bytes.length} bytes`);
+        written += count;
+      }
+      fsyncSync(fd);
+    } catch (error) {
+      try {
+        if (written > 0 && fstatSync(fd).size === size + written) ftruncateSync(fd, size);
+      } catch {
+        // Left as an interrupted tail: the next append terminates and ledgers it.
+      }
+      throw error;
+    }
   } finally {
     closeSync(fd);
   }
@@ -1393,7 +1478,9 @@ export function planUnlock(root, identity) {
  */
 export function executeUnlock(root, identity, targets) {
   if (!targets.length) throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
-  const { path: ledger } = ledgerLines(root, LOCK_EVENTS);
+  // Unlock only appends: it never needs the audit's content, so a damaged
+  // ledger line can never block lock recovery.
+  const ledger = ledgerPath(root, LOCK_EVENTS);
   const runId = randomUUID();
   let applied = null;
   for (const { relative, snapshot } of targets) {
