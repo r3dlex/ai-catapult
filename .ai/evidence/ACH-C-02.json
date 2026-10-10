@@ -225,7 +225,16 @@
     },
     "scope_of_fix_commit": "src/contract-drift.js, test/contract-drift.test.js, .ai/evidence/ACH-C-02.json — all within the registered goal scope; excluded files byte-untouched; .ai/ci/local-ci.json unchanged (none of the three files is a declared source)",
     "suite_after_fix": "npm test sanitized 273/273 exit 0 at the fix head; git diff --check exit 0",
-    "budget": "review round 2 of ≤2 per defect follows at the updated head"
+    "round_2": {
+      "artifact": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/.omc/artifacts/ask/codex-independent-review-round-2-r3dlex-ai-catapult-pr-57-goal-ach-2026-10-10T05-02-52-813Z.md",
+      "prompt": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/.omc/plans/receipts-c02-20261010/review-prompt-round2.md",
+      "verdict": "REQUEST_CHANGES",
+      "resolved": "findings 1 (missing-contract-dir), 4 (guarding), 5 (red3b wording) verified RESOLVED by the reviewer at a5de872",
+      "finding2_unresolved": "cross-surface pin parity covers only the first registration dir (autobahnDir = firstPayloadDir); a later registered payload with self-consistent-but-stale contract bytes exits 0/ok (reviewer repro re-confirmed locally by the runner: later array record and later key both exit 0, the same stale payload placed first exits 1 with surface-pin-parity findings + refresh hints)",
+      "finding3_partial": "evidence citations verified byte-exact (substrings of ledger lines 459/461; extraction receipts equal their ledger lines) but the live PR body still carried the old paraphrases when round 2 ran — corrected by the post-round-2 body edit (gh pr edit 57, byte-true quotes + ledger-text conflict referral); the reviewer additionally holds that admission does not resolve the 04:31Z condition-(4) no-primitive STOP clause — that interpretation is referred to the coordinator (disclosure + referral recorded in the evidence and PR body; this runner treats the clause's meaning as coordinator-owned)",
+      "new_major_unresolved": "an unrelated OpenCode skill present under the shared ${XDG_CONFIG_HOME}/opencode/skills dir makes install --harness claude exit 1 (opencode installRoot exists but is not ai-catapult-owned; reviewer repro re-confirmed locally: unrelated skill + install → exit 1 on opencode missing-contract-dir)",
+      "budget": "findings 2 and 3 consumed their 2 rounds; per the standing ≤2-rounds/defect constraint the review loop stops unresolved — no round 3, no merge from this runner"
+    }
   },
   "provenance": {
     "worktree": "/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/opencode/ach-c02-wt (worktree only; local ai-catapult/ checkout untouched)",
