@@ -251,6 +251,21 @@
       "source": "handoff:ai-catapult:ach-catapult-delivery-ts:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
       "target": "plan:ai-catapult:ach-catapult-delivery-ts:ACH-C-06:4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
       "type": "plans"
+    },
+    {
+      "source": "spec:ai-catapult:xskp-p4-adopt-engine",
+      "target": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "target": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-04:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "target": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-05:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "type": "plans"
     }
   ],
   "generated_at": "2026-08-22T00:00:00Z",
@@ -281,7 +296,8 @@
         "handoff:ai-catapult:xskp-p4-adopt-engine:93c64059b73f049b708baf459f711732749c6fa50635a8f6b50a0e0250530ceb",
         "handoff:ai-catapult:xskp-p4-adopt-engine:ed0b95f763c33548d3f313ccc3cd0e62f41dbe22501b4e6d1128d0bd029a2897",
         "handoff:ai-catapult:xskp-p4-adopt-engine:92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
-        "handoff:ai-catapult:xskp-p4-adopt-engine:2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8"
+        "handoff:ai-catapult:xskp-p4-adopt-engine:2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8",
+        "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7"
       ],
       "id": "spec:ai-catapult:xskp-p4-adopt-engine",
       "path": "docs/specifications/ACTIVE/cross-surface-knowledge-publication-xskp-p4-adopt-engine.md",
@@ -896,6 +912,39 @@
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "ACH-C-06",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:xskp-p4-adopt-engine"
+      ],
+      "id": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/handoff.md",
+      "repo_id": "ai-catapult",
+      "status": "active",
+      "title": "xskp-p4-adopt-engine-ts",
+      "type": "handoff"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7"
+      ],
+      "id": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-04:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "XSKP-P4-04",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7"
+      ],
+      "id": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-05:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "XSKP-P4-05",
       "type": "plan"
     }
   ],
