@@ -23,6 +23,11 @@
  *   dot-github/   → .github/
  *   dot-rules.ts  → .rules.ts
  *   (everything else maps 1:1)
+ *
+ * Besides the manifest entries the scaffold byte-copies the vendored
+ * scripts/validate-rules.sh validator into <target>/scripts/ — the template's
+ * prek.toml hook and the emitted .rules.ts header reference it (packaged
+ * installs source the staged copy; see scripts/stage-skill-templates.ts).
  */
 
 import { mkdirSync, readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
@@ -178,9 +183,11 @@ function writeMechanicalFiles(manifest: BoundaryManifest, templatesDir: string, 
  * Returns the emitted paths and the judgment-laden manifest paths (for the
  * finish prompt).
  */
-export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, upstreamRef, force = false }: {
+export function scaffold({ targetDir, templatesDir, skillsDir, repoId, date, upstreamUrl, upstreamRef, force = false }: {
   targetDir: string;
   templatesDir: string;
+  /** Skills root carrying scripts/validate-rules.sh (vendor mode); absent when templates come from the staged dist copy. */
+  skillsDir?: string | undefined;
   repoId: string;
   date: string;
   upstreamUrl: string;
@@ -211,6 +218,33 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   // Fix #3: collect collisions before writing anything, then refuse if any
   // exist and --force was not passed.
   const collisions = collectCollisions(manifest, targetDir, force);
+
+  // The template's prek.toml declares a validate-rules local hook whose entry
+  // is `bash scripts/validate-rules.sh`, and the emitted .rules.ts header
+  // documents that file as its validation entry point — but the vendored
+  // template set never shipped it, so every scaffolded tree carried a dead
+  // hook. The vendored skills root ships the canonical validator next to the
+  // catalog (the skillsDir the caller resolved; the catalog may place the
+  // skill at any depth, so the root — not template arithmetic — is the
+  // stable anchor); packaged installs get a staged copy at
+  // dist/skill-templates/scripts/ (scripts/stage-skill-templates.ts).
+  // Resolve it here and treat a collision under the same --force semantics
+  // as the manifest paths, so a scaffold that cannot emit a live hook
+  // refuses before writing anything.
+  const validatorCandidates = [join(templatesDir, 'scripts', 'validate-rules.sh')];
+  if (skillsDir) validatorCandidates.push(join(skillsDir, 'scripts', 'validate-rules.sh'));
+  const validatorSrc = validatorCandidates.find((candidate) => existsSync(candidate));
+  if (!validatorSrc) {
+    process.stderr.write(
+      'vendor/ missing or stale — vendored scripts/validate-rules.sh not found next to the templates; run: node scripts/setup.ts\n',
+    );
+    process.exit(1);
+  }
+  const validatorDest = join(targetDir, 'scripts', 'validate-rules.sh');
+  if (!force && existsSync(validatorDest)) {
+    collisions.push('scripts/validate-rules.sh');
+  }
+
   if (collisions.length > 0) {
     process.stderr.write(
       `error: init would overwrite existing files in ${targetDir}:\n` +
@@ -230,6 +264,14 @@ export function scaffold({ targetDir, templatesDir, repoId, date, upstreamUrl, u
   emitGitkeeps(templatesDir, templatesDir, targetDir, force, gitkeepCollisions);
   // .gitkeep collisions are non-fatal — they are empty marker files; silently
   // skip them if --force was not given (the directory already exists).
+
+  // Emit the vendored Archgate validator promised by the template's prek.toml
+  // hook (resolved and collision-checked above). Byte-exact copy from the
+  // pinned vendor source; listed in emittedPaths so the finish prompt and
+  // NEXT-STEPS.md reference the live hook target.
+  mkdirSync(join(targetDir, 'scripts'), { recursive: true });
+  writeFileSync(validatorDest, readFileSync(validatorSrc));
+  emittedPaths.push('scripts/validate-rules.sh');
 
   // Collect judgment-laden paths from manifest (for finish prompt).
   const judgmentLadenPaths = manifest.paths

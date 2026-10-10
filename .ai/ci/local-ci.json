@@ -17,7 +17,7 @@
     "scripts/stage-ci-adapters-runtime.ts": "a4e6c6d277da91ec97939c52c055114d720da81a74bba57f604f3d145a81113d",
     "scripts/stage-matrix-runtime.ts": "0641043cfe566c4ad291cf8ff872d0c1cedce1d3878be522ecd9901a181edcb3",
     "scripts/stage-readme-contract.ts": "637179e42c1a4c56776bd1ccaa92f96420a58c5a92285dc449d5167089305fc2",
-    "scripts/stage-skill-templates.ts": "2c1fb08ed87329f8a540b6a06ce28deabf5dbe9cb32e186ee141a4fab8223a4b",
+    "scripts/stage-skill-templates.ts": "5c1f6e268e105ae1d45bbe32af381b660a3f1a62bc3eed8f339aba4f011febe4",
     "scripts/verify-vendor.ts": "bad7df47566e9d37a06f371172f9168feea8f6a6f664908b6b21469c7613fbe4",
     "skills.lock.json": "96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb",
     "src/skill-resolver.ts": "84c4ad817cffabdd08d744d18a604a1e9bbea1ade866e5ceaef9c099923da9eb",

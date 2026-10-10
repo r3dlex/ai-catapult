@@ -15,6 +15,10 @@ function fixture({ catalog = true, sourcePath = '03-configure-generate/ai-catapu
   const skillDir = join(vendorSkills, sourcePath);
   mkdirSync(dirname(skillDir), { recursive: true });
   cpSync(canonicalSkill, skillDir, { recursive: true });
+  // Model the real skills root: the vendored Archgate validator lives at the
+  // root (scripts/validate-rules.sh) and init refuses to scaffold without it.
+  mkdirSync(join(vendorSkills, 'scripts'), { recursive: true });
+  cpSync(join(canonicalSkill, '..', '..', 'scripts', 'validate-rules.sh'), join(vendorSkills, 'scripts', 'validate-rules.sh'));
   if (catalog) {
     writeFileSync(join(vendorSkills, 'catalog.json'), JSON.stringify({
       schema_version: '1.0',

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // stage-skill-templates.ts — copy vendored ai-catapult-init templates into
-// dist/skill-templates/ so they ship in the npm tarball.
+// dist/skill-templates/ (plus the vendored scripts/validate-rules.sh validator
+// the emitted prek.toml hook references) so they ship in the npm tarball.
 //
 // This is a packaged copy of the catalog-resolved SSOT templates for `ai-catapult init` when vendor/ is absent
 // (i.e. when the package is installed via npx rather than cloned from source).
@@ -11,7 +12,7 @@
 //
 // Run by: npm run build (via scripts/prepare-dist.ts)
 // Snapshot for tests: npm run pretest → node scripts/snapshot-dist.ts copies dist/
-import { cpSync, existsSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { countFilesRecursive } from './build-plugin-lib.ts';
@@ -41,7 +42,23 @@ export function run(): void {
   rmSync(dest, { recursive: true, force: true });
   cpSync(src, dest, { recursive: true });
 
+  // Also ship the vendored Archgate validator alongside the templates: the
+  // emitted prek.toml hook references scripts/validate-rules.sh, and the
+  // packaged CLI (no vendor/) must still be able to scaffold a tree whose
+  // hook is live. Byte-exact copy from the same skills root the templates
+  // stage from (skillSrc is <skillsRoot>/<category>/ai-catapult-init, so the
+  // script sits two levels above it).
+  const validatorSrc = join(skillSrc, '..', '..', 'scripts', 'validate-rules.sh');
+  if (!existsSync(validatorSrc)) {
+    process.stderr.write(`ERROR: vendored validator script not found at ${validatorSrc}\n`);
+    process.stderr.write('       vendor/ is missing or stale — run node scripts/setup.ts first.\n');
+    process.exit(1);
+  }
+  mkdirSync(join(dest, 'scripts'), { recursive: true });
+  cpSync(validatorSrc, join(dest, 'scripts', 'validate-rules.sh'));
+
   console.log('OK: dist/skill-templates/ staged from resolved ai-catapult-init/templates/');
+  console.log('OK: dist/skill-templates/scripts/validate-rules.sh staged from the vendored skills root');
   console.log(`    ${countFilesRecursive(dest)} files`);
 }
 

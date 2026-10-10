@@ -46,6 +46,11 @@ function resolveTemplatesDir(): string {
   process.exit(1);
 }
 
+/** Skills root selected for scaffold: vendor mode when vendor/ exists, undefined → staged dist copy. */
+function scaffoldSkillsDir(): string | undefined {
+  return existsSync(VENDOR_SKILLS) ? VENDOR_SKILLS : undefined;
+}
+
 const HELP = `Usage: ai-catapult <command> [options]
 
 Commands:
@@ -220,7 +225,10 @@ function runInit(argv: string[]): void {
   const sourceSha = reviewedReadmeSha(targetDir);
 
   const { emittedPaths, judgmentLadenPaths } = scaffold({
-    targetDir, templatesDir: TEMPLATES_DIR, repoId, date, upstreamUrl, upstreamRef, force,
+    targetDir,
+    templatesDir: TEMPLATES_DIR,
+    skillsDir: scaffoldSkillsDir(),
+    repoId, date, upstreamUrl, upstreamRef, force,
   });
 
   try {
