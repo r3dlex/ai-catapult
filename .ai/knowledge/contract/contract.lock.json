@@ -1,0 +1,18 @@
+{
+  "files": {
+    "conformance.json": "f341ea24067cc9913e0e21cc90b4042471d895316786e35cae2da45b36d3a0b6",
+    "fixtures/valid/.ai/knowledge/entries/example-repo__plan__example.json": "d59f6b63cecd10b355bda018a5d26437e8ef52ff878f4a55b2f75f8eb9c61964",
+    "fixtures/valid/.ai/knowledge/registry.json": "e7cf57710664e97de44da9d472bbe2116f09e9b5c60a9f1f3da1efb56989de45",
+    "fixtures/valid/.omo/plans/example.md": "3ebbd9127ca61c4603a12722beda66b70e9c424bc67704f342baef1705cb69ac",
+    "fixtures/valid/docs/plans/example.md": "c199eb971601a4de443d553886bcdd6279533315d300e7226a8dd85d8d9d8685",
+    "fixtures/vectors/README.md": "a9b24cbf0edc91b9c727d8226e7d44b4421f8bd4d3640dcfeb90f35048612fff",
+    "fixtures/vectors/serialization-expected.json": "9154ccfa43b344254de1a38d98b56f5ab04cc3568b221744059ad7efb0886599",
+    "fixtures/vectors/serialization-input.json": "13eeeeb46164f755b192b67beed37a7c66ec65cd86b129a87dfa6965d5556c59",
+    "knowledge-entry.schema.json": "aa866e78cdfab727d938acdbfd31c49702ec003e032c520226e39f43ca83ebf6",
+    "knowledge-registry.schema.json": "360cc2033db5c957008b96149663660c246a72a06df50e8ce1e362efbc3db640",
+    "migration.schema.json": "73d57da57d12e7a908cc7ca75b73cc7870939efed1c53ebe325e67204c40ef45",
+    "publication-policy.json": "a49d50118d81e77c99ac3704dc6faabf89eab628934e8cc38f560993a6925f47"
+  },
+  "pack_version": "1",
+  "schema": "knowledge-contract-lock/1"
+}
