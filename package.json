@@ -32,13 +32,13 @@
     "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
-    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
+    "prepack": "node scripts/setup.ts && npm run build",
+    "pretest": "npm run build",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
-    "regen:fixture": "bash scripts/regen-fixture.sh",
-    "build:plugin:codex": "bash scripts/build-codex-plugin.sh",
-    "build:plugin:claude": "bash scripts/build-claude-plugin.sh",
-    "build:plugin:opencode": "bash scripts/build-opencode-plugin.sh"
+    "regen:fixture": "node scripts/regen-fixture.ts",
+    "build:plugin:codex": "node scripts/build-codex-plugin.ts",
+    "build:plugin:claude": "node scripts/build-claude-plugin.ts",
+    "build:plugin:opencode": "node scripts/build-opencode-plugin.ts"
   },
   "keywords": [
     "ai-sdlc",

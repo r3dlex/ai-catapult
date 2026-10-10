@@ -1,11 +1,23 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
 
-function fail(message) {
+/** Shape read from catalog.json; fields come from JSON and may be absent. */
+interface CatalogSkill {
+  name?: string;
+  source_path?: string;
+  lifecycle?: string;
+  supported_hosts?: string[];
+}
+
+interface Catalog {
+  skills?: Array<CatalogSkill | null>;
+}
+
+function fail(message: string): never {
   throw new Error(`Invalid vendored skills: ${message}`);
 }
 
-function safeRelativePath(value, field) {
+function safeRelativePath(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) fail(`${field} must be a non-empty string`);
   if (isAbsolute(value) || /^[A-Za-z]:[\\/]/.test(value) || value.includes('\\')) {
     fail(`${field} must be a repository-relative POSIX path`);
@@ -17,7 +29,7 @@ function safeRelativePath(value, field) {
   return value;
 }
 
-function pathInside(root, candidate, field) {
+function pathInside(root: string, candidate: string, field: string): string {
   const rootReal = realpathSync(root);
   const candidateReal = realpathSync(candidate);
   const rel = relative(rootReal, candidateReal);
@@ -27,17 +39,20 @@ function pathInside(root, candidate, field) {
   return candidateReal;
 }
 
-function frontmatterName(skillMd) {
+function frontmatterName(skillMd: string): string {
   const text = readFileSync(skillMd, 'utf8');
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) fail(`${skillMd} has no YAML frontmatter`);
-  const nameLine = match[1].split(/\r?\n/).find((line) => /^name\s*:/.test(line));
+  const nameLine = match[1]!.split(/\r?\n/).find((line) => /^name\s*:/.test(line));
   if (!nameLine) fail(`${skillMd} frontmatter has no name`);
   const value = nameLine.slice(nameLine.indexOf(':') + 1).trim();
-  return value.replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, (_, double, single) => double ?? single);
+  return value.replace(
+    /^(?:"([\s\S]*)"|'([\s\S]*)')$/,
+    (_full: string, double: string | undefined, single: string | undefined) => (double ?? single) as string,
+  );
 }
 
-function validateTemplates(skillDir) {
+function validateTemplates(skillDir: string): void {
   const templatesDir = join(skillDir, 'templates');
   const manifestPath = join(templatesDir, 'boundary-manifest.json');
   if (!existsSync(manifestPath)) fail('ai-catapult-init/templates/boundary-manifest.json is missing');
@@ -51,11 +66,13 @@ function validateTemplates(skillDir) {
     if (!existsSync(join(templatesDir, template))) fail(`required template is missing: ${template}`);
   }
 
-  let manifest;
+  let manifest: { paths?: Array<{ classification?: string; template?: string } | null> };
   try {
-    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      paths?: Array<{ classification?: string; template?: string } | null>;
+    };
   } catch (error) {
-    fail(`boundary-manifest.json is malformed: ${error.message}`);
+    fail(`boundary-manifest.json is malformed: ${(error as Error).message}`);
   }
   if (!Array.isArray(manifest.paths)) fail('boundary-manifest.json paths must be an array');
   for (const entry of manifest.paths) {
@@ -67,31 +84,32 @@ function validateTemplates(skillDir) {
   }
 }
 
-function readCatalog(vendorSkillsDir) {
+function readCatalog(vendorSkillsDir: string): { skills: Array<CatalogSkill | null> } {
   if (!existsSync(vendorSkillsDir)) fail(`directory not found: ${vendorSkillsDir}`);
 
   const catalogPath = join(vendorSkillsDir, 'catalog.json');
   if (!existsSync(catalogPath)) {
     fail(`catalog.json is missing from ${vendorSkillsDir}; refresh the vendored skills checkout from skills.lock.json`);
   }
-  let catalog;
+  let catalog: Catalog;
   try {
-    catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+    catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as Catalog;
   } catch (error) {
-    fail(`catalog.json is malformed: ${error.message}`);
+    fail(`catalog.json is malformed: ${(error as Error).message}`);
   }
-  if (!Array.isArray(catalog.skills)) fail('catalog.json skills must be an array');
-  return catalog;
+  const skills = catalog.skills;
+  if (!Array.isArray(skills)) fail('catalog.json skills must be an array');
+  return { skills };
 }
 
 /** Resolve and validate a canonical skill from a vendored skills checkout. */
-export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-init') {
+export function resolveVendorSkill(vendorSkillsDir: string, skillName: string = 'ai-catapult-init'): string {
   const catalog = readCatalog(vendorSkillsDir);
   const matches = catalog.skills.filter((entry) => entry?.name === skillName);
   if (matches.length !== 1) {
     fail(`catalog.json must contain exactly one canonical ${skillName} entry (found ${matches.length})`);
   }
-  const sourcePath = safeRelativePath(matches[0].source_path, `${skillName} source_path`);
+  const sourcePath = safeRelativePath(matches[0]!.source_path, `${skillName} source_path`);
 
   const skillDir = join(vendorSkillsDir, sourcePath);
   const skillMd = join(skillDir, 'SKILL.md');
@@ -119,7 +137,10 @@ export function resolveVendorSkill(vendorSkillsDir, skillName = 'ai-catapult-ini
  * catalog without it means the vendored checkout is wrong, not that the plugin
  * should ship without it.
  */
-export function resolveBundledSkills(vendorSkillsDir, { host = 'claude-code' } = {}) {
+export function resolveBundledSkills(
+  vendorSkillsDir: string,
+  { host = 'claude-code' }: { host?: string } = {},
+): Array<{ name: string; dir: string }> {
   const catalog = readCatalog(vendorSkillsDir);
   const names = catalog.skills
     .filter((entry) => entry?.lifecycle !== 'deprecated')
@@ -130,5 +151,5 @@ export function resolveBundledSkills(vendorSkillsDir, { host = 'claude-code' } =
   if (!names.includes('ai-catapult-init')) {
     fail(`catalog.json has no ai-catapult-init entry bundled for host ${host}`);
   }
-  return names.map((name) => ({ name, dir: resolveVendorSkill(vendorSkillsDir, name) }));
+  return names.map((name) => ({ name: name as string, dir: resolveVendorSkill(vendorSkillsDir, name as string) }));
 }
