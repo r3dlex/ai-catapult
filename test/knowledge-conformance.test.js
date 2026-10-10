@@ -1,7 +1,8 @@
 /**
- * TDD tests for Goal XSKP-P4-02 — knowledge read verbs (knowledge-registry/1).
+ * TDD tests for Goals XSKP-P4-02 (read verbs) and XSKP-P4-03 (write verbs) —
+ * knowledge-registry/1 conformance.
  *
- * Goal record (handoff xskp-p4-adopt-engine, gen 2ce8dbb7…, goals.json):
+ * XSKP-P4-02 goal record (handoff xskp-p4-adopt-engine, gen 2ce8dbb7…, goals.json):
  *   'ai-catapult knowledge list|find|show|verify|rebuild' passes C01-C06, C14,
  *   the C15 read half and C18 with the same exit codes and error tokens as the
  *   contract. C16: the JS serializer orders keys by Unicode code point (not
@@ -9,6 +10,17 @@
  *   fixtures/vectors/serialization-expected.json byte-for-byte; C02 reproduces
  *   the fixture registry.json. Packaged lane: the same cases run against the
  *   dist-snapshot tree. Auto-discovered by node --test under npm test.
+ *
+ * XSKP-P4-03 goal record (same handoff):
+ *   publish/archive/retire/unlock pass C07-C13, the C15 write half and C19
+ *   (unlock without --confirm-no-writer exits 2; never automatic; ledgered).
+ *   The policy's inline (?i) secret pattern is translated to a JS 'i' flag and
+ *   tested explicitly (Node rejects (?i)); the C08 token is assembled at
+ *   runtime. The lock is an atomic mkdirSync; contention fails immediately with
+ *   locked; a stale lock is reported, never removed automatically. AC-3 (P4):
+ *   C01-C19 pass in source and packaged lanes. AC-7: an executable guard wraps
+ *   every write test (git status --porcelain plus native/immutable sha256
+ *   snapshots, before and after).
  *
  * Cases exercised, from .ai/knowledge/contract/conformance.json:
  *   C01-valid-readback            show example-repo:plan:example (exit 0, digest)
@@ -18,14 +30,43 @@
  *   C04-missing-without-tombstone verify → missing_without_tombstone, exit 1
  *   C05-path-traversal            verify → unsafe_path (traversal), exit 1
  *   C06-symlink-component         verify → unsafe_path (symlink_component), exit 1
+ *   C07-denied-source             publish a deny-listed path → denied_private, exit 1
+ *   C08-secret-in-content         publish a runtime-assembled AWS-key shape →
+ *                                 secret_detected; the (?i) pattern matches
+ *                                 case-insensitively through the JS i flag
+ *   C09-id-reuse                  retire, then publish a new doc under the same
+ *                                 knowledge_id → id_reused, exit 1
+ *   C10-revision-append           edit canonical, republish → rev 2, rev 1 kept;
+ *                                 show verifies it
+ *   C11-frontmatter-merge         existing frontmatter keys kept; only
+ *                                 knowledge_id added
+ *   C12-immutable-no-rewrite      immutable path published in place, bytes
+ *                                 unchanged, frontmatter_id false
+ *   C13-lock-contention           two concurrent publishes of one knowledge_id:
+ *                                 one exits 0, the other fails locked at once
  *   C14-federated-absent-child    find --federated with an absent managed child:
  *                                 exit 0, absence reported not failed
  *   C15 read half                 rebuild preserves unknown entry keys (x_extra)
+ *   C15 write half                rebuild then republish preserves x_extra
  *   C16-serialization-vector      serialize → bytes equal expected vector;
  *                                 pins code-point key order (x_ｚ before x_😀)
- *   C18-stale-lock-reported       verify reports stale_lock, exit 0, lock kept
+ *   C17-dispatcher-forwarding     `ai-catapult knowledge` forwards argv verbatim
+ *                                 and returns the writer's exit and streams.
+ *                                 The absent-writer clause has no subject here:
+ *                                 the contract scopes it to implementations that
+ *                                 ship reader and writer as separate files
+ *                                 (root scripts/ai-knowledge); P4 ships both
+ *                                 halves in src/knowledge.js, so the writer can
+ *                                 never be absent while the reader is present.
+ *   C18-stale-lock-reported       verify reports stale_lock, exits 0, lock kept
+ *                                 (seeded, and left by a killed real writer)
+ *   C19-manual-unlock             unlock refuses without --confirm-no-writer
+ *                                 (exit 2); with it the lock goes and the
+ *                                 unlock is ledgered prepared → applied
  *   list smoke                    list on the valid fixture (AC names list; no
  *                                 dedicated C-case) pins the 9-key item shape
+ *   archive                       the contract verb with no C-case: confirmed,
+ *                                 ledgered migrate with reference repair
  *
  * Every case runs in TWO lanes against the same fixtures:
  *   source:   this checkout's bin/ai-catapult.js
@@ -34,27 +75,38 @@
  *             vendor is absent; the CLI must run from the package alone,
  *             including resolving .ai/knowledge/contract from package files).
  *
- * The tests only ever spawn the CLI; they import nothing from src/ so the red
+ * The tests only ever spawn the CLI (or a child process that imports the
+ * lane's src/knowledge.js); they import nothing from src/ themselves so the red
  * state is the dispatch failure itself, not a module load error.
  */
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
+  appendFileSync,
+  closeSync,
+  constants as fsConstants,
+  copyFileSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
-import { appendFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '..');
@@ -186,13 +238,13 @@ function laneContractDir(lane) {
  * template dir at module load; AI_CATAPULT_DIST_ROOT is pinned per lane
  * (readiness-delivery precedent: the extracted package uses its own dist).
  */
-function spawnKnowledge(lane, rootDir, args) {
+function spawnKnowledge(lane, rootDir, args, extraEnv = {}) {
   const cli = join(laneRoot(lane), 'bin/ai-catapult.js');
   const distRoot = lane === 'source' ? DIST_SNAPSHOT : join(packaged.dir, 'dist');
   const result = spawnSync(process.execPath, [cli, 'knowledge', '--root', rootDir, ...args], {
     encoding: 'utf8',
     timeout: 30_000,
-    env: { ...process.env, AI_CATAPULT_DIST_ROOT: distRoot },
+    env: { ...process.env, AI_CATAPULT_DIST_ROOT: distRoot, ...extraEnv },
   });
   assert.equal(result.error, undefined, `spawn failed: ${result.error}`);
   return result;
@@ -542,5 +594,797 @@ test('XSKP-P4-02 review-r1 F2: verify rejects extra positional args with usage e
     );
     assert.equal(withoutRoot.status, 2, `verify with an extra positional must be a usage error, with or without --root (exit ${withoutRoot.status})\n${withoutRoot.stderr}`);
     assert.ok(withoutRoot.stderr.startsWith('ai-catapult knowledge: unrecognized arguments'), withoutRoot.stderr);
+  });
+});
+// ===========================================================================
+// XSKP-P4-03 — write verbs (publish / archive / retire / unlock)
+// ===========================================================================
+
+const LANES = ['source', 'packaged'];
+const EXAMPLE_ID = 'example-repo:plan:example';
+const EXAMPLE_DOC = 'docs/plans/example.md';
+const ENTRY_LOCK_REL = '.ai/knowledge/.locks/example-repo__plan__example.json.lock';
+const LOCK_EVENTS_REL = '.ai/knowledge/lock-events.jsonl';
+const LOCKED = { error: 'locked', detail: 'entry lock already exists; explicit unlock required' };
+const POLICY = JSON.parse(readFileSync(join(SOURCE_CONTRACT, 'publication-policy.json'), 'utf8'));
+
+// ---------------------------------------------------------------------------
+// AC-7 executable guard
+// ---------------------------------------------------------------------------
+
+/**
+ * The policy's glob semantics, ported here independently of src/: `*` stays
+ * inside one path component, `**\/` spans zero or more directories.
+ */
+function policyGlob(path, pattern) {
+  let expression = '';
+  for (let i = 0; i < pattern.length;) {
+    if (pattern.startsWith('**/', i)) {
+      expression += '(?:.*/)?';
+      i += 3;
+    } else if (pattern.startsWith('**', i)) {
+      expression += '.*';
+      i += 2;
+    } else if (pattern[i] === '*') {
+      expression += '[^/]*';
+      i += 1;
+    } else {
+      expression += pattern[i].replace(/[.*+?^${}()|[\]\\/-]/g, '\\$&');
+      i += 1;
+    }
+  }
+  return new RegExp(`^${expression}$`, 's').test(path);
+}
+
+// AC-7 scope: every native-artifact rule and every immutable path the policy names.
+const GUARDED_GLOBS = [...POLICY.native_rules.map((rule) => rule.glob), ...POLICY.immutable];
+// Walk only the literal directory prefix of each glob.
+const GUARDED_ROOTS = [...new Set(GUARDED_GLOBS.map((glob) => {
+  const parts = glob.split('/');
+  const wild = parts.findIndex((part) => part.includes('*'));
+  return (wild < 0 ? parts : parts.slice(0, wild)).join('/');
+}))];
+
+/** sha256 of every native/immutable file under dir; symlinks recorded, never followed. */
+function guardedDigests(dir) {
+  const found = new Set();
+  const visit = (rel) => {
+    const abs = join(dir, rel);
+    let info;
+    try {
+      info = lstatSync(abs);
+    } catch {
+      return;
+    }
+    if (info.isDirectory()) {
+      for (const name of readdirSync(abs)) visit(`${rel}/${name}`);
+      return;
+    }
+    if (!GUARDED_GLOBS.some((glob) => policyGlob(rel, glob))) return;
+    found.add(info.isSymbolicLink() ? `${rel} -> ${readlinkSync(abs)}` : `${rel} ${sha256File(abs)}`);
+  };
+  for (const prefix of GUARDED_ROOTS) visit(prefix);
+  return [...found].sort();
+}
+
+function checkoutSnapshot() {
+  const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=all'], {
+    cwd: root, encoding: 'utf8', timeout: 60_000,
+  });
+  assert.equal(status.status, 0, `git status failed\n${status.stderr}`);
+  return { status: status.stdout, digests: guardedDigests(root) };
+}
+
+/**
+ * AC-7: run a write-verb body and prove the real checkout kept its
+ * `git status --porcelain` and every native/immutable digest across it. A
+ * failing body still reports a guard violation; a guard violation never hides
+ * a failing body.
+ */
+async function ac7Guarded(name, body) {
+  const before = checkoutSnapshot();
+  let failure = null;
+  try {
+    await body();
+  } catch (error) {
+    failure = error;
+  }
+  const after = checkoutSnapshot();
+  if (failure) {
+    if (!isDeepStrictEqual(after, before)) failure.message += `\nAC-7: ${name} also changed the checkout`;
+    throw failure;
+  }
+  assert.deepEqual(after, before, `AC-7: ${name} changed the checkout's git status or a native/immutable file`);
+}
+
+function gitIn(dir, ...args) {
+  const result = spawnSync('git', [
+    '-c', 'user.name=Conformance', '-c', 'user.email=conformance@example.invalid',
+    '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args,
+  ], { cwd: dir, encoding: 'utf8', timeout: 30_000 });
+  assert.equal(result.status, 0, `git ${args.join(' ')} failed\n${result.stderr}`);
+  return result.stdout.trim();
+}
+
+/**
+ * Run body once per lane on a fresh staged fixture carrying the repo profile
+ * the writer reads, inside the AC-7 guard. The staged root's own
+ * native/immutable digests are compared before and after each lane too: a
+ * write verb may add entries and canonical documents, never touch a native
+ * artifact or an immutable file.
+ */
+async function writeCase(name, { mutate, git = false } = {}, body) {
+  await ac7Guarded(name, async () => {
+    for (const lane of LANES) {
+      const tmp = stageFixture(lane, (dir) => {
+        mkdirSync(join(dir, '.ai/init'), { recursive: true });
+        writeFileSync(
+          join(dir, '.ai/init/repo-profile.json'),
+          `${JSON.stringify({ repo_id: 'example-repo' }, null, 2)}\n`,
+          'utf8',
+        );
+        if (mutate) mutate(dir);
+      });
+      try {
+        if (git) {
+          gitIn(tmp, 'init', '-q');
+          gitIn(tmp, 'add', '-A');
+          gitIn(tmp, 'commit', '-q', '-m', 'conformance fixture');
+        }
+        const before = guardedDigests(tmp);
+        await body(lane, tmp);
+        assert.deepEqual(
+          guardedDigests(tmp),
+          before,
+          `AC-7: ${name} (${lane}) changed a native or immutable file in the staged root`,
+        );
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Real concurrent writers
+// ---------------------------------------------------------------------------
+
+function spawnKnowledgeAsync(lane, rootDir, args) {
+  const cli = join(laneRoot(lane), 'bin/ai-catapult.js');
+  const distRoot = lane === 'source' ? DIST_SNAPSHOT : join(packaged.dir, 'dist');
+  const child = spawn(process.execPath, [cli, 'knowledge', '--root', rootDir, ...args], {
+    env: { ...process.env, AI_CATAPULT_DIST_ROOT: distRoot },
+  });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+  const exited = new Promise((resolveExit, reject) => {
+    child.on('error', reject);
+    child.on('close', (status, signal) => resolveExit({ status, signal, stdout, stderr }));
+  });
+  return { child, exited };
+}
+
+async function waitFor(predicate, what, timeoutMs = 20_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((wake) => setTimeout(wake, 25));
+  }
+}
+
+function lockOwnerPid(tmp) {
+  try {
+    return JSON.parse(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8')).pid;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Park a real publisher inside its critical section. A FIFO in the entries
+ * directory blocks the writer's own entry scan, which runs only after it took
+ * the entry lock, so contention is deterministic with no test hook in src/.
+ */
+async function parkPublisher(lane, tmp, args) {
+  const fifo = join(tmp, '.ai/knowledge/entries/example-repo__plan__zz-parked.json');
+  const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
+  assert.equal(made.status, 0, `mkfifo failed\n${made.stderr}`);
+  const writer = spawnKnowledgeAsync(lane, tmp, args);
+  try {
+    await waitFor(() => lockOwnerPid(tmp) === writer.child.pid, 'the parked publisher to own the entry lock');
+  } catch (error) {
+    writer.child.kill('SIGKILL');
+    await writer.exited;
+    throw error;
+  }
+  return { fifo, ...writer };
+}
+
+/** Release a parked publisher: hand its entry scan one valid entry, then EOF. */
+async function feedParked(parked, bytes) {
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    let fd;
+    try {
+      // Non-blocking: ENXIO means the writer has not opened the FIFO yet.
+      fd = openSync(parked.fifo, fsConstants.O_WRONLY | fsConstants.O_NONBLOCK);
+    } catch (error) {
+      if (error.code !== 'ENXIO') throw error;
+      if (parked.child.exitCode !== null || parked.child.signalCode !== null) {
+        throw new Error('the parked publisher exited before reading its entry scan');
+      }
+      if (Date.now() > deadline) throw new Error('timed out feeding the parked publisher');
+      await new Promise((wake) => setTimeout(wake, 25));
+      continue;
+    }
+    try {
+      writeSync(fd, bytes);
+    } finally {
+      closeSync(fd);
+    }
+    return;
+  }
+}
+
+/** A valid entry for the parked scan, pointing at a real canonical file. */
+function parkedEntryBytes(tmp) {
+  const doc = 'docs/plans/zz-parked.md';
+  writeFileSync(join(tmp, doc), '# Parked\n', 'utf8');
+  return `${JSON.stringify({
+    canonical: { format: 'markdown', frontmatter_id: false, immutable: false, path: doc },
+    kind: 'plan',
+    knowledge_id: 'example-repo:plan:zz-parked',
+    lifecycle: 'active',
+    origin: { host: 'none', native: false, producer: 'manual', surface: 'workspace' },
+    relations: [],
+    repo_id: 'example-repo',
+    revisions: [{
+      derived_from: [],
+      evidence_class: 'verified-current',
+      published_at: '2026-10-10T00:00:00Z',
+      rev: 1,
+      sha256: sha256File(join(tmp, doc)),
+    }],
+    schema: 'knowledge-registry/1',
+    title: 'Parked',
+    tombstone: null,
+  }, null, 2)}\n`;
+}
+
+function readLedger(dir, rel) {
+  return readFileSync(join(dir, rel), 'utf8').split('\n').filter((line) => line !== '').map((line) => JSON.parse(line));
+}
+
+function laneModuleUrl(lane) {
+  return pathToFileURL(join(laneRoot(lane), 'src/knowledge.js')).href;
+}
+
+// ---------------------------------------------------------------------------
+// Usage shapes
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 usage: write verbs reject missing arguments with exit 2 (source + packaged)', async () => {
+  await writeCase('usage', {}, (lane, tmp) => {
+    const cases = [
+      [['publish'], 'the following arguments are required: path'],
+      [['archive'], 'the following arguments are required: id'],
+      [['retire', EXAMPLE_ID], 'the following arguments are required: --reason'],
+      [['retire'], 'the following arguments are required: id, --reason'],
+      [['unlock', EXAMPLE_ID], 'the following arguments are required: --confirm-no-writer'],
+      [['publish', EXAMPLE_DOC, '--unknown'], 'unrecognized argument: --unknown'],
+    ];
+    for (const [args, message] of cases) {
+      const result = spawnKnowledge(lane, tmp, args);
+      assert.equal(result.status, 2, `${JSON.stringify(args)} must be a usage error (exit ${result.status})\n${result.stderr}`);
+      assert.ok(result.stderr.startsWith(`ai-catapult knowledge: ${message}`), `${JSON.stringify(args)}\n${result.stderr}`);
+      assert.equal(result.stdout, '');
+    }
+    assert.equal(existsSync(join(tmp, '.ai/knowledge/.locks')), false, 'usage errors never take a lock');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C07 — denied source
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C07-denied-source: publish refuses a deny-listed path with denied_private (source + packaged)', async () => {
+  await writeCase('C07', {
+    mutate: (dir) => {
+      mkdirSync(join(dir, '.omo/run-continuation'), { recursive: true });
+      writeFileSync(join(dir, '.omo/run-continuation/ses_x.json'), '{"session": "x"}\n', 'utf8');
+    },
+  }, (lane, tmp) => {
+    const registryBefore = readFileSync(join(tmp, EXPECTED_REGISTRY_FILE));
+    const result = spawnKnowledge(lane, tmp, ['publish', '.omo/run-continuation/ses_x.json']);
+    assert.equal(result.status, 1, `publish of a private path must exit 1 (exit ${result.status})\n${result.stderr}`);
+    assert.deepEqual(JSON.parse(result.stdout), { error: 'denied_private', detail: 'source is private' });
+    assert.deepEqual(readdirSync(join(tmp, '.ai/knowledge/entries')), ['example-repo__plan__example.json']);
+    assert.deepEqual(readFileSync(join(tmp, EXPECTED_REGISTRY_FILE)), registryBefore);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C08 — secret in content; the (?i) inline flag becomes the JS i flag
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C08-secret-in-content: publish refuses a runtime-assembled AWS key shape (source + packaged)', async () => {
+  // Assembled at runtime, never stored literally (conformance C08 mutate rule).
+  const awsShaped = 'AKIA' + '0'.repeat(16);
+  await writeCase('C08', {
+    mutate: (dir) => writeFileSync(join(dir, 'docs/leak.md'), `# Leak\n\nkey ${awsShaped}\n`, 'utf8'),
+  }, (lane, tmp) => {
+    const result = spawnKnowledge(lane, tmp, ['publish', 'docs/leak.md']);
+    assert.equal(result.status, 1, `publish must refuse secret content (exit ${result.status})\n${result.stderr}`);
+    assert.deepEqual(JSON.parse(result.stdout), { error: 'secret_detected', detail: 'source contains a secret-shaped value' });
+    assert.equal(existsSync(join(tmp, '.ai/knowledge/entries/example-repo__doc__leak.json')), false);
+    assert.equal(readFileSync(join(tmp, 'docs/leak.md'), 'utf8'), `# Leak\n\nkey ${awsShaped}\n`, 'a refused source is never rewritten');
+  });
+});
+
+test('XSKP-P4-03 C08 (?i) translation: the inline-flag pattern compiles to the JS i flag and matches any case (source + packaged)', async () => {
+  const raw = POLICY.deny.secret_patterns.find((pattern) => pattern.startsWith('(?i)'));
+  assert.ok(raw, 'the frozen policy carries an inline (?i) secret pattern');
+  // Why the translation exists: JavaScript has no leading inline-flag group.
+  assert.throws(() => new RegExp(raw), SyntaxError);
+  // Runtime-assembled probes; only a case-insensitive match catches the upper-case key.
+  const upper = `TOKEN: ${'x'.repeat(20)}`;
+  const mixed = `Password = "${'Ab9'.repeat(6)}"`;
+  const control = 'TOKEN: short';
+  await writeCase('C08-flag', {
+    mutate: (dir) => {
+      writeFileSync(join(dir, 'docs/upper.md'), `# Upper\n\n${upper}\n`, 'utf8');
+      writeFileSync(join(dir, 'docs/mixed.md'), `# Mixed\n\n${mixed}\n`, 'utf8');
+      writeFileSync(join(dir, 'docs/control.md'), `# Control\n\n${control}\n`, 'utf8');
+    },
+  }, (lane, tmp) => {
+    const probe = spawnSync(process.execPath, ['--input-type=module', '-e', [
+      'const { compileSecretPattern } = await import(process.argv[1]);',
+      'const compiled = compileSecretPattern(process.argv[2]);',
+      'process.stdout.write(JSON.stringify({ source: compiled.source, flags: compiled.flags,',
+      '  upper: compiled.test(process.argv[3]), lower: compiled.test(process.argv[3].toLowerCase()) }));',
+    ].join('\n'), laneModuleUrl(lane), raw, upper], { encoding: 'utf8', timeout: 30_000 });
+    assert.equal(probe.status, 0, `compileSecretPattern probe failed\n${probe.stderr}`);
+    const compiled = JSON.parse(probe.stdout);
+    assert.equal(compiled.source, new RegExp(raw.slice('(?i)'.length)).source, 'only the (?i) prefix is removed');
+    assert.ok(compiled.flags.includes('i'), `the translated pattern carries the i flag (got ${compiled.flags})`);
+    assert.equal(compiled.upper, true);
+    assert.equal(compiled.lower, true);
+
+    for (const doc of ['docs/upper.md', 'docs/mixed.md']) {
+      const result = spawnKnowledge(lane, tmp, ['publish', doc]);
+      assert.equal(result.status, 1, `${doc} must be refused (exit ${result.status})\n${result.stderr}`);
+      assert.deepEqual(JSON.parse(result.stdout), { error: 'secret_detected', detail: 'source contains a secret-shaped value' });
+    }
+    // A short value is no secret shape: the translation does not over-match.
+    const control = spawnKnowledge(lane, tmp, ['publish', 'docs/control.md']);
+    assert.equal(control.status, 0, `the control document must publish (exit ${control.status})\n${control.stdout}${control.stderr}`);
+    assert.equal(JSON.parse(control.stdout).knowledge_id, 'example-repo:doc:control');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C09 — id reuse after retire
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C09-id-reuse: retire writes the tombstone; republishing the retired id fails id_reused (source + packaged)', async () => {
+  await writeCase('C09', {
+    mutate: (dir) => writeFileSync(join(dir, 'docs/plans/replacement.md'), '# Replacement\n', 'utf8'),
+  }, (lane, tmp) => {
+    const retire = spawnKnowledge(lane, tmp, ['retire', EXAMPLE_ID, '--reason', 'superseded by replacement']);
+    assert.equal(retire.status, 0, `retire must exit 0 (exit ${retire.status})\n${retire.stdout}${retire.stderr}`);
+    const retired = JSON.parse(retire.stdout);
+    assert.equal(retired.lifecycle, 'retired');
+    assert.equal(retired.tombstone.reason, 'superseded by replacement');
+    assert.equal(retired.tombstone.last_sha256, CANONICAL_SHA256);
+    assert.match(retired.tombstone.retired_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/);
+    assert.deepEqual(JSON.parse(readFileSync(join(tmp, ENTRY_FILE_REL), 'utf8')), retired);
+    assert.equal(JSON.parse(readFileSync(join(tmp, EXPECTED_REGISTRY_FILE), 'utf8')).entries[0].lifecycle, 'retired');
+
+    const reuse = spawnKnowledge(lane, tmp, ['publish', 'docs/plans/replacement.md', '--id', EXAMPLE_ID]);
+    assert.equal(reuse.status, 1, `republishing a retired id must exit 1 (exit ${reuse.status})\n${reuse.stderr}`);
+    assert.deepEqual(JSON.parse(reuse.stdout), { error: 'id_reused', detail: 'retired identity cannot be reused' });
+    assert.equal(readFileSync(join(tmp, 'docs/plans/replacement.md'), 'utf8'), '# Replacement\n');
+
+    // The tombstone keeps the entry valid once the caller removes the canonical file.
+    rmSync(join(tmp, EXAMPLE_DOC));
+    const verify = spawnKnowledge(lane, tmp, ['verify']);
+    assert.equal(verify.status, 0, `verify after retire must pass (exit ${verify.status})\n${verify.stdout}`);
+    assert.equal(JSON.parse(verify.stdout).ok, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C10 — revision append
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C10-revision-append: republishing an edited canonical appends rev 2 and keeps rev 1 (source + packaged)', async () => {
+  await writeCase('C10', {
+    mutate: (dir) => appendFileSync(join(dir, EXAMPLE_DOC), '\nSecond pass.\n', 'utf8'),
+  }, (lane, tmp) => {
+    const edited = sha256File(join(tmp, EXAMPLE_DOC));
+    const publish = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
+    assert.equal(publish.status, 0, `publish must exit 0 (exit ${publish.status})\n${publish.stdout}${publish.stderr}`);
+    const entry = JSON.parse(publish.stdout);
+    assert.deepEqual(entry.revisions.map((revision) => [revision.rev, revision.sha256]), [[1, CANONICAL_SHA256], [2, edited]]);
+    assert.deepEqual(entry.revisions[1].derived_from, [{
+      classification: 'canonical', path: EXAMPLE_DOC, sha256: edited, surface: 'workspace',
+    }]);
+    // First-revision metadata is kept, not re-derived.
+    assert.deepEqual(entry.origin, { host: 'opencode', native: true, producer: 'prometheus', surface: 'omo' });
+    assert.equal(entry.title, 'Example plan');
+    assert.equal(sha256File(join(tmp, EXAMPLE_DOC)), edited, 'a canonical that already carries its id is not rewritten');
+    assert.equal(readFileSync(join(tmp, ENTRY_FILE_REL), 'utf8'), publish.stdout, 'the entry file holds the canonical bytes the writer printed');
+
+    const show = spawnKnowledge(lane, tmp, ['show', EXAMPLE_ID]);
+    assert.equal(show.status, 0, `show must verify rev 2 (exit ${show.status})\n${show.stdout}`);
+    const shown = JSON.parse(show.stdout);
+    assert.equal(shown.revisions.at(-1).rev, 2);
+    assert.equal(shown.revisions[0].sha256, CANONICAL_SHA256, 'previous revision kept');
+    const check = spawnKnowledge(lane, tmp, ['rebuild', '--check']);
+    assert.equal(check.status, 0, `the written aggregate must reproduce (exit ${check.status})\n${check.stdout}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C11 — frontmatter merge
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C11-frontmatter-merge: only knowledge_id is added; existing keys and body are kept (source + packaged)', async () => {
+  const original = '---\ntitle: Custom title\nowner: docs-team\n---\n\n# Custom title\n\nBody text.\n';
+  await writeCase('C11', {
+    mutate: (dir) => writeFileSync(join(dir, 'docs/mergeme.md'), original, 'utf8'),
+  }, (lane, tmp) => {
+    const publish = spawnKnowledge(lane, tmp, ['publish', 'docs/mergeme.md']);
+    assert.equal(publish.status, 0, `publish must exit 0 (exit ${publish.status})\n${publish.stdout}${publish.stderr}`);
+    const merged = '---\nknowledge_id: example-repo:doc:mergeme\ntitle: Custom title\nowner: docs-team\n---\n\n# Custom title\n\nBody text.\n';
+    assert.equal(readFileSync(join(tmp, 'docs/mergeme.md'), 'utf8'), merged);
+    const entry = JSON.parse(publish.stdout);
+    assert.equal(entry.knowledge_id, 'example-repo:doc:mergeme');
+    assert.deepEqual(entry.canonical, { format: 'markdown', frontmatter_id: true, immutable: false, path: 'docs/mergeme.md' });
+    assert.deepEqual(entry.origin, { host: 'none', native: false, producer: 'manual', surface: 'workspace' });
+    assert.equal(entry.revisions[0].sha256, sha256File(join(tmp, 'docs/mergeme.md')));
+    assert.deepEqual(entry.revisions[0].derived_from, [{
+      classification: 'canonical', path: 'docs/mergeme.md', sha256: createHash('sha256').update(original).digest('hex'), surface: 'workspace',
+    }]);
+    // Republishing the merged file is a no-op on its bytes (merge, never overwrite).
+    const again = spawnKnowledge(lane, tmp, ['publish', 'docs/mergeme.md']);
+    assert.equal(again.status, 0, `republish must exit 0 (exit ${again.status})\n${again.stdout}`);
+    assert.equal(readFileSync(join(tmp, 'docs/mergeme.md'), 'utf8'), merged);
+    // A conflicting frontmatter id is refused, never overwritten.
+    const conflict = spawnKnowledge(lane, tmp, ['publish', 'docs/mergeme.md', '--id', 'example-repo:doc:other']);
+    assert.equal(conflict.status, 1);
+    assert.deepEqual(JSON.parse(conflict.stdout), { error: 'id_conflict', detail: 'frontmatter identity differs' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C12 — immutable source published in place
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C12-immutable-no-rewrite: an immutable path is registered in place, bytes unchanged, no frontmatter id (source + packaged)', async () => {
+  const handoff = '.ai/handoff/readiness-v1/example-plan/0123abcd/handoff.md';
+  await writeCase('C12', {
+    mutate: (dir) => {
+      mkdirSync(dirname(join(dir, handoff)), { recursive: true });
+      writeFileSync(join(dir, handoff), '# Frozen handoff\n\nNo frontmatter here.\n', 'utf8');
+    },
+  }, (lane, tmp) => {
+    const before = sha256File(join(tmp, handoff));
+    const publish = spawnKnowledge(lane, tmp, ['publish', handoff]);
+    assert.equal(publish.status, 0, `publish must exit 0 (exit ${publish.status})\n${publish.stdout}${publish.stderr}`);
+    assert.equal(sha256File(join(tmp, handoff)), before, 'immutable bytes are never rewritten');
+    const entry = JSON.parse(publish.stdout);
+    assert.equal(entry.knowledge_id, 'example-repo:doc:handoff');
+    assert.deepEqual(entry.canonical, { format: 'markdown', frontmatter_id: false, immutable: true, path: handoff });
+    assert.equal(entry.revisions[0].sha256, before);
+    const verify = spawnKnowledge(lane, tmp, ['verify']);
+    assert.equal(verify.status, 0, `verify after an immutable publish must pass (exit ${verify.status})\n${verify.stdout}`);
+    // An immutable entry is never retired or rewritten through a lifecycle verb.
+    const retire = spawnKnowledge(lane, tmp, ['retire', 'example-repo:doc:handoff', '--reason', 'no']);
+    assert.equal(retire.status, 1);
+    assert.equal(JSON.parse(retire.stdout).error, 'unsafe_target');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C13 — two concurrent publishes of one knowledge_id
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C13-lock-contention: of two concurrent publishes one exits 0, the other fails locked at once (source + packaged)', async () => {
+  await writeCase('C13', {
+    mutate: (dir) => appendFileSync(join(dir, EXAMPLE_DOC), '\nConcurrent pass.\n', 'utf8'),
+  }, async (lane, tmp) => {
+    const holder = await parkPublisher(lane, tmp, ['publish', EXAMPLE_DOC]);
+    try {
+      const contender = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
+      assert.equal(contender.status, 1, `the contender must fail (exit ${contender.status})\n${contender.stdout}${contender.stderr}`);
+      assert.deepEqual(JSON.parse(contender.stdout), LOCKED);
+      // Immediately: it returned while the holder still owns the lock.
+      assert.equal(holder.child.exitCode, null, 'the contender must not wait for the holder');
+      assert.equal(lockOwnerPid(tmp), holder.child.pid, 'the contender must not touch the holder\'s lock');
+
+      await feedParked(holder, parkedEntryBytes(tmp));
+      const done = await holder.exited;
+      assert.equal(done.status, 0, `the holder must complete (exit ${done.status})\n${done.stdout}${done.stderr}`);
+      assert.deepEqual(JSON.parse(done.stdout).revisions.map((revision) => revision.rev), [1, 2]);
+    } finally {
+      holder.child.kill('SIGKILL');
+      await holder.exited;
+    }
+    assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false, 'the holder releases its own lock');
+    // Swap the drained FIFO for a regular file so later scans read the same entry.
+    const parked = readFileSync(join(tmp, 'docs/plans/zz-parked.md'));
+    rmSync(holder.fifo);
+    writeFileSync(holder.fifo, parkedEntryBytes(tmp), 'utf8');
+    assert.deepEqual(readFileSync(join(tmp, 'docs/plans/zz-parked.md')), parked);
+    const check = spawnKnowledge(lane, tmp, ['rebuild', '--check']);
+    assert.equal(check.status, 0, `the holder's aggregate must reproduce (exit ${check.status})\n${check.stdout}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C15 write half — unknown keys survive rebuild then republish
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C15-write-half: rebuild then republish preserves x_extra (source + packaged)', async () => {
+  await writeCase('C15-write', {
+    mutate: (dir) => {
+      const entryPath = join(dir, ENTRY_FILE_REL);
+      const entry = JSON.parse(readFileSync(entryPath, 'utf8'));
+      entry.x_extra = { nested: { kept: true }, note: 'unknown keys survive writes' };
+      writeFileSync(entryPath, `${JSON.stringify(entry, null, 2)}\n`, 'utf8');
+    },
+  }, (lane, tmp) => {
+    const rebuild = spawnKnowledge(lane, tmp, ['rebuild']);
+    assert.equal(rebuild.status, 0, `rebuild must exit 0 (exit ${rebuild.status})\n${rebuild.stdout}`);
+    appendFileSync(join(tmp, EXAMPLE_DOC), '\nRepublished.\n', 'utf8');
+    const publish = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
+    assert.equal(publish.status, 0, `publish must exit 0 (exit ${publish.status})\n${publish.stdout}${publish.stderr}`);
+    const written = JSON.parse(readFileSync(join(tmp, ENTRY_FILE_REL), 'utf8'));
+    assert.deepEqual(written.x_extra, { nested: { kept: true }, note: 'unknown keys survive writes' });
+    assert.equal(written.revisions.length, 2);
+    assert.deepEqual(JSON.parse(publish.stdout).x_extra, written.x_extra);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C17 — dispatcher forwarding
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C17-dispatcher-forwarding: `ai-catapult knowledge` forwards argv verbatim and returns the writer\'s exit and streams (source + packaged)', async () => {
+  await writeCase('C17', {
+    mutate: (dir) => {
+      mkdirSync(join(dir, '.omo/run-continuation'), { recursive: true });
+      writeFileSync(join(dir, '.omo/run-continuation/ses_x.json'), '{}\n', 'utf8');
+    },
+  }, (lane, tmp) => {
+    const argvs = [
+      ['publish', '--kind', 'spec', 'a b', '', '--', '--not-a-flag'],
+      ['publish', '.omo/run-continuation/ses_x.json'],
+      ['unlock', EXAMPLE_ID],
+      ['retire', EXAMPLE_ID, '--reason', 'forwarded verbatim'],
+    ];
+    const exits = [];
+    for (const argv of argvs) {
+      const viaDispatcher = spawnKnowledge(lane, tmp, argv);
+      const direct = spawnSync(process.execPath, ['--input-type=module', '-e', [
+        'const { runKnowledge } = await import(process.argv[1]);',
+        'process.exitCode = runKnowledge(JSON.parse(process.argv[2]));',
+      ].join('\n'), laneModuleUrl(lane), JSON.stringify(['--root', tmp, ...argv])], { encoding: 'utf8', timeout: 30_000 });
+      assert.deepEqual(
+        { status: viaDispatcher.status, stdout: viaDispatcher.stdout, stderr: viaDispatcher.stderr },
+        { status: direct.status, stdout: direct.stdout, stderr: direct.stderr },
+        `dispatcher and writer must agree for ${JSON.stringify(argv)}`,
+      );
+      exits.push(viaDispatcher.status);
+    }
+    assert.deepEqual(exits, [2, 1, 2, 0], 'the probes cover usage, refusal and success');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// C18 + C19 — a stale lock is reported, never removed automatically; manual
+// unlock is explicit and ledgered
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen, unlocked only with --confirm-no-writer (source + packaged)', async () => {
+  await writeCase('C19', {
+    mutate: (dir) => appendFileSync(join(dir, EXAMPLE_DOC), '\nAfter recovery.\n', 'utf8'),
+  }, async (lane, tmp) => {
+    // A real writer dies inside its critical section and leaves its lock.
+    const holder = await parkPublisher(lane, tmp, ['publish', EXAMPLE_DOC]);
+    const pid = holder.child.pid;
+    holder.child.kill('SIGKILL');
+    const killed = await holder.exited;
+    assert.equal(killed.signal, 'SIGKILL');
+    rmSync(holder.fifo);
+    const lockDir = join(tmp, ENTRY_LOCK_REL);
+    const ownerBytes = readFileSync(join(lockDir, 'owner.json'));
+    assert.equal(JSON.parse(ownerBytes).pid, pid);
+
+    const verify = spawnKnowledge(lane, tmp, ['verify']);
+    assert.equal(verify.status, 0, `verify must report, not fail (exit ${verify.status})\n${verify.stdout}`);
+    assert.deepEqual(JSON.parse(verify.stdout).warnings, [{ lock: ENTRY_LOCK_REL, pid, warning: 'stale_lock' }]);
+
+    const blocked = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
+    assert.equal(blocked.status, 1);
+    assert.deepEqual(JSON.parse(blocked.stdout), LOCKED);
+    assert.deepEqual(readFileSync(join(lockDir, 'owner.json')), ownerBytes, 'a stale lock is never stolen');
+
+    const refused = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID]);
+    assert.equal(refused.status, 2, `unlock without --confirm-no-writer must exit 2 (exit ${refused.status})`);
+    assert.ok(refused.stderr.startsWith('ai-catapult knowledge: the following arguments are required: --confirm-no-writer'), refused.stderr);
+    assert.deepEqual(readFileSync(join(lockDir, 'owner.json')), ownerBytes);
+    assert.equal(existsSync(join(tmp, LOCK_EVENTS_REL)), false, 'a refused unlock writes no ledger line');
+
+    const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
+    assert.equal(unlock.status, 0, `confirmed unlock must exit 0 (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
+    assert.equal(existsSync(lockDir), false, 'the confirmed unlock removes the lock');
+    const event = JSON.parse(unlock.stdout);
+    assert.equal(event.schema, 'knowledge-lock-event/1');
+    assert.equal(event.result, 'applied');
+    const lines = readFileSync(join(tmp, LOCK_EVENTS_REL), 'utf8').split('\n').filter(Boolean);
+    assert.equal(lines.length, 2, 'ledgered as prepared, then applied');
+    // Python json.dumps(sort_keys=True) line shape, shared with the root writer.
+    for (const line of lines) assert.ok(line.startsWith('{"action": "unlock", "at": '), line);
+    const [prepared, applied] = lines.map((line) => JSON.parse(line));
+    assert.deepEqual(applied, event);
+    assert.deepEqual({ ...prepared, at: applied.at, result: 'applied' }, applied);
+    assert.equal(prepared.result, 'prepared');
+    assert.deepEqual(
+      { action: applied.action, confirm_no_writer: applied.confirm_no_writer, knowledge_id: applied.knowledge_id, lock_path: applied.lock_path },
+      { action: 'unlock', confirm_no_writer: true, knowledge_id: EXAMPLE_ID, lock_path: ENTRY_LOCK_REL },
+    );
+    assert.match(applied.run_id, /^[0-9a-f-]{36}$/);
+
+    const recovered = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
+    assert.equal(recovered.status, 0, `publish after unlock must succeed (exit ${recovered.status})\n${recovered.stdout}`);
+    assert.equal(JSON.parse(recovered.stdout).revisions.length, 2);
+    const again = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
+    assert.equal(again.status, 1);
+    assert.deepEqual(JSON.parse(again.stdout), { error: 'not_locked', detail: 'entry lock directory does not exist' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Native promotion — the native artifact stays a byte-identical working copy
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 native promotion: publishing an .omo plan writes a canonical copy and leaves the native file untouched (source + packaged)', async () => {
+  const native = '# Fresh native plan\n\nSteps.\n';
+  await writeCase('native', {
+    mutate: (dir) => writeFileSync(join(dir, '.omo/plans/fresh.md'), native, 'utf8'),
+  }, (lane, tmp) => {
+    const publish = spawnKnowledge(lane, tmp, ['publish', '.omo/plans/fresh.md', '--producer', 'prometheus']);
+    assert.equal(publish.status, 0, `publish must exit 0 (exit ${publish.status})\n${publish.stdout}${publish.stderr}`);
+    const entry = JSON.parse(publish.stdout);
+    assert.equal(entry.knowledge_id, 'example-repo:plan:fresh');
+    assert.deepEqual(entry.canonical, { format: 'markdown', frontmatter_id: true, immutable: false, path: 'docs/plans/fresh.md' });
+    assert.deepEqual(entry.origin, { host: 'opencode', native: true, producer: 'prometheus', surface: 'omo' });
+    assert.deepEqual(entry.revisions[0].derived_from, [{
+      classification: 'native', path: '.omo/plans/fresh.md', sha256: createHash('sha256').update(native).digest('hex'), surface: 'omo',
+    }]);
+    assert.equal(readFileSync(join(tmp, '.omo/plans/fresh.md'), 'utf8'), native);
+    assert.equal(
+      readFileSync(join(tmp, 'docs/plans/fresh.md'), 'utf8'),
+      `---\nknowledge_id: example-repo:plan:fresh\n---\n${native}`,
+    );
+    const verify = spawnKnowledge(lane, tmp, ['verify']);
+    assert.equal(verify.status, 0, `verify after promotion must pass (exit ${verify.status})\n${verify.stdout}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// archive — confirmed, ledgered migrate with reference repair
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 archive: a confirmed run moves the canonical, repairs the reference and ledgers the migrate (source + packaged)', async () => {
+  const reference = 'docs/ref-link.md';
+  const referenceText = '# Reference\n\nSee [the example](plans/example.md).\n';
+  await writeCase('archive', {
+    git: true,
+    mutate: (dir) => writeFileSync(join(dir, reference), referenceText, 'utf8'),
+  }, (lane, tmp) => {
+    const manifestRel = '.ai/knowledge/migration/run-1/archive-confirmation.json';
+    const env = { AI_KNOWLEDGE_ARCHIVE_MANIFEST: manifestRel };
+    const unconfirmed = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], { AI_KNOWLEDGE_ARCHIVE_MANIFEST: '' });
+    assert.equal(unconfirmed.status, 1);
+    assert.deepEqual(JSON.parse(unconfirmed.stdout), { error: 'archive_confirmation_required', detail: 'explicit run manifest is required' });
+    assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false, 'a refused archive releases its lock');
+
+    const backup = '.ai/drift/backups/run-1/docs/plans/example.md';
+    mkdirSync(dirname(join(tmp, backup)), { recursive: true });
+    copyFileSync(join(tmp, EXAMPLE_DOC), join(tmp, backup));
+    const receipt = {
+      backup,
+      confirmation_token: 'not-a-token',
+      confirmed: true,
+      knowledge_id: EXAMPLE_ID,
+      references: [{ path: reference, sha256: sha256File(join(tmp, reference)) }],
+      repo_id: 'example-repo',
+      repo_root: realpathSync(tmp),
+      run_id: 'run-1',
+      schema: 'knowledge-archive-confirmation/1',
+      sha256: CANONICAL_SHA256,
+      source: EXAMPLE_DOC,
+      source_commit: gitIn(tmp, 'rev-parse', 'HEAD'),
+      target: 'docs/plans/ARCHIVED/example.md',
+    };
+    mkdirSync(dirname(join(tmp, manifestRel)), { recursive: true });
+    writeFileSync(join(tmp, manifestRel), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    const badToken = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+    assert.equal(badToken.status, 1);
+    assert.deepEqual(JSON.parse(badToken.stdout), { error: 'invalid_confirmation', detail: 'receipt does not bind this exact archive run' });
+    assert.ok(existsSync(join(tmp, EXAMPLE_DOC)), 'a refused archive moves nothing');
+
+    receipt.confirmation_token = 'ct-2026-10-10-001';
+    writeFileSync(join(tmp, manifestRel), `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    const archive = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+    assert.equal(archive.status, 0, `confirmed archive must exit 0 (exit ${archive.status})\n${archive.stdout}${archive.stderr}`);
+    const entry = JSON.parse(archive.stdout);
+    assert.equal(entry.lifecycle, 'archived');
+    assert.equal(entry.canonical.path, 'docs/plans/ARCHIVED/example.md');
+    assert.equal(existsSync(join(tmp, EXAMPLE_DOC)), false);
+    assert.equal(sha256File(join(tmp, 'docs/plans/ARCHIVED/example.md')), CANONICAL_SHA256, 'the move keeps the bytes');
+    assert.equal(readFileSync(join(tmp, reference), 'utf8'), '# Reference\n\nSee [the example](plans/ARCHIVED/example.md).\n');
+
+    const [migrate] = readLedger(tmp, '.ai/knowledge/migration/ledger.jsonl');
+    assert.deepEqual({ ...migrate, at: null }, {
+      action: 'migrate',
+      after_sha256: CANONICAL_SHA256,
+      at: null,
+      backup,
+      before_sha256: CANONICAL_SHA256,
+      refs_repaired: [{
+        after_sha256: sha256File(join(tmp, reference)),
+        before_sha256: receipt.references[0].sha256,
+        file: reference,
+      }],
+      result: 'applied',
+      run_id: 'run-1',
+      schema: 'knowledge-migration-event/1',
+      seq: 1,
+      source: EXAMPLE_DOC,
+      target: 'docs/plans/ARCHIVED/example.md',
+    });
+    const [consumed] = readLedger(tmp, '.ai/knowledge/migration/confirmations.jsonl');
+    assert.equal(consumed.confirmation_token, 'ct-2026-10-10-001');
+    assert.equal(consumed.manifest_sha256, sha256File(join(tmp, manifestRel)));
+    assert.equal(consumed.result, 'consumed');
+    assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false, 'a completed archive releases its lock');
+    const verify = spawnKnowledge(lane, tmp, ['verify']);
+    assert.equal(verify.status, 0, `verify after archive must pass (exit ${verify.status})\n${verify.stdout}`);
+
+    // A completed archive is idempotent through its audit; no second migrate.
+    const retry = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+    assert.equal(retry.status, 0, `archive retry must exit 0 (exit ${retry.status})\n${retry.stdout}`);
+    assert.equal(readLedger(tmp, '.ai/knowledge/migration/ledger.jsonl').length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contract pin — the writer fails closed on a mutated pack (D4)
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 contract pin: write verbs refuse a mutated contract pack with contract_mismatch (packaged copy)', async () => {
+  await ac7Guarded('contract-pin', () => {
+    const copy = mkdtempSync(join(tmpdir(), 'ai-catapult-kc-pkgcopy-'));
+    const tmp = stageFixture('packaged');
+    try {
+      cpSync(assertPackaged(), copy, { recursive: true });
+      mkdirSync(join(tmp, '.ai/init'), { recursive: true });
+      writeFileSync(join(tmp, '.ai/init/repo-profile.json'), '{"repo_id": "example-repo"}\n', 'utf8');
+      appendFileSync(join(copy, '.ai/knowledge/contract/publication-policy.json'), ' ');
+      const result = spawnSync(process.execPath, [join(copy, 'bin/ai-catapult.js'), 'knowledge', '--root', tmp, 'publish', EXAMPLE_DOC], {
+        encoding: 'utf8', timeout: 30_000, env: { ...process.env, AI_CATAPULT_DIST_ROOT: join(copy, 'dist') },
+      });
+      assert.equal(result.status, 1, `a mutated pack must fail closed (exit ${result.status})\n${result.stdout}${result.stderr}`);
+      assert.deepEqual(JSON.parse(result.stdout), { error: 'contract_mismatch', detail: 'publication-policy.json' });
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

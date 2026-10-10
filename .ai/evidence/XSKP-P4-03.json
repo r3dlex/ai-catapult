@@ -1,0 +1,7 @@
+{
+  "goal_id": "XSKP-P4-03",
+  "red": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/knowledge-conformance.test.js",
+    "exit_code": 1
+  }
+}
