@@ -37,6 +37,7 @@
       "npm ci --ignore-scripts"
     ],
     "dependencies": [
+      "node_modules",
       "vendor"
     ],
     "outputs": [

@@ -376,11 +376,31 @@
         "s4-fresh-green3.txt: vendored driver exit 0 with the refreshed package.json pin — all pins validated, bootstrap npm ci --ignore-scripts, then npm test 301/301 under the driver."
       ],
       "post_fix_gates": {
-        "full_suite": { "command": "npm test", "exit_code": 0, "tests": 301, "passed": 301 },
-        "vendored_local_ci": { "command": "bash skills/04-validate-handoff/autobahn/local-ci.sh --root .", "exit_code": 0, "bootstrap": ["npm ci --ignore-scripts"] },
-        "typecheck": { "command": "npm run typecheck", "exit_code": 0 },
-        "lint": { "command": "npx eslint .", "exit_code": 0 },
-        "git_diff_check": { "command": "git diff --check", "exit_code": 0 }
+        "full_suite": {
+          "command": "npm test",
+          "exit_code": 0,
+          "tests": 301,
+          "passed": 301
+        },
+        "vendored_local_ci": {
+          "command": "bash skills/04-validate-handoff/autobahn/local-ci.sh --root .",
+          "exit_code": 0,
+          "bootstrap": [
+            "npm ci --ignore-scripts"
+          ]
+        },
+        "typecheck": {
+          "command": "npm run typecheck",
+          "exit_code": 0
+        },
+        "lint": {
+          "command": "npx eslint .",
+          "exit_code": 0
+        },
+        "git_diff_check": {
+          "command": "git diff --check",
+          "exit_code": 0
+        }
       },
       "reviewer_positives_recorded": [
         "Full suite 297/297 and pins verified at the reviewed head, including independently recomputed setup/ci.yml pin hashes.",
@@ -412,7 +432,15 @@
         "red_green": "17/20 against the unfixed script at 9e74f52 (exactly the three new scoped-only tests red; all pre-existing green) → 20/20 with the fix; receipts round2fix/red-publish-both.log and green-publish-both.log."
       },
       "post_fix_gates": {
-        "full_suite": { "command": "npm test", "exit_code": 0, "tests": 328, "passed": 328, "failed": 0, "skipped": 0, "note": "325 round-2 baseline + the 3 new scoped-only regression tests" },
+        "full_suite": {
+          "command": "npm test",
+          "exit_code": 0,
+          "tests": 328,
+          "passed": 328,
+          "failed": 0,
+          "skipped": 0,
+          "note": "325 round-2 baseline + the 3 new scoped-only regression tests"
+        },
         "typecheck": "npx tsc --noEmit exit 0",
         "eslint": "npx eslint . exit 0, 0 problems",
         "dead_refs": "node scripts/check-dead-refs.ts PASSED — 61 raw matches, all excluded (unchanged baseline)",
@@ -421,6 +449,58 @@
         "pin_refresh": ".ai/ci/local-ci.json sources test/publish-recovery.test.ts 33a9ff1c86e7c7847685013f8d423f5d1753799aedd8d08ebbdc5266b64bc43f → 91b4fe293ac4589c9da179a562c23c91396871942e7e7c837fb6b0311d4029f5"
       },
       "scope_note": "Fix commit touches only scripts/publish-both.ts (fresh root build in runScopedPublish + staged-runtime validation), test/publish-both.test.ts (three scoped-only regression tests + sandbox files/stub upgrade), test/publish-recovery.test.ts (files entry + run-build stub handler; local-ci pin refreshed), README.md (release-recovery preconditions), the ADR 0001 errata section (item 6), .ai/ci/local-ci.json (pin refresh), and this evidence file. A blinded round-3 review re-adjudicates before the approval flow."
+    },
+    "merge_preparation": {
+      "purpose": "pre-merge gate admission for goal tswc-ac-a2 (PR #61 squash merge via merge-authority.sh)",
+      "approval": {
+        "mode": "agent",
+        "assurance": "agent-self",
+        "principal": "agent@autobahn",
+        "digest": "53a530b2c0454e4712c97dca36f4b4efc7b8f90b6db9dd85b045f8a5ed37df28",
+        "tag": "approval/tswc-ai-catapult/ac3b276da285",
+        "tag_object": "513a76a8b8d3c2d4833170124b241332684b01e8",
+        "publication_commit": "013dd26f8746920a87d501fbeef1df945d205865",
+        "issued_at": "2026-10-10T14:06:39Z",
+        "expires_at": "2026-10-24T14:06:39Z",
+        "disclosure": "agent-self approval: the agent lane issued and signed the plan-approval/1 itself; no human approved the plan"
+      },
+      "review_lane_record": {
+        "schema": "review-lane/1",
+        "pr": 61,
+        "signed_head": "de6d93ea3fcb61141368ec8e2442df66df8ef919",
+        "signature_ns": "ai-catapult-review",
+        "principal": "reviewer@autobahn",
+        "verdict": "approve",
+        "note": "lane string byte-equal to the approval record reviewer_lane"
+      },
+      "review_round_3": {
+        "verdict": "APPROVE",
+        "reviewed_head": "de6d93ea3fcb61141368ec8e2442df66df8ef919",
+        "reviewer": "blinded codex (omc ask codex, review-prompt-round3.md)",
+        "artifact": ".omc/plans/receipts-a2-impl-20261010/round3/codex-you-are-an-independent-peer-reviewer-code-reviewer-lane-for--2026-10-10T14-03-31-633Z.md",
+        "artifact_relocation_disclosure": "ask artifact was written inside the checkout at .omc/artifacts/ask/ by omc ask and copied out to the receipts dir before any gate run; the checkout copy deleted (dead-refs gate scans untracked files)",
+        "findings": "one minor (README.md:78 documented source-refresh sequence omits npm run build; on a clean checkout prepare-dist.ts fails with ENOENT while chmodding the bin) - non-blocking, deferred, recorded here without changing the approved head",
+        "verified_by_reviewer": "build, typecheck, eslint, 328/328, diff-check, inventory hashes; red/green replay 17/20 -> 20/20; scoped packing contains executable 0755 bin + skills.lock.json; incomplete-runtime refusal cleans staging; port fidelity and protected-tree byte-unchanged checks passed"
+      },
+      "premerge_round_1": {
+        "phase": "pre-merge",
+        "pr": 61,
+        "root": "detached temp worktree at de6d93ea3fcb61141368ec8e2442df66df8ef919",
+        "result": "refused",
+        "refusals": [
+          "gate_workspace_undeclared_output:node_modules",
+          "worktree_changed_during_gates"
+        ],
+        "cause": "the certify gate workspace runs the declared npm ci bootstrap in a fresh repo at the head and then refuses every untracked path outside workspace.dependencies; npm ci necessarily creates node_modules, which the local-ci/2 workspace declaration did not declare",
+        "fix": "declare node_modules in workspace.dependencies of .ai/ci/local-ci.json and update the readiness-policy workspace assertion (test/readiness-policy.test.ts) in the same commit; head moves, so the review record is re-signed at the new head and hosted CI re-runs there before any merge"
+      },
+      "post_fix_local_gates": {
+        "typecheck": "exit 0",
+        "eslint": "exit 0",
+        "npm_test": "328/328, 0 skipped, exit 0",
+        "git_diff_check": "clean",
+        "local_ci_contract_validation": "pinned lib read_declaration accepts dependencies [node_modules, vendor]"
+      }
     }
   }
 }

@@ -177,7 +177,7 @@ void test('the local CI contract is local-ci/2 with the declared isolated worksp
   assert.equal(record.schema, 'local-ci/2');
   assert.deepEqual(record.workspace, {
     bootstrap: ['npm ci --ignore-scripts'],
-    dependencies: ['vendor'],
+    dependencies: ['node_modules', 'vendor'],
     outputs: ['dist', 'dist-snapshot'],
   });
   assert.deepEqual(record.verification, ['npm test']);
