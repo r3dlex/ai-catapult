@@ -223,6 +223,27 @@ void test('judgment-record: malformed records are refused field-by-field (mutati
   assert.throws(() => validateJudgmentRecord(ownProto), Error, 'own __proto__ must be refused');
 });
 
+void test('date-time: valid early years are accepted; impossible calendar dates stay refused across eras', () => {
+  const golden = loadFixture('judgment-record-v1.golden.json') as Record<string, unknown>;
+  // RFC 3339 years are four digits. Date.UTC maps years 0–99 onto 1900–1999,
+  // which rejected valid early years; the calendar check must keep the literal
+  // year (setUTCFullYear) without that remapping.
+  validateJudgmentRecord({ ...golden, recorded_at: '0099-02-28T00:00:00Z' });
+  validateJudgmentRecord({ ...golden, recorded_at: '0004-02-29T00:00:00Z' }); // year 4 is a leap year
+  const impossible: readonly string[] = [
+    '0099-02-29T00:00:00Z', // year 99 is not a leap year
+    '0100-02-29T00:00:00Z', // century years need division by 400
+    '2026-02-30T00:00:00Z',
+  ];
+  for (const recordedAt of impossible) {
+    assert.throws(
+      () => validateJudgmentRecord({ ...golden, recorded_at: recordedAt }),
+      Error,
+      `${recordedAt} must be refused`,
+    );
+  }
+});
+
 void test('task-set: malformed task sets are refused (splitting, stamping and partition rules)', () => {
   const golden = loadFixture('task-set-v1.golden.json') as Record<string, unknown>;
   const mutations: Array<[string, Record<string, unknown>]> = [

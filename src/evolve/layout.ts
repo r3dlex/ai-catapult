@@ -12,10 +12,11 @@
  * existing bytes. verifyEvolveLayout() reports every deviation from the shape
  * as a {path, reason} violation, with paths relative to the evolve/ directory.
  */
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
-import { EvolveError } from './errors.ts';
+import { EvolveError, nodeErrorCode } from './errors.ts';
+import { createFileHere, enterDirectory, enterOrCreateDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
 import { OVERLAY_FILE_PATTERN } from './proposals.ts';
 
 export const EVOLVE_DIR = 'evolve';
@@ -87,40 +88,73 @@ export interface EvolveInitResult {
 }
 
 export function initEvolveLayout(root: string): EvolveInitResult {
-  const paths = evolvePaths(root);
-  const existed = existsSync(paths.evolveDir);
   const created: string[] = [];
-  mkdirSync(paths.evolveDir, { recursive: true });
-  ensurePurposeFile(paths, created);
-  for (const dir of TOP_LEVEL_DIRS) {
-    const target = join(paths.evolveDir, dir);
-    if (!existsSync(target)) {
-      mkdirSync(target);
-      created.push(dir);
+  return withBoundRoot(root, (anchor) => {
+    const existed = ensureEvolveDir(anchor);
+    ensurePurposeFile(created);
+    for (const dir of TOP_LEVEL_DIRS) {
+      ensureTopLevelDir(dir, created);
     }
-  }
-  for (const name of WIKI_FILE_NAMES) {
-    const target = join(paths.wikiDir, name);
-    if (!existsSync(target)) {
-      writeFileSync(target, '', 'utf8');
-      created.push(`wiki/${name}`);
+    enterDirectory('wiki', join(anchor, EVOLVE_DIR));
+    for (const name of WIKI_FILE_NAMES) {
+      ensureWikiFile(name, created);
     }
-  }
-  return { created: created.sort(), existed };
+    return { created: created.sort(), existed };
+  });
 }
 
-function ensurePurposeFile(paths: EvolvePaths, created: string[]): void {
-  if (existsSync(paths.purposeFile)) {
-    if (!readFileSync(paths.purposeFile).equals(Buffer.from(PURPOSE_TEXT, 'utf8'))) {
-      throw new EvolveError(
-        'layout-violation',
-        'PURPOSE.md exists but its bytes differ from the pinned purpose text; init never blesses a mutated workspace',
-      );
-    }
+/** Create or enter evolve/; a symlink or non-directory is refused. */
+function ensureEvolveDir(anchor: string): boolean {
+  const existed = entryKind(EVOLVE_DIR) === 'directory';
+  enterOrCreateDirectory(EVOLVE_DIR, anchor);
+  return existed;
+}
+
+function ensurePurposeFile(created: string[]): void {
+  const kind = entryKind(PURPOSE_FILE_NAME);
+  if (kind === 'missing') {
+    createFileHere(PURPOSE_FILE_NAME, PURPOSE_TEXT);
+    created.push(PURPOSE_FILE_NAME);
     return;
   }
-  writeFileSync(paths.purposeFile, PURPOSE_TEXT, 'utf8');
-  created.push(PURPOSE_FILE_NAME);
+  if (kind !== 'file') {
+    throw new EvolveError('unsafe-path', `${PURPOSE_FILE_NAME} must be a regular file; symlinks are refused`);
+  }
+  if (!readFileHere(PURPOSE_FILE_NAME).equals(Buffer.from(PURPOSE_TEXT, 'utf8'))) {
+    throw new EvolveError(
+      'layout-violation',
+      'PURPOSE.md exists but its bytes differ from the pinned purpose text; init never blesses a mutated workspace',
+    );
+  }
+}
+
+/** Create a missing top-level directory; an existing symlink or file is refused. */
+function ensureTopLevelDir(name: string, created: string[]): void {
+  if (entryKind(name) === 'missing') {
+    try {
+      mkdirSync(name);
+      created.push(name);
+      return;
+    } catch (error) {
+      if (nodeErrorCode(error) !== 'EEXIST') throw error;
+    }
+  }
+  if (entryKind(name) !== 'directory') {
+    throw new EvolveError('unsafe-path', `${name} must be a real directory; symlinks and non-directories are refused`);
+  }
+}
+
+/** Create a missing wiki file; an existing symlink or non-file is refused. */
+function ensureWikiFile(name: string, created: string[]): void {
+  const kind = entryKind(name);
+  if (kind === 'missing') {
+    createFileHere(name, '');
+    created.push(`wiki/${name}`);
+    return;
+  }
+  if (kind !== 'file') {
+    throw new EvolveError('unsafe-path', `wiki/${name} must be a regular file; symlinks are refused`);
+  }
 }
 
 export interface EvolveLayoutViolation {
@@ -140,8 +174,11 @@ export function verifyEvolveLayout(root: string): EvolveVerification {
 }
 
 function evolveDrift(paths: EvolvePaths): EvolveLayoutViolation[] {
-  if (!isDirectory(paths.evolveDir)) {
-    return [{ path: '', reason: 'the evolve/ workspace directory is missing' }];
+  if (!isRealDirectory(paths.evolveDir)) {
+    const reason = existsSync(paths.evolveDir)
+      ? 'the evolve/ workspace directory must be a real directory, not a symlink or other entry'
+      : 'the evolve/ workspace directory is missing';
+    return [{ path: '', reason }];
   }
   const violations: EvolveLayoutViolation[] = [];
   checkPurposeBytes(paths, violations);
@@ -153,8 +190,15 @@ function evolveDrift(paths: EvolvePaths): EvolveLayoutViolation[] {
 }
 
 function checkPurposeBytes(paths: EvolvePaths, violations: EvolveLayoutViolation[]): void {
-  if (!existsSync(paths.purposeFile)) {
+  let stat;
+  try {
+    stat = lstatSync(paths.purposeFile);
+  } catch {
     violations.push({ path: PURPOSE_FILE_NAME, reason: 'declared file missing' });
+    return;
+  }
+  if (stat.isSymbolicLink() || !stat.isFile()) {
+    violations.push({ path: PURPOSE_FILE_NAME, reason: 'PURPOSE.md must be a regular file' });
     return;
   }
   if (!readFileSync(paths.purposeFile).equals(Buffer.from(PURPOSE_TEXT, 'utf8'))) {
@@ -181,8 +225,11 @@ function checkTopLevelEntries(paths: EvolvePaths, violations: EvolveLayoutViolat
 }
 
 function checkWikiEntries(paths: EvolvePaths, violations: EvolveLayoutViolation[]): void {
-  if (!isDirectory(paths.wikiDir)) {
-    violations.push({ path: 'wiki', reason: 'expected directory missing' });
+  if (!isRealDirectory(paths.wikiDir)) {
+    violations.push({
+      path: 'wiki',
+      reason: existsSync(paths.wikiDir) ? 'expected a real directory, not a symlink' : 'expected directory missing',
+    });
     return;
   }
   const expected = new Set<string>(WIKI_FILE_NAMES);
@@ -201,8 +248,11 @@ function checkWikiEntries(paths: EvolvePaths, violations: EvolveLayoutViolation[
 }
 
 function checkRawEntries(paths: EvolvePaths, violations: EvolveLayoutViolation[]): void {
-  if (!isDirectory(paths.rawDir)) {
-    violations.push({ path: 'raw', reason: 'expected directory missing' });
+  if (!isRealDirectory(paths.rawDir)) {
+    violations.push({
+      path: 'raw',
+      reason: existsSync(paths.rawDir) ? 'expected a real directory, not a symlink' : 'expected directory missing',
+    });
     return;
   }
   for (const entry of sortedEntries(paths.rawDir)) {
@@ -241,8 +291,4 @@ function isRealDirectory(path: string): boolean {
 
 function sortedEntries(dir: string): Dirent[] {
   return readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function isDirectory(path: string): boolean {
-  return existsSync(path) && statSync(path).isDirectory();
 }

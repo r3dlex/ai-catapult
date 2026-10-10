@@ -3,12 +3,14 @@
  * byte prefix. assertAppendOnly is the invariant primitive behind the
  * transition matrix; appendWikiFile is the only write path into wiki/logs.md
  * and wiki/skill-impact.md — it refuses to create a missing wiki file instead
- * of silently materialising one.
+ * of silently materialising one, and it appends through an O_APPEND file
+ * descriptor opened against the verified wiki directory inode, so a crash or
+ * a concurrent append can never truncate history and a symlink swapped in at
+ * any component can never redirect the write.
  */
-import { readFileSync } from 'node:fs';
-import { appendRegularFile, assertRealDirectory } from './containment.ts';
+import { appendFileHere, enterDirectory, withBoundRoot } from './containment.ts';
 import { EvolveError, nodeErrorCode } from './errors.ts';
-import type { EvolvePaths } from './layout.ts';
+import { EVOLVE_DIR, type EvolvePaths } from './layout.ts';
 import { sha256Hex } from './digest.ts';
 
 export type WikiFileName = 'logs.md' | 'skill-impact.md';
@@ -32,24 +34,26 @@ export function assertAppendOnly(before: string, after: string): void {
 }
 
 export function appendWikiFile(paths: EvolvePaths, which: WikiFileName, entry: string): AppendedWikiFile {
-  assertRealDirectory(paths.wikiDir);
   const target = wikiFilePath(paths, which);
-  try {
-    // O_APPEND extends the inode. It does not truncate, so a crash or a
-    // concurrent append cannot drop history the way a read-modify-write can.
-    appendRegularFile(target, entry);
-  } catch (error) {
-    if (nodeErrorCode(error) === 'ENOENT') {
-      throw new EvolveError(
-        'layout-violation',
-        `wiki/${which} does not exist; the append-only machinery appends to wiki files but never creates them`,
-        { cause: error },
-      );
+  return withBoundRoot(paths.root, (anchor) => {
+    const evolve = enterDirectory(EVOLVE_DIR, anchor);
+    enterDirectory('wiki', evolve);
+    try {
+      // O_APPEND extends the inode. It does not truncate, so a crash or a
+      // concurrent append cannot drop history the way a read-modify-write can.
+      const appended = appendFileHere(which, entry);
+      return { path: target, sha256: sha256Hex(appended) };
+    } catch (error) {
+      if (nodeErrorCode(error) === 'ENOENT') {
+        throw new EvolveError(
+          'layout-violation',
+          `wiki/${which} does not exist; the append-only machinery appends to wiki files but never creates them`,
+          { cause: error },
+        );
+      }
+      throw error;
     }
-    throw error;
-  }
-  const appended = readFileSync(target);
-  return { path: target, sha256: sha256Hex(appended) };
+  });
 }
 
 function wikiFilePath(paths: EvolvePaths, which: WikiFileName): string {

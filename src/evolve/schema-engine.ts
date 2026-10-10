@@ -150,7 +150,11 @@ function dateTimeParts(value: string): number[] | null {
 function isRealUtcDate(parts: readonly number[]): boolean {
   const fields = readDateFields(parts);
   if (fields === null || !clockInRange(fields)) return false;
-  const utc = new Date(Date.UTC(fields.year, fields.month - 1, fields.day));
+  // Date.UTC maps years 0–99 onto 1900–1999, which rejected valid early years.
+  // setUTCFullYear sets the literal year, so 0099-02-28 stays 99 AD and an
+  // impossible date still normalizes to a different month/day and is refused.
+  const utc = new Date(0);
+  utc.setUTCFullYear(fields.year, fields.month - 1, fields.day);
   return utc.getUTCFullYear() === fields.year && utc.getUTCMonth() === fields.month - 1 && utc.getUTCDate() === fields.day;
 }
 

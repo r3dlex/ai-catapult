@@ -22,17 +22,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import {
+import fs, {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -111,6 +114,33 @@ function initTmpLayout(prefix: string): { paths: EvolvePaths; root: string } {
   const paths = evolvePaths(root);
   initEvolveLayout(root);
   return { paths, root };
+}
+
+type PatchedFsFunction = (...args: unknown[]) => unknown;
+
+/**
+ * Patch functions on the node:fs builtin for the duration of `run` and
+ * re-sync the builtin's ESM exports, so already-loaded modules that imported
+ * these functions by name observe the patch (the same mechanism the round-2
+ * review used to reproduce the check-to-open swap). Test-only helper.
+ */
+function withPatchedFs<T>(
+  patches: Partial<Record<'lstatSync' | 'realpathSync' | 'openSync' | 'writeSync' | 'writeFileSync', PatchedFsFunction>>,
+  run: () => T,
+): T {
+  const originals: Array<[string, unknown]> = [];
+  try {
+    for (const [name, replacement] of Object.entries(patches)) {
+      if (replacement === undefined) continue;
+      originals.push([name, Reflect.get(fs, name) as unknown]);
+      Reflect.set(fs, name, replacement);
+    }
+    syncBuiltinESMExports();
+    return run();
+  } finally {
+    for (const [name, original] of originals) Reflect.set(fs, name, original);
+    if (originals.length > 0) syncBuiltinESMExports();
+  }
 }
 
 void test('evolve layout golden: init produces exactly the fixture-conforming three-layer tree', () => {
@@ -367,6 +397,151 @@ void test('write-once and append-only refuse symlinks that would escape the work
   }
 });
 
+void test('ancestor symlinks are refused: trace, wiki and overlay writes cannot escape through a symlinked evolve/', () => {
+  const root = makeTmpRoot('evolve-ancestor-');
+  const outside = join(root, 'outside');
+  try {
+    mkdirSync(outside);
+    initEvolveLayout(outside);
+    symlinkSync(join(outside, EVOLVE_DIR), join(root, EVOLVE_DIR));
+    const paths = evolvePaths(root);
+    const attempts: Array<[string, () => unknown]> = [
+      ['trace', () => recordTrace(paths, 'run-2026-10-10-alpha', 'trace.json', 'escaped trace\n')],
+      ['wiki', () => appendWikiFile(paths, 'logs.md', 'escaped wiki\n')],
+      ['overlay', () => stageOverlay(paths, 'test-skill', 'escaped overlay\n')],
+    ];
+    for (const [label, attempt] of attempts) {
+      assert.throws(
+        attempt,
+        (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        `${label} write must refuse the symlinked ancestor instead of following it`,
+      );
+    }
+    // The external workspace never received a byte.
+    assert.equal(readFileSync(join(outside, EVOLVE_DIR, 'wiki', 'logs.md'), 'utf8'), '');
+    assert.deepEqual(collectFiles(join(outside, EVOLVE_DIR, 'raw')), []);
+    assert.deepEqual(collectFiles(join(outside, EVOLVE_DIR, 'proposals')), []);
+
+    // And verification reports the symlinked workspace instead of blessing it.
+    const verified = verifyEvolveLayout(root);
+    assert.equal(verified.ok, false);
+    assert.equal(verified.violations.some((v) => v.reason.includes('real directory')), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('init refuses a symlinked wiki/ directory instead of creating wiki files through it', () => {
+  const root = makeTmpRoot('evolve-init-wiki-symlink-');
+  const outWiki = join(root, 'out-wiki');
+  try {
+    mkdirSync(join(root, EVOLVE_DIR));
+    mkdirSync(outWiki);
+    symlinkSync(outWiki, join(root, EVOLVE_DIR, 'wiki'));
+    assert.throws(
+      () => initEvolveLayout(root),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+    // Nothing was written into the symlink target.
+    assert.deepEqual(collectFiles(outWiki), []);
+    assert.equal(existsSync(join(outWiki, 'logs.md')), false);
+    assert.equal(existsSync(join(outWiki, 'skill-impact.md')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const SWAP_RUN_ID = 'run-2026-10-10-alpha';
+
+void test('a run directory swapped for a symlink between the check and the write is refused (check-to-open race)', () => {
+  const { paths, root } = initTmpLayout('evolve-swap-check-');
+  const outside = join(root, 'outside');
+  const runDir = join(paths.rawDir, SWAP_RUN_ID);
+  const savedDir = `${runDir}-saved`;
+  const originalLstat = fs.lstatSync;
+  const originalRealpath = fs.realpathSync;
+  try {
+    mkdirSync(outside);
+    mkdirSync(runDir);
+    let swapped = false;
+    const swap = (): void => {
+      if (swapped) return;
+      swapped = true;
+      renameSync(runDir, savedDir);
+      symlinkSync(outside, runDir);
+    };
+    withPatchedFs(
+      {
+        // The cure resolves each component by name relative to the verified
+        // parent directory, so the swap lands between its lstat and the write.
+        lstatSync: (...args: unknown[]) => {
+          const answer = (originalLstat as unknown as PatchedFsFunction)(...args);
+          if (String(args[0]) === SWAP_RUN_ID) swap();
+          return answer;
+        },
+        // The pre-cure code validated with realpathSync; inject the swap right
+        // after that validation returned, exactly as the round-2 review did.
+        realpathSync: (...args: unknown[]) => {
+          const answer = (originalRealpath as unknown as PatchedFsFunction)(...args);
+          if (String(args[0]) === runDir) swap();
+          return answer;
+        },
+      },
+      () => {
+        assert.throws(
+          () => recordTrace(paths, SWAP_RUN_ID, 'trace.json', 'must not escape\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(existsSync(join(outside, 'trace.json')), false);
+    assert.deepEqual(collectFiles(savedDir), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('a run directory swapped for a symlink immediately before the open cannot receive the write', () => {
+  const { paths, root } = initTmpLayout('evolve-swap-open-');
+  const outside = join(root, 'outside');
+  const runDir = join(paths.rawDir, SWAP_RUN_ID);
+  const savedDir = `${runDir}-saved`;
+  const targetAbs = join(runDir, 'trace.json');
+  const originalOpen = fs.openSync;
+  const contents = 'bound to the verified inode\n';
+  try {
+    mkdirSync(outside);
+    mkdirSync(runDir);
+    let swapped = false;
+    const swap = (): void => {
+      if (swapped) return;
+      swapped = true;
+      renameSync(runDir, savedDir);
+      symlinkSync(outside, runDir);
+    };
+    withPatchedFs(
+      {
+        openSync: (...args: unknown[]) => {
+          // Swap before the open: path-based writes follow the planted symlink
+          // out of the workspace, while an inode-bound write cannot.
+          if (String(args[0]) === 'trace.json' || String(args[0]) === targetAbs) swap();
+          return (originalOpen as unknown as PatchedFsFunction)(...args);
+        },
+      },
+      () => {
+        const written = recordTrace(paths, SWAP_RUN_ID, 'trace.json', contents);
+        assert.equal(written.bytes, Buffer.byteLength(contents, 'utf8'));
+      },
+    );
+    // The symlink target never received the write…
+    assert.equal(existsSync(join(outside, 'trace.json')), false);
+    // …the write stayed bound to the verified directory inode.
+    assert.equal(readFileSync(join(savedDir, 'trace.json'), 'utf8'), contents);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test('append-only concurrent writers do not drop entries', async () => {
   const { root } = initTmpLayout('evolve-concurrent-');
   const layoutUrl = new URL('../src/evolve/layout.ts', import.meta.url).href;
@@ -384,6 +559,52 @@ void test('append-only concurrent writers do not drop entries', async () => {
     assert.equal(lines.length, 80);
     assert.equal(lines.filter((line) => line.startsWith('A')).length, 40);
     assert.equal(lines.filter((line) => line.startsWith('B')).length, 40);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('append-only: a concurrent append inside the write window survives (deterministic interleaving)', () => {
+  const { paths, root } = initTmpLayout('evolve-interleave-');
+  const logsAbs = join(root, EVOLVE_DIR, 'wiki', 'logs.md');
+  const originalWriteSync = fs.writeSync;
+  const originalWriteFileSync = fs.writeFileSync;
+  const ownEntry = 'ours-entry\n';
+  let racerLanded = false;
+  const race = (): void => {
+    if (racerLanded) return;
+    racerLanded = true;
+    appendFileSync(logsAbs, 'racer-entry\n');
+  };
+  try {
+    withPatchedFs(
+      {
+        // The cure appends through an O_APPEND file descriptor; inject the
+        // competing append immediately before that write.
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (Buffer.isBuffer(data) && data.toString('utf8') === ownEntry) race();
+          return (originalWriteSync as unknown as PatchedFsFunction)(...args);
+        },
+        // The pre-cure read-modify-write path truncated through writeFileSync;
+        // inject the competing append at that same instant.
+        writeFileSync: (...args: unknown[]) => {
+          if (String(args[0]) === logsAbs) race();
+          return (originalWriteFileSync as unknown as PatchedFsFunction)(...args);
+        },
+      },
+      () => {
+        appendWikiFile(paths, 'logs.md', ownEntry);
+      },
+    );
+    assert.equal(racerLanded, true, 'the interleaving must have actually fired');
+    const content = readFileSync(logsAbs, 'utf8');
+    assert.equal(content.includes(ownEntry), true, 'the writer’s own entry must survive');
+    assert.equal(
+      content.includes('racer-entry'),
+      true,
+      'the concurrent append must survive — the old read-modify-write path truncated it away',
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
