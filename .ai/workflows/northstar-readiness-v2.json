@@ -99,6 +99,38 @@
         "sha256": "6d54f993b28620d1c887bdf1947f0c45b9ceb6fe5122468f5b61b870e425ed88"
       },
       "status": "active"
+    },
+    {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/goals.json",
+          "sha256": "327ea33c20071ab519a289b61aef7ee164d7601768b9837252878e3559fd4081"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/graph.json",
+          "sha256": "8bb5454efeee13a3356ea62459914ea786beb4d4eca96347225139f6059af80b"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/handoff.md",
+          "sha256": "b3e16509a80bbe046266d26ae4db23addf91ff3a82cd53ab12d926455a34a91e"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/sidecar.json"
+        }
+      },
+      "generation": "4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3",
+      "handoff_path": ".ai/handoff/readiness-v2/ach-catapult-delivery-ts/4407a0464bef2e0d0d9ab3552825e180e4ad7d2ab4ff3976bfe8b0b039dff7b3/handoff.md",
+      "id": "northstar-plan-ach-catapult-delivery-ts",
+      "mode": "live",
+      "plan_id": "ach-catapult-delivery-ts",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/admission-complete-handoffs-ach-catapult-delivery.md",
+        "sha256": "45c3c274d9c891bd1bb49c3d08e520f926d0d6f9f5eb815977d5efa6fc5f1ccd"
+      },
+      "status": "active"
     }
   ],
   "schema": "readiness-contract/2"
