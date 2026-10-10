@@ -325,6 +325,29 @@ failing-first test (captures under the session receipts, `phase-g/`).
    `test/publish-both.test.ts` (clean-checkout red, incomplete-runtime red,
    complete-runtime green through the sandboxed publish) and the
    `test/publish-recovery.test.ts` run-build stub.
+7. **Script-free staging for the readiness pack lanes (review round 5,
+   hosted CI, 2026-10-10).** The round-5 `prepare` hook met npm's own version
+   split: on npm ≤ 10 — bundled with hosted CI's Node 22 — `npm pack
+   --ignore-scripts` **still runs the package's `prepare`** (measured on
+   npm 10.9.9: the pack lane exits 0 but leads its stdout with the hook's
+   lines; npm 11.20.0 honors the flag), contrary to the flag's documented
+   meaning. The two `readiness-delivery` pack lanes stage the root
+   `package.json` and `JSON.parse` the `pack --ignore-scripts --json` stdout,
+   so hosted CI failed both with `Unexpected token 's', "skills loc"... is
+   not valid JSON` — the hook printed `scripts/setup.ts`'s `skills lock: …`
+   lines ahead of the JSON array and re-vendored `vendor/skills` inside the
+   stage (a real clone into a throwaway tree). The four other pack lanes
+   stage the same manifest but never parse that stdout and passed on npm 10;
+   they stay unchanged (the fix scope is the red lanes, not a suite-wide
+   rewrite). Fix: both lanes stage through one `stageForPack` helper that
+   strips `prepack`/`prepare` from the staged manifest — the same
+   zero-scripts staged class `stageScopedPackage` established for the publish
+   lane (erratum 3) — so the staged manifest, not the npm version, controls
+   script execution. The root `prepare` and the plain-`npm ci` bootstrap are
+   unchanged; registry consumer installs still run no scripts (D5 amendment).
+   Red/green: the exact CI error reproduces locally by running the file under
+   an npm 10 PATH shim (failures 2, fail 0 after the strip, file 4/4) and
+   `npm test` is 329/329 on npm 11.
 
 ## Consequences
 
@@ -334,7 +357,9 @@ failing-first test (captures under the session receipts, `phase-g/`).
   committed, in-sync `package-lock.json`; it is pinned in the local-ci record.
   The published tarball's `prepare` never runs at registry consumer installs
   (measured, see the round-5 amendment in D5); the staged scoped mirror strips
-  it so its pack runs zero scripts.
+  it so its pack runs zero scripts (erratum 3), and the readiness pack lanes
+  stage script-free manifests for the same reason (erratum 7: npm ≤ 10 runs
+  `prepare` on `npm pack` even under `--ignore-scripts`).
 - Sibling lanes (tswc-ac-b1/b3/b4/b5) and downstream external gates rebase on
   this tree and ship in TypeScript; this ADR is their packaging baseline.
 - Golden fixtures stay byte-exact: the two graph-automation `.sh` fixtures and

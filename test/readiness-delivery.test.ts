@@ -42,6 +42,24 @@ function tree(path: string, prefix = ''): Array<[string, string]> {
     ? tree(join(path, entry.name), `${prefix}${entry.name}/`)
     : [[`${prefix}${entry.name}`, readFileSync(join(path, entry.name)).toString('base64')]]).sort(([a], [b]) => a.localeCompare(b));
 }
+// The stage must pack script-free on every npm: npm <= 10 (the CI Node 22
+// bundled npm) runs `prepare` on `npm pack` even under `--ignore-scripts` —
+// the root `prepare` (`node scripts/setup.ts`) then prints non-JSON lines
+// ahead of `--json` output and re-vendors `vendor/skills` inside the stage.
+// Strip the pack-lifecycle scripts (and nothing else), mirroring the publish
+// lane's zero-scripts staged class (publish-both.ts stageScopedPackage).
+function stageForPack(stage: string): void {
+  mkdirSync(stage);
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { files: string[] };
+  for (const path of ['package.json', ...pkg.files]) {
+    const source = path === 'dist/' ? dist : join(root, path);
+    if (existsSync(source)) cpSync(source, join(stage, path), { recursive: true });
+  }
+  const manifest = JSON.parse(readFileSync(join(stage, 'package.json'), 'utf8')) as { scripts: Record<string, string> };
+  delete manifest.scripts.prepack;
+  delete manifest.scripts.prepare;
+  writeFileSync(join(stage, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
+}
 
 void test('readiness delivery binds actual locked Git bytes, not a forgeable sentinel', () => {
   verifyLockedSource(vendor);
@@ -73,12 +91,7 @@ void test('readiness resources and public behavior survive both builds, packing 
   const temp = realpathSync(mkdtempSync(join(tmpdir(), 'readiness-delivery-')));
   try {
     const stage = join(temp, 'stage');
-    mkdirSync(stage);
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { files: string[] };
-    for (const path of ['package.json', ...pkg.files]) {
-      const source = path === 'dist/' ? dist : join(root, path);
-      if (existsSync(source)) cpSync(source, join(stage, path), { recursive: true });
-    }
+    stageForPack(stage);
     const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], { cwd: stage })) as Array<{ filename: string }>;
     const tarballName = packed[0]?.filename;
     assert.ok(tarballName, 'npm pack must report a tarball filename');
@@ -154,12 +167,7 @@ function assertPackedLane(
   const temp = mkdtempSync(join(tmpdir(), 'readiness-v2-pack-'));
   try {
     const stage = join(temp, 'stage');
-    mkdirSync(stage);
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { files: string[] };
-    for (const path of ['package.json', ...pkg.files]) {
-      const source = path === 'dist/' ? dist : join(root, path);
-      if (existsSync(source)) cpSync(source, join(stage, path), { recursive: true });
-    }
+    stageForPack(stage);
     const packed = JSON.parse(run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], { cwd: stage })) as Array<{ filename: string }>;
     const tarballName = packed[0]?.filename;
     assert.ok(tarballName, 'npm pack must report a tarball filename');

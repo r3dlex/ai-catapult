@@ -25,7 +25,7 @@
     "test/autobahn-startup.test.ts": "a7f17be3ff77d4ccba6ae1b2643c62b8c67ca22dec7df7a428d551757049332d",
     "test/publish-lifecycle.test.ts": "0b33b19f7564fedd491bde52a2562c06566fd9390b9915a40d176aca889cb2a0",
     "test/publish-recovery.test.ts": "91b4fe293ac4589c9da179a562c23c91396871942e7e7c837fb6b0311d4029f5",
-    "test/readiness-delivery.test.ts": "7cc0e429408b9f9a63dab2f8c3dc9c45e6eae55478c581ded625e2ae8f3efd94",
+    "test/readiness-delivery.test.ts": "932f1030e4578bc78c27fa45b3aa9ced0edfe4c073dac7fa49715aa63c4334f0",
     "test/release-0.4.3.test.ts": "9469cfcef01da35a2545d2a5fb8575848bbe85f24244cbad31544124a17443b8",
     "test/release-dispatch.test.ts": "028bc939bfac3d8856f93dd5bb4da5b902ef0ed8f68e4b3abb2209ba5ca637b4"
   },
