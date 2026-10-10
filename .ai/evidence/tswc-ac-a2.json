@@ -190,5 +190,160 @@
       "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/tswc-v2-migration.test.js": 0,
       "npm test": 1
     }
+  },
+  "implementation": {
+    "branch": "feat/tswc-ai-catapult-tswc-ac-a2-impl-20261010",
+    "merge_base": "013dd26f8746920a87d501fbeef1df945d205865",
+    "captures_home": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)",
+    "negative_fixtures": [
+      {
+        "id": "S1-toolchain-typecheck",
+        "command": "npm run typecheck",
+        "exit_code": 2,
+        "reason": "A seeded type error (string assigned to a number-typed binding) in scripts/zz-s1-seed.ts fails strict tsc with TS2322, so the toolchain gate is real evidence, not a paper gate. Seed file removed after capture.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s1a-red.txt"
+      },
+      {
+        "id": "S1-toolchain-lint",
+        "command": "npx eslint test/zz-s1-seed.ts",
+        "exit_code": 1,
+        "reason": "A seeded floating promise fails @typescript-eslint/no-floating-promises at plain 'error' with no carve-outs, so the lint gate is real evidence. Seed file removed after capture.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s1b-red.txt"
+      },
+      {
+        "id": "S2-rename-node-execution",
+        "command": "node scripts/regen-fixture.js",
+        "exit_code": 1,
+        "reason": "The removed .js path fails node execution lookup with MODULE_NOT_FOUND: under type-stripping Node resolves .js specifiers literally (no .ts-twin magic), so old paths are gone, not silently retargeted.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s2b-red.txt"
+      },
+      {
+        "id": "S2-rename-typecheck-never-existed",
+        "command": "seeded probe `import { Ghost } from './does-not-exist.js';` in scripts/ + npm run typecheck",
+        "exit_code": 2,
+        "reason": "A value-import of a relative .js specifier with no resolution fails with TS2307; probe removed after capture.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s2-val-nonexistent-red.txt"
+      },
+      {
+        "id": "S2-rename-typecheck-removed-root-sh",
+        "command": "seeded probe `import { Ghost } from '../setup.sh';` in scripts/ + npm run typecheck",
+        "exit_code": 2,
+        "reason": "A value-import of the removed root setup.sh path fails with TS2307; probe removed after capture.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s2-val-setupsh-red.txt"
+      },
+      {
+        "id": "S2-rename-typecheck-removed-js",
+        "command": "seeded probe `import { Ghost } from '../setup.js';` in scripts/ + npm run typecheck",
+        "exit_code": 2,
+        "reason": "A value-import of a pre-existing-name-shaped .js specifier with no module behind it fails with TS2307; probe removed after capture.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s2-val-setupjs-red.txt"
+      },
+      {
+        "id": "S3-packaging-dist-absence",
+        "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/scoped-mirror-staging.test.ts",
+        "exit_code": 1,
+        "reason": "With dist/ moved aside, the 'every declared files entry exists' subtest fails (missing: dist/) while the two prepack-scripts subtests still pass — this test is the actual dist-presence gate; npm pack and npm publish --dry-run do not provide one. dist/ restored before the green leg.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s3-red.txt"
+      },
+      {
+        "id": "S4-local-ci-drift",
+        "command": "bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root .",
+        "exit_code": 1,
+        "reason": "With one pinned sha256 flipped (scripts/setup.ts ..43980 -> ..4398a), the vendored local-ci/2 contract refuses before any command executes: 'stale source SHA256: scripts/setup.ts'. The record was restored from its canonical copy immediately afterwards and verified byte-identical (sha256 44a6595f583276cc6f3047447c4940a51a449addc5aae36eb8d38d27d4a24744).",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s4-drift-red.txt"
+      }
+    ],
+    "green_counterparts": [
+      {
+        "id": "S1-clean-typecheck",
+        "command": "npm run typecheck",
+        "exit_code": 0,
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/clean-typecheck-green.txt"
+      },
+      {
+        "id": "S1-clean-lint-full-tree",
+        "command": "npx eslint .",
+        "exit_code": 0,
+        "reason": "Full-tree flat-config lint with 0 errors after the wave (baseline before fixes: 305 errors).",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/final-lint-gate-green.txt"
+      },
+      {
+        "id": "S2-old-name-typecheck-twin-green",
+        "command": "seeded probe `import { runInstall } from '../src/install.js';` in scripts/ + npm run typecheck",
+        "exit_code": 0,
+        "reason": "A value-import of a renamed-away .js name whose .ts twin exists still typechecks — NodeNext resolves .js specifiers to .ts twins by design; see disclosures for how the rename is actually enforced. Probe removed after capture.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s2-val-twin-green.txt"
+      },
+      {
+        "id": "S2-renamed-script-execution-green",
+        "command": "node scripts/regen-fixture.ts",
+        "exit_code": 0,
+        "reason": "The renamed .ts script runs directly under node type-stripping and regenerated test/fixtures/init-standalone/ with zero tracked drift, reproducing both golden graph-automation fixtures byte-identically.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s2-exec-green.txt"
+      },
+      {
+        "id": "S3-dist-restored",
+        "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/scoped-mirror-staging.test.ts",
+        "exit_code": 0,
+        "reason": "All three subtests pass with dist/ present.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s3-green.txt"
+      },
+      {
+        "id": "S4-local-ci-fresh",
+        "command": "bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root .",
+        "exit_code": 0,
+        "reason": "The vendored contract validated all 2 workflow pins + 23 source pins in place and executed npm test through ci-gate --verify at the repo root: 297 tests, 297 pass, 0 fail. The driver prints its own limit: supporting local checks, not hosted-CI equivalence.",
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s4-fresh-green.txt"
+      },
+      {
+        "id": "S5-whitespace-cleanliness",
+        "command": "git diff --check",
+        "exit_code": 0,
+        "capture": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/final-git-diff-check-green.txt"
+      }
+    ],
+    "gate_state": {
+      "full_suite": {
+        "command": "npm test",
+        "exit_code": 0,
+        "tests": 297,
+        "passed": 297,
+        "failed": 0,
+        "evidence": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/s4-fresh-green.txt"
+      },
+      "typecheck": {
+        "command": "npm run typecheck",
+        "exit_code": 0,
+        "evidence": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/clean-typecheck-green.txt"
+      },
+      "lint": {
+        "command": "npx eslint .",
+        "exit_code": 0,
+        "errors_before_fixes": 305,
+        "errors_after": 0,
+        "evidence": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/final-lint-gate-green.txt"
+      },
+      "git_diff_check": {
+        "command": "git diff --check",
+        "exit_code": 0,
+        "evidence": ".omc/plans/receipts-a2-impl-20261010/phase-g (AiTool workspace root)/final-git-diff-check-green.txt"
+      }
+    },
+    "adr": "docs/architecture/adr/0001-typescript-rename-wave-packaging.md",
+    "tracked_non_ts_code_files_remaining": [
+      "eslint.config.js",
+      "test/fixtures/init-standalone/graph-automation/graph-refresh.sh",
+      "test/fixtures/init-standalone/graph-automation/hook-body.sh"
+    ],
+    "disclosures": [
+      "S2 typecheck interop limit: NodeNext resolves .js specifiers to .ts twins by design, so a value-import of a renamed-away name that owns a .ts twin still typechecks (probe: import { runInstall } from '../src/install.js' -> 0 errors, capture s2-val-twin-green.txt). The rename is enforced by: (a) TS2307 on value-imports with no resolution behind them (three red captures), (b) node-execution MODULE_NOT_FOUND on old .js paths, which resolve literally under type-stripping (s2b-red.txt), and (c) the tracked-file inventory recorded above.",
+      "S2 side-effect blind spot: tsc never resolution-checks side-effect-only imports (import '../src/install.js'; -> 0 errors regardless of target existence; verified across .js/.ts/extensionless/sh specifier shapes, captures s2-probe-*.txt). Only imports that reference bindings are checked. No tracked file relies on the blind spot; recorded as a toolchain-wide limitation, disclosed rather than waived.",
+      "S3 npm leniency: npm pack --ignore-scripts and npm publish --dry-run --ignore-scripts both succeed silently with dist/ absent from the tree (entryCount 1); npm does not gate on declared-but-missing files entries. The operative dist-presence gate is the scoped-mirror-staging 'every declared files entry exists' subtest recorded as S3's negative fixture.",
+      "Lint decision (AC-6, also ADR 0001 D6): allowForKnownSafePromises: [{from:'package', package:'node:test'}] was empirically rejected — @types/node 26.6.5 types node:test's test() as lib Promise<void>, so the package-from specifier never matches (verified with typescript-eslint 8.71.1); scoping the same override to {from:'lib'} was rejected because it neuters no-floating-promises inside test bodies. The rule stays at plain 'error' with no carve-outs. Applied instead: 276 top-level test( sites codemodded to void test(...) (the rule's documented ignore operator; node:test tracks registration promises, so failures still surface), two await-less before(async ...) hooks made synchronous, 6 dead declarations removed, and the three complexity-11/12 hotspots refactored (extracted isDependencyCase/assertCase and assertVendoredLane/assertPackedLane helpers) instead of disabling or configuring away.",
+      "Suite baseline moved 296/297 to 297/297: the single pre-existing failure at the old base was the finish-prompt drift-guard probing `node bin/ai-catapult.js install` interactive prompt output — environment-dependent at that base. It was reclassified and fixed as part of this wave's port (no AC text changed). The old limit entry above describes the pre-implementation base and is kept verbatim for provenance.",
+      "local-ci/2 bootstrap is ['npm ci --ignore-scripts'] backed by a pinned package-lock.json; the bash <pinned source> bootstrap form ceased to be possible after the wave because the previous shell entrypoint is now a converted .ts surface and the vendored contract's allowlist has no node-spawned bootstrap form. The vendored contract files themselves are byte-locked and untouched (vendored pin 28f813bf, skills.lock.json unchanged).",
+      "dist/matrix-runtime.py is the vendored matrix-contract Python staged as a build artifact (ADR 0001 D2), not first-party code; it remains outside the rename wave like its origin under vendor/.",
+      "prek run --all-files exits 1 from exactly one hook: the test/fixtures/init-standalone fixture project's validate-rules hook (fixture prek.toml -> bash scripts/validate-rules.sh, exit 127). The fixture is tracked and byte-frozen (zero diff vs the merge-base) and never contained a scripts/ directory in its scaffold output, so this failure is byte-identical to base — pre-existing and untouched by the wave; fixing it would drift the golden init fixture, which is out of goal scope. The root workspace prek hooks that AC-6 wires both pass (typecheck via npm run typecheck, eslint via npx eslint) — the typecheck hook in fact went from impossible-at-base (no tsc config) to green with this wave."
+    ]
   }
 }
