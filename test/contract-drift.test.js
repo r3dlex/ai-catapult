@@ -33,10 +33,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { sweepContractDrift } from '../src/contract-drift.js';
+import { resolvePinnedPath, sweepContractDrift } from '../src/contract-drift.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const vendor = join(root, 'vendor/skills');
@@ -149,6 +150,32 @@ function sweep(fixtures) {
 function mutate(fixtureFile) {
   assert.ok(existsSync(fixtureFile), `mutation target missing: ${fixtureFile}`);
   writeFileSync(fixtureFile, readFileSync(fixtureFile, 'utf8') + '\n# drift\n');
+}
+
+const MANIFEST_COPIES = ['readiness-dependency.json', 'readiness-dependency-v2.json'];
+
+/**
+ * Rewrite every manifest copy of a payload so its digests match the payload's
+ * CURRENT bytes: stale-but-self-consistent content that in-surface hashing
+ * alone cannot distinguish from a fresh install — only parity against the
+ * vendored pin can.
+ */
+function makeSelfConsistent(payloadDir) {
+  const autobahnDir = join(payloadDir, 'skills', 'autobahn');
+  const northstarDir = join(payloadDir, 'skills', 'northstar');
+  for (const manifestName of MANIFEST_COPIES) {
+    for (const peerDir of [autobahnDir, northstarDir]) {
+      const copy = join(peerDir, manifestName);
+      const manifest = JSON.parse(readFileSync(copy, 'utf8'));
+      for (const key of Object.keys(manifest.files ?? {})) {
+        const pinnedPath = resolvePinnedPath(key, autobahnDir, northstarDir);
+        if (existsSync(pinnedPath)) {
+          manifest.files[key] = createHash('sha256').update(readFileSync(pinnedPath)).digest('hex');
+        }
+      }
+      writeFileSync(copy, JSON.stringify(manifest, null, 2) + '\n');
+    }
+  }
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -422,6 +449,96 @@ test('contract drift: every ai-catapult@* registration key is inspected', () => 
     const finding = loaded.findings.find((f) => f.path.startsWith(second) && f.path.endsWith(NORTHSTAR_PROBE_FILE));
     assert.ok(finding, `the second key's drifted file must be named; got ${JSON.stringify(loaded.findings)}`);
     assert.equal(result.ok, false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: stale-but-self-consistent bytes in a later registration KEY fail cross-surface pin parity', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-laterkey-parity-'));
+  try {
+    const fixtures = buildFixtures(base);
+    // A later key whose payload mutated a pinned file and rewrote its own
+    // manifest digests to match: in-surface hashing passes, so only cross-
+    // surface parity against the vendored pin can catch the stale bytes.
+    const second = join(base, 'loaded-cache-payload-laterkey');
+    copyPayloadLayout(second);
+    mutate(join(second, 'skills', 'autobahn', PROBE_FILE));
+    makeSelfConsistent(second);
+    const pluginsFile = join(fixtures.home, '.claude/plugins/installed_plugins.json');
+    const parsed = JSON.parse(readFileSync(pluginsFile, 'utf8'));
+    parsed.plugins['ai-catapult@other-marketplace'] = [
+      { scope: 'user', installPath: second, version: '0.4.3', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' },
+    ];
+    writeFileSync(pluginsFile, JSON.stringify(parsed));
+    const result = sweep(fixtures);
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift', `later-key stale-self-consistent bytes must fail parity; got ${JSON.stringify(loaded)}`);
+    const finding = loaded.findings.find((f) => f.kind === 'surface-pin-parity' && f.path.startsWith(second));
+    assert.ok(finding, `a surface-pin-parity finding naming the later key's payload must be present; got ${JSON.stringify(loaded.findings)}`);
+    assert.deepEqual(loaded.refreshHints.sort(), ['claude plugin marketplace update', 'claude plugin update']);
+    assert.equal(result.ok, false);
+    assert.notEqual(result.exitCode, 0);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: stale-but-self-consistent bytes in a later array RECORD fail cross-surface pin parity', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-laterrec-parity-'));
+  try {
+    const fixtures = buildFixtures(base);
+    // Same bypass as the later-key case, via a second array record under the
+    // existing ai-catapult@ key: self-consistent stale bytes must still fail
+    // parity against the vendored pin.
+    const second = join(base, 'loaded-cache-payload-project2');
+    copyPayloadLayout(second);
+    mutate(join(second, 'skills', 'autobahn', PROBE_FILE));
+    makeSelfConsistent(second);
+    const pluginsFile = join(fixtures.home, '.claude/plugins/installed_plugins.json');
+    const parsed = JSON.parse(readFileSync(pluginsFile, 'utf8'));
+    parsed.plugins['ai-catapult@ai-catapult'].push({
+      scope: 'project',
+      installPath: second,
+      version: '0.4.3',
+      installedAt: '2026-01-01T00:00:00.000Z',
+      lastUpdated: '2026-01-01T00:00:00.000Z',
+    });
+    writeFileSync(pluginsFile, JSON.stringify(parsed));
+    const result = sweep(fixtures);
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift', `later-record stale-self-consistent bytes must fail parity; got ${JSON.stringify(loaded)}`);
+    const finding = loaded.findings.find((f) => f.kind === 'surface-pin-parity' && f.path.startsWith(second));
+    assert.ok(finding, `a surface-pin-parity finding naming the later record's payload must be present; got ${JSON.stringify(loaded.findings)}`);
+    assert.deepEqual(loaded.refreshHints.sort(), ['claude plugin marketplace update', 'claude plugin update']);
+    assert.equal(result.ok, false);
+    assert.notEqual(result.exitCode, 0);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: unrelated OpenCode skills do not make the opencode surface a false-positive drift', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-opencode-owner-'));
+  try {
+    const fixtures = buildFixtures(base);
+    // The opencode skills root is a SHARED OpenCode surface: with ai-catapult
+    // not installed there but unrelated skills present, the shared root has no
+    // ai-catapult ownership evidence and must report `absent` — not
+    // missing-contract-dir drift (which would break `install --harness claude`
+    // with exit 1 on machines carrying unrelated OpenCode skills).
+    rmSync(join(fixtures.opencodeSkills, 'autobahn'), { recursive: true, force: true });
+    rmSync(join(fixtures.opencodeSkills, 'northstar'), { recursive: true, force: true });
+    mkdirSync(join(fixtures.opencodeSkills, 'some-other-skill'), { recursive: true });
+    writeFileSync(join(fixtures.opencodeSkills, 'some-other-skill', 'SKILL.md'), '# unrelated\n');
+    const result = sweep(fixtures);
+    const surface = result.surfaces.find((s) => s.label === 'opencode skills');
+    assert.equal(surface.status, 'absent', `unrelated-only OpenCode skills root must be absent, got ${JSON.stringify(surface)}`);
+    assert.equal(result.ok, true, JSON.stringify(result.surfaces.filter((s) => s.status !== 'ok')));
+    assert.equal(result.exitCode, 0);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
