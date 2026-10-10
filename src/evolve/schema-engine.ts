@@ -38,8 +38,8 @@ export const SUPPORTED_KEYWORDS = [
   'type',
 ] as const;
 
-const ISO_DATE_TIME =
-  /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
+const DATE_TIME_PARTS =
+  /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/;
 
 /**
  * Evaluate `value` against a schema document; returns one message per
@@ -123,10 +123,51 @@ function evaluateFormat(value: unknown, schema: EvolveSchemaDoc, path: string, v
     violations.push(`${pathLabel(path)} uses the unsupported format "${format}"`);
     return;
   }
-  const printable = typeof value === 'string' ? value : '';
-  if (typeof value !== 'string' || !ISO_DATE_TIME.test(printable) || !Number.isFinite(Date.parse(printable))) {
+  if (typeof value !== 'string' || !isRfc3339DateTime(value)) {
     violations.push(`${pathLabel(path)} must be an RFC 3339 date-time`);
   }
+}
+
+/** Calendar fields must exist. Date.parse alone normalizes 2026-02-30 to March. */
+function isRfc3339DateTime(value: string): boolean {
+  const parts = dateTimeParts(value);
+  if (parts === null || !isRealUtcDate(parts)) return false;
+  return Number.isFinite(Date.parse(value));
+}
+
+function dateTimeParts(value: string): number[] | null {
+  const match = DATE_TIME_PARTS.exec(value);
+  if (match === null) return null;
+  const parts: number[] = [];
+  for (let index = 1; index <= 6; index += 1) {
+    const text = match[index];
+    if (text === undefined) return null;
+    parts.push(Number(text));
+  }
+  return parts;
+}
+
+function isRealUtcDate(parts: readonly number[]): boolean {
+  const fields = readDateFields(parts);
+  if (fields === null || !clockInRange(fields)) return false;
+  const utc = new Date(Date.UTC(fields.year, fields.month - 1, fields.day));
+  return utc.getUTCFullYear() === fields.year && utc.getUTCMonth() === fields.month - 1 && utc.getUTCDate() === fields.day;
+}
+
+function readDateFields(parts: readonly number[]): { year: number; month: number; day: number; hour: number; minute: number; second: number } | null {
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  const hour = parts[3];
+  const minute = parts[4];
+  const second = parts[5];
+  if (year === undefined || month === undefined || day === undefined) return null;
+  if (hour === undefined || minute === undefined || second === undefined) return null;
+  return { year, month, day, hour, minute, second };
+}
+
+function clockInRange(fields: { month: number; day: number; hour: number; minute: number; second: number }): boolean {
+  return fields.month >= 1 && fields.month <= 12 && fields.day >= 1 && fields.hour <= 23 && fields.minute <= 59 && fields.second <= 59;
 }
 
 function evaluateArray(value: readonly unknown[], schema: EvolveSchemaDoc, path: string, violations: string[]): void {
@@ -145,19 +186,20 @@ function evaluateArray(value: readonly unknown[], schema: EvolveSchemaDoc, path:
 
 function evaluateObject(value: Record<string, unknown>, schema: EvolveSchemaDoc, path: string, violations: string[]): void {
   for (const key of schema.required ?? []) {
-    if (!(key in value)) {
+    if (!Object.hasOwn(value, key)) {
       violations.push(requiredMessage(path, key));
     }
   }
   const props = schema.properties ?? {};
   for (const [key, propSchema] of Object.entries(props)) {
-    if (key in value) {
+    if (Object.hasOwn(value, key)) {
       evaluateNode(value[key], propSchema, childPath(path, key), violations);
     }
   }
   if (schema.additionalProperties === false) {
     for (const key of Object.keys(value)) {
-      if (!(key in props)) {
+      // `in` is true for inherited names (constructor, __proto__). Own keys only.
+      if (!Object.hasOwn(props, key)) {
         violations.push(`${childPath(path, key)} must not be present (additionalProperties is false)`);
       }
     }

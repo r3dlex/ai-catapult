@@ -12,10 +12,11 @@
  * existing bytes. verifyEvolveLayout() reports every deviation from the shape
  * as a {path, reason} violation, with paths relative to the evolve/ directory.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import type { Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { EvolveError } from './errors.ts';
+import { OVERLAY_FILE_PATTERN } from './proposals.ts';
 
 export const EVOLVE_DIR = 'evolve';
 
@@ -42,8 +43,10 @@ export const PURPOSE_TEXT = [
   '    (the skill audit trail). Entries may extend these files; truncating,',
   '    rewriting or prepending is refused. Nothing is ever rolled back.',
   '- proposals/',
-  '    Staging for single-skill overlay proposals awaiting judgment. Starts',
-  '    empty; layout verification treats every entry here as drift.',
+  '    Staging for single-skill overlay proposals awaiting judgment. An overlay',
+  '    is a replaceable proposals/<skill>.overlay file; skill names are',
+  '    lowercase letters, digits and hyphens. Symlinks and any other entry',
+  '    are drift. Overlays are not write-once traces.',
   '',
   'PURPOSE.md is pinned byte-exactly: initEvolveLayout() refuses to bless a',
   'mutated copy and verifyEvolveLayout() reports any deviation from this',
@@ -145,7 +148,7 @@ function evolveDrift(paths: EvolvePaths): EvolveLayoutViolation[] {
   checkTopLevelEntries(paths, violations);
   checkWikiEntries(paths, violations);
   checkRawEntries(paths, violations);
-  checkProposalsEmpty(paths, violations);
+  checkProposalEntries(paths, violations);
   return violations;
 }
 
@@ -212,16 +215,27 @@ function checkRawEntries(paths: EvolvePaths, violations: EvolveLayoutViolation[]
   }
 }
 
-function checkProposalsEmpty(paths: EvolvePaths, violations: EvolveLayoutViolation[]): void {
-  if (!isDirectory(paths.proposalsDir)) {
-    violations.push({ path: 'proposals', reason: 'expected directory missing' });
+function checkProposalEntries(paths: EvolvePaths, violations: EvolveLayoutViolation[]): void {
+  if (!isRealDirectory(paths.proposalsDir)) {
+    violations.push({ path: 'proposals', reason: 'expected a real directory, not a symlink' });
     return;
   }
   for (const entry of sortedEntries(paths.proposalsDir)) {
-    violations.push({
-      path: `proposals/${entry.name}`,
-      reason: 'proposals/ must stay empty until staging takes it over',
-    });
+    if (entry.isSymbolicLink() || !entry.isFile() || !OVERLAY_FILE_PATTERN.test(entry.name)) {
+      violations.push({
+        path: `proposals/${entry.name}`,
+        reason: 'proposals/ holds only single-skill <name>.overlay files; symlinks and other entries are drift',
+      });
+    }
+  }
+}
+
+function isRealDirectory(path: string): boolean {
+  try {
+    const stat = lstatSync(path);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch {
+    return false;
   }
 }
 

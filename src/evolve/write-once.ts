@@ -4,9 +4,10 @@
  * Run ids and trace names are validated fail-closed before anything is
  * created on disk.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { EvolveError } from './errors.ts';
+import { assertRealDirectory, writeRegularFile } from './containment.ts';
+import { EvolveError, nodeErrorCode } from './errors.ts';
 import { RUN_ID_PATTERN, type EvolvePaths } from './layout.ts';
 import { sha256Hex } from './digest.ts';
 
@@ -25,18 +26,18 @@ export interface RecordedTrace {
 export function recordTrace(paths: EvolvePaths, runId: string, traceName: string, contents: string): RecordedTrace {
   assertRunId(runId);
   assertTraceName(traceName);
-  const runDir = join(paths.rawDir, runId);
-  mkdirSync(runDir, { recursive: true });
+  const runDir = ensureRunDir(paths.rawDir, runId);
   const target = join(runDir, traceName);
   try {
-    // 'wx' refuses any existing file, even one carrying identical bytes:
-    // write-once means the first write wins, unconditionally.
-    writeFileSync(target, contents, { encoding: 'utf8', flag: 'wx' });
+    // O_EXCL refuses any existing file, even one carrying identical bytes.
+    // O_NOFOLLOW refuses a symlink planted at the trace path.
+    writeRegularFile(target, contents, false);
   } catch (error) {
-    if (isEexist(error)) {
+    if (nodeErrorCode(error) === 'EEXIST') {
       throw new EvolveError(
         'write-once-violation',
         `raw trace ${runId}/${traceName} already exists; write-once records are never overwritten, even with identical bytes`,
+        { cause: error },
       );
     }
     throw error;
@@ -46,6 +47,29 @@ export function recordTrace(paths: EvolvePaths, runId: string, traceName: string
     sha256: sha256Hex(Buffer.from(contents, 'utf8')),
     bytes: Buffer.byteLength(contents, 'utf8'),
   };
+}
+
+function ensureRunDir(rawDir: string, runId: string): string {
+  const rawReal = assertRealDirectory(rawDir);
+  const runDir = join(rawDir, runId);
+  if (!runDirExists(runDir, runId, rawReal)) {
+    mkdirSync(runDir);
+  }
+  return runDir;
+}
+
+function runDirExists(runDir: string, runId: string, rawReal: string): boolean {
+  let stat;
+  try {
+    stat = lstatSync(runDir);
+  } catch (error) {
+    if (nodeErrorCode(error) === 'ENOENT') return false;
+    throw error;
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory() || realpathSync(runDir) !== join(rawReal, runId)) {
+    throw new EvolveError('unsafe-path', `raw/${runId} must be a real directory inside raw/; symlinks are refused`);
+  }
+  return true;
 }
 
 function assertRunId(runId: string): void {
@@ -64,8 +88,4 @@ function assertTraceName(traceName: string): void {
       `trace name "${traceName}" must be a single safe path segment matching ${TRACE_NAME_PATTERN.toString()}`,
     );
   }
-}
-
-function isEexist(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'EEXIST';
 }

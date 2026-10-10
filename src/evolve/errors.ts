@@ -20,9 +20,16 @@ export type EvolveErrorKind =
 export class EvolveError extends Error {
   readonly kind: EvolveErrorKind;
 
-  constructor(kind: EvolveErrorKind, message: string) {
-    super(message);
+  constructor(kind: EvolveErrorKind, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'EvolveError';
     this.kind = kind;
   }
+}
+
+export function nodeErrorCode(error: unknown): string | null {
+  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'string') {
+    return error.code;
+  }
+  return null;
 }

@@ -5,8 +5,9 @@
  * and wiki/skill-impact.md — it refuses to create a missing wiki file instead
  * of silently materialising one.
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { EvolveError } from './errors.ts';
+import { readFileSync } from 'node:fs';
+import { appendRegularFile, assertRealDirectory } from './containment.ts';
+import { EvolveError, nodeErrorCode } from './errors.ts';
 import type { EvolvePaths } from './layout.ts';
 import { sha256Hex } from './digest.ts';
 
@@ -31,16 +32,23 @@ export function assertAppendOnly(before: string, after: string): void {
 }
 
 export function appendWikiFile(paths: EvolvePaths, which: WikiFileName, entry: string): AppendedWikiFile {
+  assertRealDirectory(paths.wikiDir);
   const target = wikiFilePath(paths, which);
-  if (!existsSync(target)) {
-    throw new EvolveError(
-      'layout-violation',
-      `wiki/${which} does not exist; the append-only machinery appends to wiki files but never creates them`,
-    );
+  try {
+    // O_APPEND extends the inode. It does not truncate, so a crash or a
+    // concurrent append cannot drop history the way a read-modify-write can.
+    appendRegularFile(target, entry);
+  } catch (error) {
+    if (nodeErrorCode(error) === 'ENOENT') {
+      throw new EvolveError(
+        'layout-violation',
+        `wiki/${which} does not exist; the append-only machinery appends to wiki files but never creates them`,
+        { cause: error },
+      );
+    }
+    throw error;
   }
-  const current = readFileSync(target);
-  const appended = Buffer.concat([current, Buffer.from(entry, 'utf8')]);
-  writeFileSync(target, appended);
+  const appended = readFileSync(target);
   return { path: target, sha256: sha256Hex(appended) };
 }
 

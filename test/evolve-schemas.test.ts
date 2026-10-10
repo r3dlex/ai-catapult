@@ -209,11 +209,18 @@ void test('judgment-record: malformed records are refused field-by-field (mutati
     ['per_criterion missing score', { ...golden, per_criterion_scores: [{ criterion: 'x' }] }],
     ['empty judgment_id', { ...golden, judgment_id: '' }],
     ['recorded_at not a date-time', { ...golden, recorded_at: 'yesterday' }],
+    ['recorded_at impossible calendar date', { ...golden, recorded_at: '2026-02-30T00:00:00Z' }],
+    ['own constructor property', { ...golden, constructor: 'nope' }],
     ['run_id wrong shape', { ...golden, run_id: 'Run 2026!' }],
   ];
   for (const [label, record] of mutations) {
     assert.throws(() => validateJudgmentRecord(record), Error, `must refuse: ${label}`);
   }
+  // Inherited fields are not the record's own fields, even when `in` would say so.
+  assert.throws(() => validateJudgmentRecord(Object.create(golden)), Error, 'inherited fields must not satisfy required');
+  const ownProto = { ...golden };
+  Object.defineProperty(ownProto, '__proto__', { value: { admin: true }, enumerable: true, configurable: true, writable: true });
+  assert.throws(() => validateJudgmentRecord(ownProto), Error, 'own __proto__ must be refused');
 });
 
 void test('task-set: malformed task sets are refused (splitting, stamping and partition rules)', () => {

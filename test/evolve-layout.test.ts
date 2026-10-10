@@ -20,6 +20,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -29,6 +30,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -43,6 +45,7 @@ import {
 } from '../src/evolve/layout.ts';
 import { recordTrace } from '../src/evolve/write-once.ts';
 import { appendWikiFile, assertAppendOnly } from '../src/evolve/append-only.ts';
+import { stageOverlay } from '../src/evolve/proposals.ts';
 import { EvolveError } from '../src/evolve/errors.ts';
 import type { EvolvePaths } from '../src/evolve/layout.ts';
 
@@ -332,6 +335,105 @@ void test('append-only machinery refuses to append to a missing wiki file instea
       err instanceof EvolveError && err.kind === 'layout-violation',
     );
     assert.equal(existsSync(paths.wikiLogsFile), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('write-once and append-only refuse symlinks that would escape the workspace', () => {
+  const { paths, root } = initTmpLayout('evolve-symlink-');
+  const outside = join(root, 'outside');
+  try {
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'kept.txt'), 'keep', 'utf8');
+    symlinkSync(outside, join(paths.rawDir, 'run-2026-10-10-alpha'));
+    assert.throws(
+      () => recordTrace(paths, 'run-2026-10-10-alpha', 'trace.json', '{}\n'),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+    assert.equal(existsSync(join(outside, 'trace.json')), false);
+
+    const outsideLog = join(outside, 'log.md');
+    writeFileSync(outsideLog, 'keep', 'utf8');
+    rmSync(paths.wikiLogsFile);
+    symlinkSync(outsideLog, paths.wikiLogsFile);
+    assert.throws(
+      () => appendWikiFile(paths, 'logs.md', 'escaped\n'),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+    assert.equal(readFileSync(outsideLog, 'utf8'), 'keep');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('append-only concurrent writers do not drop entries', async () => {
+  const { root } = initTmpLayout('evolve-concurrent-');
+  const layoutUrl = new URL('../src/evolve/layout.ts', import.meta.url).href;
+  const appendUrl = new URL('../src/evolve/append-only.ts', import.meta.url).href;
+  const script = `
+    import { evolvePaths } from ${JSON.stringify(layoutUrl)};
+    import { appendWikiFile } from ${JSON.stringify(appendUrl)};
+    const paths = evolvePaths(process.env.EVOLVE_ROOT);
+    const tag = process.env.EVOLVE_TAG;
+    for (let i = 0; i < 40; i += 1) appendWikiFile(paths, 'logs.md', tag + String(i) + '\\n');
+  `;
+  try {
+    await Promise.all(['A', 'B'].map((tag) => spawnAppend(script, root, tag)));
+    const lines = readFileSync(join(root, EVOLVE_DIR, 'wiki', 'logs.md'), 'utf8').split('\n').filter((line) => line !== '');
+    assert.equal(lines.length, 80);
+    assert.equal(lines.filter((line) => line.startsWith('A')).length, 40);
+    assert.equal(lines.filter((line) => line.startsWith('B')).length, 40);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+function spawnAppend(script: string, root: string, tag: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+      env: { ...process.env, EVOLVE_ROOT: root, EVOLVE_TAG: tag },
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf8');
+    });
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`append child ${tag} exited ${code}: ${stderr}`));
+    });
+  });
+}
+
+void test('proposals overlays stage as replaceable single-skill files and stay verifiable', () => {
+  const { paths, root } = initTmpLayout('evolve-overlay-');
+  try {
+    const staged = stageOverlay(paths, 'evolution-rollout', 'overlay-v1\n');
+    assert.ok(staged.path.endsWith(join('evolve', 'proposals', 'evolution-rollout.overlay')));
+    assert.equal(readFileSync(staged.path, 'utf8'), 'overlay-v1\n');
+    assert.deepEqual(verifyEvolveLayout(root), { ok: true, violations: [] });
+
+    stageOverlay(paths, 'evolution-rollout', 'overlay-v2\n');
+    assert.equal(readFileSync(staged.path, 'utf8'), 'overlay-v2\n');
+    assert.deepEqual(verifyEvolveLayout(root), { ok: true, violations: [] });
+
+    assert.throws(
+      () => stageOverlay(paths, '../escape', 'nope\n'),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+
+    const outside = join(root, 'outside-overlay');
+    writeFileSync(outside, 'keep', 'utf8');
+    rmSync(staged.path);
+    symlinkSync(outside, staged.path);
+    assert.throws(
+      () => stageOverlay(paths, 'evolution-rollout', 'pwn\n'),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+    assert.equal(readFileSync(outside, 'utf8'), 'keep');
+    const drifted = verifyEvolveLayout(root);
+    assert.equal(drifted.ok, false);
+    assert.equal(drifted.violations.some((v) => v.path === 'proposals/evolution-rollout.overlay'), true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
