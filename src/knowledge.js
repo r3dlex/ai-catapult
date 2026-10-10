@@ -948,15 +948,19 @@ function entryLockRel(identity) {
   return `${LOCKS_DIR}/${identity.replace(/:/g, '__')}.json.lock`;
 }
 
-/** Where unlock moves a lock it is removing; the name still blocks writers. */
+// An unlock claim: <entry file>.unlocking-<claimer pid>-<uuid>.lock. Unique per
+// claim, so no other process can ever produce the same name.
+const CLAIM_SUFFIX = '\\.unlocking-([0-9]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+/** A fresh, exclusively owned claim name for one lock this unlock removes. */
 function claimLockRel(identity) {
-  return `${LOCKS_DIR}/${identity.replace(/:/g, '__')}.json.unlocking.lock`;
+  return `${LOCKS_DIR}/${identity.replace(/:/g, '__')}.json.unlocking-${process.pid}-${randomUUID()}.lock`;
 }
 
 /** Entry locks (and unlock claims) a writer of this repository can create. */
 function writerLockPattern(policy, repoId) {
   const kinds = Object.keys(policy.canonical_targets).join('|');
-  return new RegExp(`^${repoId}__(?:${kinds})__[a-z0-9][a-z0-9.-]*\\.json(?:\\.unlocking)?\\.lock$`);
+  return new RegExp(`^${repoId}__(?:${kinds})__[a-z0-9][a-z0-9.-]*\\.json(?:${CLAIM_SUFFIX})?\\.lock$`);
 }
 
 /** Strict load for writers: every entry must pass the frozen schema and its own identity. */
@@ -1082,7 +1086,10 @@ function holdLock(root, relative, ownerInfo, lockedDetail, body) {
 function withEntryLock(root, identity, policy, body) {
   const own = posix.basename(entryLockRel(identity));
   const writerLock = writerLockPattern(policy, identity.split(':')[0]);
-  return holdLock(root, entryLockRel(identity), { pid: process.pid }, ENTRY_LOCKED, (marker) => {
+  // The token makes each lock incarnation's owner bytes unique, so unlock can
+  // tell the lock it inspected from a replacement even across pid reuse.
+  const owner = { pid: process.pid, token: randomUUID() };
+  return holdLock(root, entryLockRel(identity), owner, ENTRY_LOCKED, (marker) => {
     const held = readdirSync(writerPath(root, LOCKS_DIR))
       .filter((name) => name !== own && writerLock.test(name))
       .sort(compareCodePoints)
@@ -1301,9 +1308,8 @@ function lockChanged(error) {
 /**
  * Snapshot a lock directory as {ino, owner}, or null when there is none. Only
  * an owner.json (or nothing: a writer killed before writing it) may be inside.
- * Exported for the conformance probe of claimLock.
  */
-export function inspectLock(root, relative) {
+function inspectLock(root, relative) {
   const path = writerPath(root, relative);
   try {
     const info = lstatSync(path, { bigint: true });
@@ -1321,14 +1327,13 @@ export function inspectLock(root, relative) {
 }
 
 /**
- * Atomically take the inspected lock out of service by renaming it to its
- * claim name, then prove the claim is the inspected lock (same inode, same
- * owner bytes). A lock removed or replaced since inspection — by a concurrent
- * unlock, or a new writer after one — is put back and the claim fails with
- * lock_changed. The claim name still blocks writers while it exists.
- * Exported for the conformance probe.
+ * Take exclusive ownership of the inspected lock incarnation: atomically
+ * rename it to a fresh claim name only this process knows, then prove the
+ * claimed object is the snapshot (same inode, same owner bytes). Anything else
+ * — removed, or replaced since the snapshot — is put back, and the claim fails
+ * lock_changed. Deletion then only ever happens under the claim name.
  */
-export function claimLock(root, relative, claimRelative, snapshot) {
+function claimLock(root, relative, claimRelative, snapshot) {
   const from = writerPath(root, relative);
   const to = writerPath(root, claimRelative);
   try {
@@ -1354,65 +1359,89 @@ export function claimLock(root, relative, claimRelative, snapshot) {
 }
 
 /**
- * Remove one confirmed-stale lock: prepared is ledgered before removal and
- * applied after; a lost race ledgers failed. claimed says the lock already
- * sits at its claim name (left by an unlock that did not finish).
+ * Everything one confirmed unlock may remove for identity, snapshotted before
+ * anything is removed: claims left by unlocks that died, then the entry lock.
+ * A lock that appears later is never adopted. A claim whose unlock is still
+ * running (or cannot be shown dead) is refused as locked, never touched.
+ * Exported, with executeUnlock, for the conformance probe.
  */
-function unlockOne(root, ledger, identity, relative, claimRelative, runId, claimed) {
-  const snapshot = inspectLock(root, claimed ? claimRelative : relative);
-  if (!snapshot) return null;
-  const prepared = {
-    schema: 'knowledge-lock-event/1',
-    at: now(),
-    run_id: runId,
-    knowledge_id: identity,
-    action: 'unlock',
-    lock_path: claimed ? claimRelative : relative,
-    confirm_no_writer: true,
-    result: 'prepared',
-  };
-  // A durable intent precedes removal.
-  appendEvent(ledger, prepared);
-  const claim = writerPath(root, claimRelative);
-  try {
-    if (!claimed) claimLock(root, relative, claimRelative, snapshot);
-    if (snapshot.owner !== null) unlinkSync(join(claim, LOCK_OWNER_FILE));
-    rmdirSync(claim);
-  } catch (error) {
-    appendEvent(ledger, { ...prepared, at: now(), result: 'failed' });
-    throw lockChanged(error);
+export function planUnlock(root, identity) {
+  const file = identity.replace(/:/g, '__');
+  const leftover = new RegExp(`^${file.replace(/\./g, '\\.')}\\.json${CLAIM_SUFFIX}\\.lock$`);
+  const locks = writerPath(root, LOCKS_DIR);
+  const targets = [];
+  const names = existsSync(locks) ? readdirSync(locks).sort(compareCodePoints) : [];
+  for (const name of names) {
+    const match = leftover.exec(name);
+    if (!match) continue;
+    const relative = `${LOCKS_DIR}/${name}`;
+    if (pidAlive(Number(match[1])) !== false) {
+      throw new KnowledgeError('locked', `${relative}: claimed by an unlock that is still running`);
+    }
+    const snapshot = inspectLock(root, relative);
+    if (snapshot) targets.push({ relative, snapshot });
   }
-  const applied = { ...prepared, at: now(), result: 'applied' };
-  try {
-    appendEvent(ledger, applied);
-  } catch (error) {
-    // A failed final audit restores the marker where it was.
-    const restored = writerPath(root, relative);
-    mkdirSync(restored);
-    if (snapshot.owner !== null) writeFileSync(join(restored, LOCK_OWNER_FILE), snapshot.owner);
-    throw error;
+  const snapshot = inspectLock(root, entryLockRel(identity));
+  if (snapshot) targets.push({ relative: entryLockRel(identity), snapshot });
+  return targets;
+}
+
+/**
+ * Remove exactly the planned lock incarnations, each claimed exclusively
+ * first: prepared is ledgered before, applied after; a lost race ledgers
+ * failed and fails lock_changed.
+ */
+export function executeUnlock(root, identity, targets) {
+  if (!targets.length) throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
+  const { path: ledger } = ledgerLines(root, LOCK_EVENTS);
+  const runId = randomUUID();
+  let applied = null;
+  for (const { relative, snapshot } of targets) {
+    const prepared = {
+      schema: 'knowledge-lock-event/1',
+      at: now(),
+      run_id: runId,
+      knowledge_id: identity,
+      action: 'unlock',
+      lock_path: relative,
+      confirm_no_writer: true,
+      result: 'prepared',
+    };
+    // A durable intent precedes removal.
+    appendEvent(ledger, prepared);
+    const claimRelative = claimLockRel(identity);
+    try {
+      claimLock(root, relative, claimRelative, snapshot);
+      const claim = writerPath(root, claimRelative);
+      if (snapshot.owner !== null) unlinkSync(join(claim, LOCK_OWNER_FILE));
+      rmdirSync(claim);
+    } catch (error) {
+      appendEvent(ledger, { ...prepared, at: now(), result: 'failed' });
+      throw lockChanged(error);
+    }
+    applied = { ...prepared, at: now(), result: 'applied' };
+    try {
+      appendEvent(ledger, applied);
+    } catch (error) {
+      // A failed final audit restores the marker where it was.
+      const restored = writerPath(root, relative);
+      mkdirSync(restored);
+      if (snapshot.owner !== null) writeFileSync(join(restored, LOCK_OWNER_FILE), snapshot.owner);
+      throw error;
+    }
   }
   return applied;
 }
 
 /**
  * Manual stale-lock recovery, run only after the operator confirmed no writer
- * remains (C19). Never automatic. It first finishes a claim an interrupted
- * unlock left behind, then claims and removes the entry lock; each removal is
- * ledgered prepared, then applied.
+ * remains (C19). Never automatic, and ledgered.
  */
 function cmdUnlock(root, args) {
   const policy = loadPolicy();
   requireRegistry(root);
   validateIdentity(root, args.id, policy);
-  const relative = entryLockRel(args.id);
-  const claimRelative = claimLockRel(args.id);
-  const { path: ledger } = ledgerLines(root, LOCK_EVENTS);
-  const runId = randomUUID();
-  const leftover = unlockOne(root, ledger, args.id, relative, claimRelative, runId, true);
-  const removed = unlockOne(root, ledger, args.id, relative, claimRelative, runId, false);
-  if (!removed && !leftover) throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
-  return removed ?? leftover;
+  return executeUnlock(root, args.id, planUnlock(root, args.id));
 }
 
 const ARCHIVE_MANIFEST = /^\.ai\/knowledge\/migration\/([a-z0-9][a-z0-9-]*)\/archive-confirmation\.json$/;
