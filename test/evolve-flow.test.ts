@@ -142,13 +142,14 @@ void test('evolve flow: the identical script on two independent roots produces b
     // Determinism: same script, same bytes — the whole tree digest matches.
     assert.equal(a.digest, b.digest);
 
-    // The flow produces exactly the expected artifact set (root-relative).
+    // The flow produces exactly the expected artifact set (root-relative,
+    // with the evolve/ workspace prefix collectFiles() reports from the root).
     const expected = [
-      'PURPOSE.md',
-      join('raw', RUN_ID, 'judgment-j-20261010-0001.json'),
-      join('raw', RUN_ID, TRACE_NAME),
-      join('wiki', 'logs.md'),
-      join('wiki', 'skill-impact.md'),
+      join('evolve', 'PURPOSE.md'),
+      join('evolve', 'raw', RUN_ID, 'judgment-j-20261010-0001.json'),
+      join('evolve', 'raw', RUN_ID, TRACE_NAME),
+      join('evolve', 'wiki', 'logs.md'),
+      join('evolve', 'wiki', 'skill-impact.md'),
     ];
     assert.deepEqual(a.files.sort(), expected.slice().sort());
 
@@ -249,10 +250,12 @@ void test('audit entries: fenced single-line blocks in fixed order, appended to 
     assert.equal(readFileSync(paths.wikiSkillImpactFile, 'utf8'), expectedBlock);
 
     // Second entry appends after the first — history in order, never rewritten.
-    appendAuditEntry(paths, { ...golden, verdict: 'Accepted' });
+    const acceptedEntry = { ...golden, verdict: 'Accepted' };
+    const acceptedBlock = renderAuditEntryBlock(acceptedEntry);
+    appendAuditEntry(paths, acceptedEntry);
     assert.equal(
       readFileSync(paths.wikiSkillImpactFile, 'utf8'),
-      expectedBlock + expectedBlock,
+      expectedBlock + acceptedBlock,
     );
 
     // The workspace stays verifiable with the audit blocks in place.

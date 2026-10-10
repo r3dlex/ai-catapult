@@ -1,0 +1,25 @@
+{
+  "disclosure": {
+    "agent_self": "no human approved this work",
+    "anchor_vs_base": "013dd26f..ab539496 contains exactly 2 commits (364d256 PR #59, ab53949 PR #61). Tag was not re-minted.",
+    "approval_anchor": "013dd26f8746920a87d501fbeef1df945d205865",
+    "approval_expiry": "2026-10-24T14:06:39Z",
+    "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
+    "base": "ab539496ddd39908879d74a017a7a8720a984018",
+    "green_companion_log_sha256": "7c0610c0bd14efc010e53a082d6a10fde7509db0512fd851355caa6b41a4aa9a",
+    "green_record_log_sha256": "fb37aeb7a44e274349e0a9975157e8e6c55deae70a1e079a1c6129ae7feb11df",
+    "purpose_sha256": "8c46ad2ad9902e96c1954300f677012b0491fd15508eeb2fb198fcfab4949fa4",
+    "red_commit": "3bd85c0e2905a60b162bb2a274ca0f3ac2f37393",
+    "scope_note": ".ai/evidence/tswc-ac-b1.json is outside the goal scope array [src/evolve, schemas, test, test/fixtures] and is included because AC-3 and the tdd-evidence gate require it. No pinned source in .ai/ci/local-ci.json changed, so that inventory was not refreshed.",
+    "test_corrections": "test/evolve-flow.test.ts was corrected in the green commit and not amended into the red commit. The committed assertion omitted the evolve/ prefix collectFiles(root) reports, and expected a second Accepted audit append to byte-match the Rejected block. Both corrections make the assertions match the helpers and the rendered bytes. The purpose_sha256 placeholder was filled from PURPOSE.md bytes."
+  },
+  "goal_id": "tswc-ac-b1",
+  "green": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/evolve-layout.test.ts test/evolve-schemas.test.ts test/evolve-flow.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/evolve-layout.test.ts test/evolve-schemas.test.ts test/evolve-flow.test.ts",
+    "exit_code": 1
+  }
+}

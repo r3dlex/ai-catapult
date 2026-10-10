@@ -4,5 +4,5 @@
   "files": ["PURPOSE.md", "wiki/logs.md", "wiki/skill-impact.md"],
   "dirs": ["raw", "wiki", "proposals"],
   "files_must_not_exist": ["raw/.keep", "proposals/.keep"],
-  "purpose_sha256": "PLACEHOLDER-FILLED-AT-GREEN-COMMIT"
+  "purpose_sha256": "8c46ad2ad9902e96c1954300f677012b0491fd15508eeb2fb198fcfab4949fa4"
 }
