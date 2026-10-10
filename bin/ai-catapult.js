@@ -8,6 +8,7 @@ import { runGraphHooks } from '../src/graph-hooks.js';
 import { resolveVendorSkill } from '../src/skill-resolver.js';
 import { runMatrixRuntime } from '../src/matrix-runtime.js';
 import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.js';
+import { runKnowledge } from '../src/knowledge.js';
 import {
   assertReadmeWriteAllowed,
   generateScaffoldReadme,
@@ -56,6 +57,7 @@ Commands:
   ci-adapters                  Render/check matrix-selected GitHub, ADO, and GitLab CI adapters
   install                      Install Claude Code and Codex plugins into detected harnesses
   graph-hooks install <target> Wire graph-automation git hooks and wrapper into a target git repo
+  knowledge <verb>             Read the .ai/knowledge registry (list|find|show|verify|rebuild|serialize)
 
 Options:
   -v, --version  Print version
@@ -299,6 +301,10 @@ if (verb === 'matrix') {
 
 if (verb === 'ci-adapters') {
   process.exit(runCiAdaptersRuntime(rawArgv.slice(firstPositionalIdx + 1)));
+}
+
+if (verb === 'knowledge') {
+  process.exit(runKnowledge(rawArgv.slice(firstPositionalIdx + 1)));
 }
 
 process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);
