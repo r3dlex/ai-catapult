@@ -1,0 +1,167 @@
+{
+  "generation": "01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+  "goal_id": "tswc-ac-a2",
+  "green": {
+    "command": "node --test test/tswc-v2-migration.test.js",
+    "exit_code": 0,
+    "failed": 0,
+    "passed": 5,
+    "tests": 5
+  },
+  "inventory": {
+    "adapter": "production-gh",
+    "entries": [
+      {
+        "action": "migrate-unmerged",
+        "ambiguous": [],
+        "fate": "partly-merged",
+        "generation": "92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af",
+        "goals": [
+          "XSKP-P4-01",
+          "XSKP-P4-02",
+          "XSKP-P4-03",
+          "XSKP-P4-04",
+          "XSKP-P4-05"
+        ],
+        "id": "northstar-plan-xskp-p4-adopt-engine",
+        "in_flight": [],
+        "merged": [
+          {
+            "goal": "XSKP-P4-01",
+            "merge_commit": "2b63eb4ca3eef6ef9ecb5b47cbfbb616ea9a9ca1",
+            "pr": 55
+          },
+          {
+            "goal": "XSKP-P4-02",
+            "merge_commit": "5de9a31176b9b310dbb6cc5aa7a2e7c8137e992f",
+            "pr": 56
+          }
+        ],
+        "plan_id": "xskp-p4-adopt-engine",
+        "refused": [],
+        "unmerged": [
+          "XSKP-P4-03",
+          "XSKP-P4-04",
+          "XSKP-P4-05"
+        ]
+      },
+      {
+        "action": "migrate",
+        "ambiguous": [],
+        "fate": "unstarted",
+        "generation": "676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "goals": [
+          "tswc-ac-a2",
+          "tswc-ac-b1",
+          "tswc-ac-b3",
+          "tswc-ac-b4",
+          "tswc-ac-b5"
+        ],
+        "id": "northstar-plan-tswc-ai-catapult",
+        "in_flight": [],
+        "merged": [],
+        "plan_id": "tswc-ai-catapult",
+        "refused": [],
+        "unmerged": [
+          "tswc-ac-a2",
+          "tswc-ac-b1",
+          "tswc-ac-b3",
+          "tswc-ac-b4",
+          "tswc-ac-b5"
+        ]
+      }
+    ],
+    "provenance": "source-lane",
+    "registry": ".ai/workflows/northstar-readiness-v1.json",
+    "schema": "v1-inventory/1",
+    "target": "refs/remotes/origin/main",
+    "target_revision": "711c99cc76ae4c6ac75eae435323af5280261790"
+  },
+  "limits": [
+    "Local RED/GREEN and the full npm test are not hosted CI, exact merge admission, installed-lane evidence or live authority.",
+    "The inventory observes the hosted API at 2026-10-10; it is a point-in-time fact, not a standing guarantee.",
+    "No commit, push, tag, merge, release, readiness context or provider change is performed by this evidence.",
+    "No approval was requested or created for plan tswc-ai-catapult; its five approval-class gaps stay open until its own future approval flow (tag approval/tswc-ai-catapult/01369bfd876b would be the needed one).",
+    "Every retained v1 tswc-ai-catapult generation (676cafbc) and the v1 registry stay byte-unchanged, digest-pinned by test/tswc-v2-migration.test.js.",
+    "The rebuilt tswc-ac-a2 carries the 2026-10-08 TSF correction (typescript-only-plan-alignment-20261008/FINAL-STATE.md): the verified counts are 48 first-party .js (12 non-test under bin/, src/, scripts/ plus 36 tests under test/) and 15 first-party .sh (setup.sh plus the 14 scripts/*.sh); the C10.03 source-policy disposition is quoted verbatim in the bundle's plan_amendments attachment; the plan spec stays byte-unchanged at 6d54f993.",
+    "The per-slice S1 toolchain / S2 rename / S3 packaging / S4 local-ci negative fixtures named on the rebuilt a2 AC-6 are the future implementation goals' 4.7 red-leg obligations; this planning registration provides no implementation evidence.",
+    "vendor/skills, dist snapshots and release/version files are untouched; no PR labels are set by this goal.",
+    "The full npm test at this base carries exactly one environment-only failure ('finish-prompt drift-guard: if install is still a stub, prompt must contain forthcoming-marker'): the drift-guard probes `node bin/ai-catapult.js install` whose interactive prompt output depends on local harness state; at the clean 711c99c base on this machine the same failure is pre-existing and unrelated to this lane, and it is recorded here, not waived."
+  ],
+  "migration": {
+    "dropped_dependencies": [],
+    "goal_revisions": 5,
+    "goals": [
+      "tswc-ac-a2",
+      "tswc-ac-b1",
+      "tswc-ac-b3",
+      "tswc-ac-b4",
+      "tswc-ac-b5"
+    ],
+    "legacy_generation": "676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+    "publication": {
+      "approval_class": 5,
+      "blocking": 0,
+      "deferred": 13,
+      "generation": "01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "mode": "live",
+      "planning_complete": true,
+      "published_contract": "readiness-contract/2",
+      "report": "northstar-publication/2",
+      "status": "active"
+    },
+    "schema": "handoff-migration/2",
+    "traceability": ".ai/traceability/graph.json gained edges spec->handoff and handoff->plan for tswc-ac-a2/b1/b3/b4/b5 at generation 01369bfd, a handoff node with backlinks, five plan nodes, and one backlink on the existing spec node; generated_at unchanged."
+  },
+  "plan_id": "tswc-ai-catapult",
+  "provenance": {
+    "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+    "lane": "vendored-o8",
+    "lane_skills_commit": "28f813bf9fd767960b96e9d54857964de8181a53",
+    "lane_verified_by": "the vendored skills at the O8 pin 28f813bf (skills origin main) drove every command in this tree; the northstar handoff-write.sh producer/consumer fingerprint check passed in the same run",
+    "legacy_v1_sha256": {
+      "gen_676cafbc": {
+        "goals.json": "82b687b7321dbec724ffc647dbf6769112260cbb92d08e711a32ed160ddc88a9",
+        "graph.json": "3fabe45122091cdb751fdb9f6be6426f9e53a5d7113bf041e5a30ea306c3b5b0",
+        "handoff.md": "eda129bef3dad166d76898a10994a6fbbbd8dd5330498207c75a76749fd67e78"
+      },
+      "registry": "391dfc01a3d437cb7cf9acae6f44aab903e0a79424a7511a901b9cff976a705f"
+    },
+    "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+    "red_defect_note": "The unpushed red commit originally hashed goal revisions with plain JSON.stringify, which diverges from canonical() (python json.dumps sorted/compact with default ensure_ascii) whenever goal content carries non-ASCII (here: section/arrow/em-dash characters); XSKP-P4's equivalent test only agreed because its five goals are pure ASCII. It was amended in place (79ab96c6d5957d0888d1a62240e97d3ee035a538 -> 1aae6ea9b70db22e60ffd5fcdf1c3ced8ca42a52) before any push; the corrected revision() replicates the canonical escaping per UTF-16 unit, and the amended red state keeps 4 fail / 1 pass because the failures come from the absent v2 registry entry and generation; the recorded migration publishes the authored bundle byte-equal (deepEqual pins in the green run).",
+    "red_redcommit_sha": "1aae6ea9b70db22e60ffd5fcdf1c3ced8ca42a52",
+    "test_sha256": "708abce77428093df27a5221db6e61a8dfa4ba6666235929179dff93d472289c",
+    "tools": "contract-run-v2.sh inventory-v1; migrate-handoff.sh --to readiness-contract/2; northstar/handoff-write.sh (the publish-v2 --admit-planning route); all from the vendored O8 skills pin 28f813bf in this tree",
+    "v2_registry_sha256_after": "366dcc2b247ef3e0715b023b1cec19fa391177a6a16b35d44627117170746d91",
+    "v2_registry_sha256_before": "8c1d3d331a92c3f7916a19b58c6af6399967c0753c33210ce49e3adc152305f7"
+  },
+  "red": {
+    "command": "node --test test/tswc-v2-migration.test.js",
+    "exit_code": 1,
+    "failed": 4,
+    "passed": 1,
+    "reason": "At the red commit the .ai/handoff/readiness-v2/tswc-ai-catapult generation and its registry entry do not exist, so the four v2-dependent checks fail (registry, content projection/rebuild pins, goal_revision_v2 hashing, empty-hold sidecar); only the retained-v1-bytes check passes.",
+    "tests": 5
+  },
+  "summary": "The registered tswc-ai-catapult v1 generation 676cafbc (handoff-goals/1) is migrated to readiness-contract/2 via migrate-then-publish at the vendored O8 skills pin 28f813bf: exactly one new live v2 generation 01369bfd registered (planning_complete true, 0 blocking / 5 approval-class / 13 deferred gaps, no approval created for the plan), b1/b3/b4/b5 carried verbatim, tswc-ac-a2 rebuilt with the 2026-10-08 TSF correction (48 .js + 15 .sh counts, TSF-01..08 mapping, C10.03 source-policy disposition, rename-first ordering pinned in plan_amendments), legacy v1 bytes and registry frozen, traceability graph extended; v1 dependency chains preserved byte-equal.",
+  "tests": {
+    "command": "npm test",
+    "exit_code": 1,
+    "failed": 1,
+    "passed": 296,
+    "skipped": 0,
+    "tests": 297
+  },
+  "verification": {
+    "commands": [
+      "node --test test/tswc-v2-migration.test.js",
+      "npm test",
+      "git diff --check"
+    ],
+    "exit_codes": {
+      "git diff --check": 0,
+      "node --test test/tswc-v2-migration.test.js": 0,
+      "npm test": 1
+    }
+  }
+}

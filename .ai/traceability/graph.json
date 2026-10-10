@@ -201,6 +201,36 @@
       "source": "handoff:ai-catapult:xskp-p4-adopt-engine:2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8",
       "target": "plan:ai-catapult:xskp-p4-adopt-engine:XSKP-P4-05:2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8",
       "type": "plans"
+    },
+    {
+      "source": "spec:ai-catapult:tswc-ai-catapult",
+      "target": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-a2:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b1:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b3:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b4:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "target": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "type": "plans"
     }
   ],
   "generated_at": "2026-08-22T00:00:00Z",
@@ -469,7 +499,8 @@
     {
       "backlinks": [
         "issue:ai-catapult:tswc-ai-catapult",
-        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112"
+        "handoff:ai-catapult:tswc-ai-catapult:676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112",
+        "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
       ],
       "id": "spec:ai-catapult:tswc-ai-catapult",
       "path": "docs/specifications/ACTIVE/typescript-wikiskill-convergence-tswc-ai-catapult.md",
@@ -726,6 +757,77 @@
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "XSKP-P4-05",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:tswc-ai-catapult",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-a2:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b1:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b3:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b4:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+        "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
+      ],
+      "id": "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/handoff.md",
+      "repo_id": "ai-catapult",
+      "status": "active",
+      "title": "tswc-ai-catapult",
+      "type": "handoff"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-a2:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-a2",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b1:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b1",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b3:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b3",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b4:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b4",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:tswc-ai-catapult:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3"
+      ],
+      "id": "plan:ai-catapult:tswc-ai-catapult:tswc-ac-b5:01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "tswc-ac-b5",
       "type": "plan"
     }
   ],

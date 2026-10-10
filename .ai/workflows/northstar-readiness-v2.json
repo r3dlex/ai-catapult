@@ -67,6 +67,38 @@
         "sha256": "8bd078a7ac9dd4cc615db896e2e572645f3736b2dc5b899cccd1b9df6f20b579"
       },
       "status": "active"
+    },
+    {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/goals.json",
+          "sha256": "773cfa1e5350c360bd1be10300c3c5800238fe198f371769e83a4bc7c7744234"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/graph.json",
+          "sha256": "125ee7252e4c6d5e359957a1ebb96c44e9b702836a5cb8f6027b4a3fabf6c4e7"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/handoff.md",
+          "sha256": "37c602612ff0a80f9b1740fad9a6804abfd5790d1bcac7115f36acb51c23be26"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/sidecar.json"
+        }
+      },
+      "generation": "01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3",
+      "handoff_path": ".ai/handoff/readiness-v2/tswc-ai-catapult/01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3/handoff.md",
+      "id": "northstar-plan-tswc-ai-catapult",
+      "mode": "live",
+      "plan_id": "tswc-ai-catapult",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/typescript-wikiskill-convergence-tswc-ai-catapult.md",
+        "sha256": "6d54f993b28620d1c887bdf1947f0c45b9ceb6fe5122468f5b61b870e425ed88"
+      },
+      "status": "active"
     }
   ],
   "schema": "readiness-contract/2"

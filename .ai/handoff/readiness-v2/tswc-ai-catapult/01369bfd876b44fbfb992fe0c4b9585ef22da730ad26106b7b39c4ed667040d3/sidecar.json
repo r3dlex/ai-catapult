@@ -1,0 +1,56 @@
+{
+  "goals": {
+    "tswc-ac-a2": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded at planning time (xskp-p4's informal run at 7573da8 showed 91% lines / 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius: this goal renames the whole tree, so the pre-existing suite must characterize behavior before and after; no coverage gate is claimed here.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "tswc-ac-b1": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded; this goal creates new files only (evolve/ layout machinery, schemas, golden fixtures) so there is no legacy surface to characterize. legacy_safe_tdd is set because no goal-scoped measurement exists; the new code ships with its own structural suite.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "tswc-ac-b3": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded; greenfield gate arithmetic on top of B1's new machinery. legacy_safe_tdd is set because no goal-scoped measurement exists; the six unit vectors are the characterization surface.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "tswc-ac-b4": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded; new flow machinery plus fixture harness. legacy_safe_tdd is set because no goal-scoped measurement exists; the e2e fixture run is the characterization surface.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "tswc-ac-b5": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded; new hygiene layer over B3's gate machinery. legacy_safe_tdd is set because no goal-scoped measurement exists; the stub-harness zero-invocation assertion is the characterization surface.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "tswc-ai-catapult",
+  "schema": "readiness-sidecar/1"
+}
