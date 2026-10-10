@@ -1417,23 +1417,46 @@ function lockChanged(error) {
 }
 
 /**
- * Snapshot a lock directory as {ino, owner}, or null when there is none. Only
- * an owner.json (or nothing: a writer killed before writing it) may be inside.
+ * Snapshot a lock directory as {ino, owner, fd}, or null when there is none.
+ * Only an owner.json (or nothing: a writer killed before writing it) may be
+ * inside. With hold, the directory stays open (fd) until releaseSnapshots:
+ * an open directory keeps its inode allocated, so no replacement lock can
+ * recycle the inode number while the snapshot is in use; that, not the owner
+ * bytes, is what identifies an ownerless lock.
  */
-function inspectLock(root, relative) {
+function inspectLock(root, relative, hold = false) {
   const path = writerPath(root, relative);
+  let fd = null;
   try {
     const info = lstatSync(path, { bigint: true });
     if (!info.isDirectory()) return null;
+    if (hold) {
+      fd = openSync(path, 'r');
+      if (fstatSync(fd, { bigint: true }).ino !== info.ino) throw new KnowledgeError('lock_changed', LOCK_CHANGED);
+    }
     const owner = writerPath(root, `${relative}/${LOCK_OWNER_FILE}`);
     checkDestination(root, owner);
     if (readdirSync(path).some((name) => name !== LOCK_OWNER_FILE)) {
       throw new KnowledgeError('unknown_lock_contents', 'refusing recursive lock removal');
     }
-    return { ino: info.ino, owner: existsSync(owner) ? readFileSync(owner) : null };
+    return { ino: info.ino, owner: existsSync(owner) ? readFileSync(owner) : null, fd };
   } catch (error) {
+    if (fd !== null) closeSync(fd);
     if (error.code === 'ENOENT' && !existsSync(path)) return null;
     throw lockChanged(error);
+  }
+}
+
+/** Close the directories a plan holds open, on every exit path. */
+export function releaseSnapshots(targets) {
+  for (const { snapshot } of targets) {
+    if (snapshot.fd === null) continue;
+    try {
+      closeSync(snapshot.fd);
+    } catch {
+      // Already closed.
+    }
+    snapshot.fd = null;
   }
 }
 
@@ -1480,20 +1503,25 @@ export function planUnlock(root, identity) {
   const leftover = new RegExp(`^${file.replace(/\./g, '\\.')}\\.json${CLAIM_SUFFIX}\\.lock$`);
   const locks = writerPath(root, LOCKS_DIR);
   const targets = [];
-  const names = existsSync(locks) ? readdirSync(locks).sort(compareCodePoints) : [];
-  for (const name of names) {
-    const match = leftover.exec(name);
-    if (!match) continue;
-    const relative = `${LOCKS_DIR}/${name}`;
-    if (pidAlive(Number(match[1])) !== false) {
-      throw new KnowledgeError('locked', `${relative}: claimed by an unlock that is still running`);
+  try {
+    const names = existsSync(locks) ? readdirSync(locks).sort(compareCodePoints) : [];
+    for (const name of names) {
+      const match = leftover.exec(name);
+      if (!match) continue;
+      const relative = `${LOCKS_DIR}/${name}`;
+      if (pidAlive(Number(match[1])) !== false) {
+        throw new KnowledgeError('locked', `${relative}: claimed by an unlock that is still running`);
+      }
+      const snapshot = inspectLock(root, relative, true);
+      if (snapshot) targets.push({ relative, snapshot });
     }
-    const snapshot = inspectLock(root, relative);
-    if (snapshot) targets.push({ relative, snapshot });
+    const snapshot = inspectLock(root, entryLockRel(identity), true);
+    if (snapshot) targets.push({ relative: entryLockRel(identity), snapshot });
+    return targets;
+  } catch (error) {
+    releaseSnapshots(targets);
+    throw error;
   }
-  const snapshot = inspectLock(root, entryLockRel(identity));
-  if (snapshot) targets.push({ relative: entryLockRel(identity), snapshot });
-  return targets;
 }
 
 /**
@@ -1539,6 +1567,14 @@ function recordLockEvent(root, event, seq) {
  * damaged audit file can block lock recovery.
  */
 export function executeUnlock(root, identity, targets) {
+  try {
+    return removeTargets(root, identity, targets);
+  } finally {
+    releaseSnapshots(targets);
+  }
+}
+
+function removeTargets(root, identity, targets) {
   if (!targets.length) throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
   const runId = randomUUID();
   let seq = 0;
