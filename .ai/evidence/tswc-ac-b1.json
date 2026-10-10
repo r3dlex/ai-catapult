@@ -1,0 +1,49 @@
+{
+  "disclosure": {
+    "agent_self": "no human approved this work",
+    "anchor_vs_base": "013dd26f..ab539496 contains exactly 2 commits (364d256 PR #59, ab53949 PR #61). Tag was not re-minted.",
+    "approval_anchor": "013dd26f8746920a87d501fbeef1df945d205865",
+    "approval_expiry": "2026-10-24T14:06:39Z",
+    "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
+    "base": "ab539496ddd39908879d74a017a7a8720a984018",
+    "cure_round1": "Review round 1 REQUEST_CHANGES (Architect and Critic, independent). Cure: O_APPEND + O_NOFOLLOW writes, symlink refusal, own-property schema checks, RFC 3339 calendar validation, proposals/<skill>.overlay staging, schemas/ shipped in package.json with the local-ci package.json pin refreshed. no human approved this work.",
+    "green_companion_log_sha256": "7c0610c0bd14efc010e53a082d6a10fde7509db0512fd851355caa6b41a4aa9a",
+    "green_record_log_sha256": "fb37aeb7a44e274349e0a9975157e8e6c55deae70a1e079a1c6129ae7feb11df",
+    "purpose_sha256": "3e53affa50b35c45e5dc4b089916666a5fffa85942453eaecb2a0428596450b6",
+    "red_commit": "3bd85c0e2905a60b162bb2a274ca0f3ac2f37393",
+    "scope_note": ".ai/evidence/tswc-ac-b1.json is outside the goal scope array [src/evolve, schemas, test, test/fixtures] and is included because AC-3 and the tdd-evidence gate require it. No pinned source in .ai/ci/local-ci.json changed, so that inventory was not refreshed.",
+    "successor_authorization": "Coordinator #2 authorized exactly one bounded successor lane (b1-R; precedent HPG-AMEND-R4) after the prior lane stopped TERMINAL on 2 consecutive REQUEST_CHANGES (loop-escalation.md); same branch and PR #63. no human approved this work.",
+    "successor_cure": "Residual blockers closed: (1) writes bind to verified directory inodes \u2014 per-component lstat + chdir + cwd-verify, relative O_NOFOLLOW opens, atomic mkdir/O_EXCL creates (reproduced escapes through a symlinked evolve/, a symlinked wiki/ during init, and check-to-open swaps at raw/<run-id> now all refuse; critic+architect repro scripts replayed); (2) Date.UTC 0-99 remap fixed via setUTCFullYear so 0099-02-28T00:00:00Z validates; (3) concurrent-append regression replaced by a deterministic interleaving test (5/5 red against the pre-cure read-modify-write implementation 472f268). Evidence commands byte-identical; no pinned source in .ai/ci/local-ci.json changed.",
+    "successor_green_record_log_sha256": "fb37aeb7a44e274349e0a9975157e8e6c55deae70a1e079a1c6129ae7feb11df",
+    "successor_green_repro_log_sha256": "69627b9493cb6d676b8c89040dc48fbd0ea2179ee78e32d8249a4040de32d246",
+    "successor_npm_test_log_sha256": "0ac25e7bb6c304a2dfa1976a914a73dd865ca4e3ef4468d4462ce0049b2d3fac",
+    "successor_prek_log_sha256": "cd3edd3217a3dd7fd9bbe0ccf2e1b978d0dcc5b78f46c7a0d2ff8ec687112a66",
+    "successor_r2_cure": "Final bounded attempt (b1-R2, coordinator #2 decision, direction A) after the architect lane parked b1-R on the ancestor-of-root substitution. bindRoot now lexically normalizes the caller path and walks it top-down with lstat: every component must be a real directory; a symlink at ANY component \u2014 the root ancestors included \u2014 is refused by name with a canonicalize-with-realpath hint. The root is then opened O_DIRECTORY|O_NOFOLLOW and its device+inode compared against the cwd (path and inode) after the chdir, and the walked caller-path chain is recorded and re-resolved before every mutation. The workspace root must therefore be a symlink-free canonical path; callers on macOS whose roots traverse /var or /tmp canonicalize with realpath before binding (module docstring + error hint + this disclosure). Contract correction: the earlier successor_round2_contract phrase \"anchor ancestors included\" now exactly matches enforcement \u2014 at ca48c5e it over-stated the caller-path case. Replay: the architect ancestor reproduction is refused with the external sentinel untouched (canonical base) and refused naming the symlinked component when not canonicalized; the critic 72-case relocation matrix stays 0/72. no human approved this work.",
+    "successor_r2_green_record_log_sha256": "fb37aeb7a44e274349e0a9975157e8e6c55deae70a1e079a1c6129ae7feb11df",
+    "successor_r2_npm_test_log_sha256": "a93777f5e3aba591f7bef7358b5f033c8e050533432fa7359161c49004d059e6",
+    "successor_r2_prek_log_sha256": "cd3edd3217a3dd7fd9bbe0ccf2e1b978d0dcc5b78f46c7a0d2ff8ec687112a66",
+    "successor_r2_probe_log_sha256": "3de930e0d0ba93c060e7089b9c70468a9dd4993f177ed03b1ee024cd13a749ab",
+    "successor_r2_red_architect_log_sha256": "936e849bebdf83c4082e4a6fcc33a45b8d7cbe2214bf326f3a0e58403552b358",
+    "successor_r2_red_test_log_sha256": "533063ad1a37d5af8d8b04f5f38911b2ea2a5052599f2c06c79e8b38095f6b13",
+    "successor_red_new_tests_log_sha256": "4335fbf8466f262f6be2a63fc9f325356de27ee686f30589e7109999afd3dff4",
+    "successor_red_rmw_log_sha256": "168acc75ad8f450164b4ce3972f3124e446e423df9ff12239d29e81956fd101d",
+    "successor_repro_log_sha256": "0037aca8cd5c3f7a5c68bcebadc066ee344c50e8549f27049746d6604e8903b5",
+    "successor_round2_contract": "Declared boundary (darwin; no openat2/RESOLVE_BENEATH; Node exposes no openat/fchdir): symlink substitution at any depth, anchor ancestors included, is refused; relocation of a bound directory is detected and refused before any byte is written; a relocation first observed only after a kernel mutation is reverted for our own bytes (net external change zero or the call fails closed). The residual window between the last identity re-verification and the kernel write for a concurrent hostile relocator is declared OUTSIDE this boundary, quoted from the critic: 'This requires a containment correction or an explicitly revised contract with an enforceable boundary against concurrent relocation. Additional path checks alone leave another race.'",
+    "successor_round2_cure": "One bounded cure cycle after the successor round-1 dual review at c99bf43 returned REQUEST_CHANGES from both reviewers. (1) Architect: workspace-root substitution was adopted as the anchor; the root is now opened O_DIRECTORY|O_NOFOLLOW and its device+inode compared against the cwd after chdir (Node exposes no fchdir), so a root symlink present or substituted during the bind is refused. (2) Critic: a bound directory relocated out of the workspace kept receiving writes; every recorded level \u2014 anchor prefixes included \u2014 is re-resolved with lstat and compared device+inode before every create/open/append, and a relocation observed only after a kernel mutation is reverted for our own bytes (created file unlinked by inode identity, append truncated to the prior size, overlay rewritten from captured original bytes). Reviewer scripts replayed at the cure: architect root-race refused, external sentinel untouched; critic 72-case matrix 0/72 escapes. Round-1 red at c99bf43: 15/72 matrix escapes + root substitution succeeded (red-round2-cure-at-c99bf43.log). no human approved this work.",
+    "successor_round2_green_record_log_sha256": "fb37aeb7a44e274349e0a9975157e8e6c55deae70a1e079a1c6129ae7feb11df",
+    "successor_round2_npm_test_log_sha256": "5c3696114bedf7e8c5d0d74af040d63c980d33d9fed31c703de17ad59306af9a",
+    "successor_round2_prek_log_sha256": "cd3edd3217a3dd7fd9bbe0ccf2e1b978d0dcc5b78f46c7a0d2ff8ec687112a66",
+    "successor_round2_probe_log_sha256": "7d4e523cfa6d85ccc638accab76452e3382b3f32721e2835d18276c242cb088c",
+    "successor_round2_red_log_sha256": "38efedd0734572b1e3ccce8af92d6ec3bee9581cae49cd1ca49cfc91b627912d",
+    "test_corrections": "test/evolve-flow.test.ts was corrected in the green commit and not amended into the red commit. The committed assertion omitted the evolve/ prefix collectFiles(root) reports, and expected a second Accepted audit append to byte-match the Rejected block. Both corrections make the assertions match the helpers and the rendered bytes. The purpose_sha256 placeholder was filled from PURPOSE.md bytes."
+  },
+  "goal_id": "tswc-ac-b1",
+  "green": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/evolve-layout.test.ts test/evolve-schemas.test.ts test/evolve-flow.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/evolve-layout.test.ts test/evolve-schemas.test.ts test/evolve-flow.test.ts",
+    "exit_code": 1
+  }
+}

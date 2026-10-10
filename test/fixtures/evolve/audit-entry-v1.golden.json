@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "run_id": "run-2026-10-10-alpha",
+    "cycle": 1,
+    "recorded_at": "2026-10-10T00:00:00Z",
+    "recorder": "wiki-maintainer"
+  },
+  "target_skill": "evolution-rollout",
+  "unified_diff": "--- a/skills/evolution-rollout/SKILL.md\n+++ b/skills/evolution-rollout/SKILL.md\n@@ -1,2 +1,3 @@\n proposed overlay change",
+  "score": {
+    "weighted_aggregate": 0.775,
+    "rubric_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "verdict": "Rejected"
+}

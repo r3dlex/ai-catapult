@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-catapult:evolve:task-set:v1",
+  "title": "evolve task-set v1",
+  "description": "The task-set partitions for the evolution loop (master §5.4): the D_train/D_val split with D_val frozen per cycle — evalset_version stamps the frozen split, and scores are never compared across versions — plus the held-out T_test reservation for final reporting. d_train and t_test may be empty; d_val carries at least one case, and no case id may sit in two splits.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task_set_id", "evalset_version", "skill_under_test", "d_train", "d_val", "t_test"],
+  "properties": {
+    "task_set_id": { "type": "string", "minLength": 1 },
+    "evalset_version": { "type": "integer", "minimum": 1 },
+    "skill_under_test": { "type": "string", "minLength": 1 },
+    "d_train": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "d_val": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "t_test": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ai-catapult:evolve:audit-entry:v1",
+  "title": "evolve audit entry v1",
+  "description": "One skill audit-trail entry (master §5.4 audit elements): metadata, target_skill, unified_diff, score and the Accepted/Rejected verdict. Audit entries are append-only — appended to evolve/wiki/skill-impact.md as fenced json blocks and never rolled back.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "target_skill", "unified_diff", "score", "verdict"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "cycle", "recorded_at", "recorder"],
+      "properties": {
+        "run_id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "cycle": { "type": "integer", "minimum": 1 },
+        "recorded_at": { "type": "string", "format": "date-time" },
+        "recorder": { "type": "string", "minLength": 1 }
+      }
+    },
+    "target_skill": { "type": "string", "minLength": 1 },
+    "unified_diff": { "type": "string", "minLength": 1 },
+    "score": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weighted_aggregate", "rubric_sha256"],
+      "properties": {
+        "weighted_aggregate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "rubric_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "verdict": { "type": "string", "enum": ["Accepted", "Rejected"] }
+  }
+}

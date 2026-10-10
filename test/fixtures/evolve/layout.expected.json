@@ -1,0 +1,8 @@
+{
+  "schema": "evolve-layout-golden/1",
+  "root_dir": "evolve",
+  "files": ["PURPOSE.md", "wiki/logs.md", "wiki/skill-impact.md"],
+  "dirs": ["raw", "wiki", "proposals"],
+  "files_must_not_exist": ["raw/.keep", "proposals/.keep"],
+  "purpose_sha256": "3e53affa50b35c45e5dc4b089916666a5fffa85942453eaecb2a0428596450b6"
+}
