@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -142,5 +142,44 @@ void test('future-path fixture supports CLI template lookup and flat Claude/Code
     cleanup(vendorSkills);
     cleanup(vendorRoot);
     cleanup(distRoot);
+  }
+});
+
+void test('init refuses without writing when the vendored validator is absent', () => {
+  const vendorSkills = fixture();
+  rmSync(join(vendorSkills, 'scripts'), { recursive: true, force: true });
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-init-target-'));
+  try {
+    const cli = spawnSync(process.execPath, [join(root, 'bin/ai-catapult.ts'), 'init', target], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, AI_CATAPULT_VENDOR_SKILLS: vendorSkills },
+    });
+    assert.equal(cli.status, 1, `expected refusal, got status ${cli.status}`);
+    assert.match(String(cli.stderr), /validate-rules/);
+    assert.deepEqual(readdirSync(target), [], 'refusal must leave the target untouched');
+  } finally {
+    cleanup(vendorSkills);
+    cleanup(target);
+  }
+});
+
+void test('init refuses a validator that is a directory, not a regular file', () => {
+  const vendorSkills = fixture();
+  rmSync(join(vendorSkills, 'scripts/validate-rules.sh'), { force: true });
+  mkdirSync(join(vendorSkills, 'scripts/validate-rules.sh'));
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-init-target-'));
+  try {
+    const cli = spawnSync(process.execPath, [join(root, 'bin/ai-catapult.ts'), 'init', target], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...process.env, AI_CATAPULT_VENDOR_SKILLS: vendorSkills },
+    });
+    assert.equal(cli.status, 1, `expected refusal, got status ${cli.status}`);
+    assert.match(String(cli.stderr), /validate-rules/);
+    assert.deepEqual(readdirSync(target), [], 'refusal must leave the target untouched');
+  } finally {
+    cleanup(vendorSkills);
+    cleanup(target);
   }
 });

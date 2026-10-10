@@ -30,7 +30,7 @@
  * installs source the staged copy; see scripts/stage-skill-templates.ts).
  */
 
-import { mkdirSync, readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 
 type BoundaryManifestEntry = {
@@ -183,6 +183,27 @@ function writeMechanicalFiles(manifest: BoundaryManifest, templatesDir: string, 
  * Returns the emitted paths and the judgment-laden manifest paths (for the
  * finish prompt).
  */
+/**
+ * Resolve the vendored validate-rules.sh from the candidate locations and slurp
+ * its bytes. A candidate qualifies only if it is a regular file — existsSync
+ * alone would accept a directory and fail mid-write — and the bytes are read
+ * eagerly so the emission step cannot fail on a late read after other files
+ * landed. Returns undefined when no candidate qualifies; the caller refuses.
+ */
+function resolveValidatorBytes(candidates: string[]): { src: string; bytes: Buffer } | undefined {
+  for (const candidate of candidates) {
+    let stat;
+    try {
+      stat = statSync(candidate);
+    } catch {
+      continue;
+    }
+    if (!stat.isFile()) continue;
+    return { src: candidate, bytes: readFileSync(candidate) };
+  }
+  return undefined;
+}
+
 export function scaffold({ targetDir, templatesDir, skillsDir, repoId, date, upstreamUrl, upstreamRef, force = false }: {
   targetDir: string;
   templatesDir: string;
@@ -233,8 +254,8 @@ export function scaffold({ targetDir, templatesDir, skillsDir, repoId, date, ups
   // refuses before writing anything.
   const validatorCandidates = [join(templatesDir, 'scripts', 'validate-rules.sh')];
   if (skillsDir) validatorCandidates.push(join(skillsDir, 'scripts', 'validate-rules.sh'));
-  const validatorSrc = validatorCandidates.find((candidate) => existsSync(candidate));
-  if (!validatorSrc) {
+  const resolvedValidator = resolveValidatorBytes(validatorCandidates);
+  if (!resolvedValidator) {
     process.stderr.write(
       'vendor/ missing or stale — vendored scripts/validate-rules.sh not found next to the templates; run: node scripts/setup.ts\n',
     );
@@ -270,7 +291,7 @@ export function scaffold({ targetDir, templatesDir, skillsDir, repoId, date, ups
   // pinned vendor source; listed in emittedPaths so the finish prompt and
   // NEXT-STEPS.md reference the live hook target.
   mkdirSync(join(targetDir, 'scripts'), { recursive: true });
-  writeFileSync(validatorDest, readFileSync(validatorSrc));
+  writeFileSync(validatorDest, resolvedValidator.bytes);
   emittedPaths.push('scripts/validate-rules.sh');
 
   // Collect judgment-laden paths from manifest (for finish prompt).

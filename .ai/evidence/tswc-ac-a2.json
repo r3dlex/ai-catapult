@@ -14,7 +14,7 @@
     "cure_2": {
       "block": "tdd-evidence",
       "defect": "The recorded top-level pair used two different commands - red 'node --test test/tswc-v2-migration.test.js' (no env) vs green 'AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/tswc-v2-migration.test.js' - so the identical-command contract failed; both legs also referenced the pre-rename .js path, which this very wave renamed away (327983b), so neither leg was re-executable at the head surface.",
-      "repair": "Re-executed BOTH legs as one identical command string on 2026-10-10 (node v26.11.0), values recorded from the actual runs: red at the pre-wave base 364d2565f3d60fc58210eef222ec6a9bed6cc3dc (origin/main at the PR #61 branch point) - exit 1, \"Could not find 'test/tswc-v2-migration.test.ts'\"; green on the post-cure tree committed unchanged by this cure commit - exit 0, 5/5. The migration-era red from the original TDD cycle (4 of 5 checks failing against the v1-only tree at the red_redcommit_sha in provenance) stays preserved in provenance.red_* and the regeneration block.",
+      "repair": "Re-executed BOTH legs as one identical command string on 2026-10-10 (node v26.11.0), values recorded from the actual runs: red at the pre-wave base 364d2565f3d60fc58210eef222ec6a9bed6cc3dc (origin/main at the PR #61 branch point) - exit 1, \"Could not find 'test/tswc-v2-migration.test.ts'\"; green on the post-cure tree committed unchanged by this cure commit - exit 0, 5/5. The migration-era red from the original TDD cycle (4 of 5 checks failing against the v1-only tree at the red_redcommit_sha in provenance) stays preserved in provenance.red_* and the regeneration block. The two superseded pre-repair leg objects are preserved verbatim under cure_2.superseded_pair (round-6 review restructure).",
       "env_prefix_note": "AI_CATAPULT_DIST_ROOT=dist-snapshot is the suite-canonical env (package.json 'test'). It is inert for this test - the migration test reads committed .ai/ artifacts, imports no runtime modules and never reads AI_CATAPULT_DIST_ROOT or dist-snapshot (grep clean). Measured, not asserted: at the red state the plain no-env command fails with byte-identical output and exit code (both red logs digest to 8f9757d9...), so the red leg does not depend on the env prefix - the failure is the pre-wave state, not the environment.",
       "digests": {
         "red_state_test_bytes": "test/tswc-v2-migration.test.js at 364d2565 = ecf67a364d7646adef94e45eda872c2b18426606edf2411e6e6128243ee83568 (matches provenance.test_sha256)",
@@ -22,6 +22,24 @@
         "red_log": "round3/cure2-red-base-364d2565.log sha256 8f9757d91ff662f551f3c4beccb77932ce8daa950e7b3047ad8c3ca39e264a70",
         "red_no_env_control_log": "round3/cure2-red-base-noenv.log sha256 8f9757d91ff662f551f3c4beccb77932ce8daa950e7b3047ad8c3ca39e264a70 (byte-identical to the env-prefixed red log)",
         "green_log": "round3/cure2-green-head-postcure.log sha256 45f945ae1ac8de169c78496b132487bf7be00be0cf59454089e9688398793003"
+      },
+      "superseded_pair": {
+        "note": "Verbatim top-level red/green objects exactly as recorded at the round-5-approved cure head 71b1886c610600bc86d4c9fd1dbdbaff3f0d4dc7, before the repair below replaced them with the identical-command re-execution (round-6 review restructure; history preserved, not rewritten).",
+        "red": {
+          "command": "node --test test/tswc-v2-migration.test.js",
+          "exit_code": 1,
+          "failed": 4,
+          "passed": 1,
+          "reason": "At the red commit the .ai/handoff/readiness-v2/tswc-ai-catapult generation and its registry entry do not exist, so the four v2-dependent checks fail (registry, content projection/rebuild pins, goal_revision_v2 hashing, empty-hold sidecar); only the retained-v1-bytes check passes.",
+          "tests": 5
+        },
+        "green": {
+          "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/tswc-v2-migration.test.js",
+          "exit_code": 0,
+          "failed": 0,
+          "passed": 5,
+          "tests": 5
+        }
       }
     }
   },
