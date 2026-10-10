@@ -34,8 +34,9 @@
  * - Ledgers. A record is committed by its trailing newline, written whole or
  *   not at all (short writes retried; a failure truncates the uncommitted
  *   bytes before any caller acts). publish.py's ledger_lines fails on any
- *   damaged line; here an interrupted tail is terminated and ledgered as a
- *   knowledge-ledger-repair/1 record by the next append, and unlock never
+ *   damaged line; here an interrupted tail is repaired by the next append on
+ *   its own line (fragment + knowledge-ledger-repair/1 record, committed by
+ *   one newline, so recovery is restartable at every byte), and unlock never
  *   reads the lock-event ledger, so no damaged audit line blocks recovery.
  * - Secret patterns. JavaScript has no leading inline-flag group and Node
  *   rejects the policy's `(?i)`, so compileSecretPattern turns it into the i
@@ -1127,12 +1128,33 @@ function parseLedgerLine(bytes) {
   }
 }
 
+// A repair record always starts with these bytes (sorted keys, ledgerLine).
+const REPAIR_HEAD = Buffer.from('{"action": "terminate_interrupted_record"');
+
+/**
+ * The repair record a committed line ends with, when the line is exactly an
+ * interrupted fragment followed by the repair that names it (same size, same
+ * sha256); null otherwise.
+ */
+function repairedFragment(line) {
+  for (let at = line.lastIndexOf(REPAIR_HEAD); at >= 0; at = at > 0 ? line.lastIndexOf(REPAIR_HEAD, at - 1) : -1) {
+    const fragment = line.subarray(0, at);
+    const repair = parseLedgerLine(line.subarray(at));
+    if (fragment.length && repair && repair.schema === LEDGER_REPAIR
+      && repair.fragment_bytes === fragment.length && repair.fragment_sha256 === sha256(fragment)) {
+      return repair;
+    }
+  }
+  return null;
+}
+
 /**
  * The committed records of an append-only JSONL ledger. An unterminated final
- * line is an interrupted append, not a record: the next append terminates it
- * and ledgers a repair record, after which that fragment line is skipped only
- * because its repair record (matching sha256) follows it. Any other line that
- * is not a JSON object fails closed.
+ * line is an interrupted append, not a record, and is ignored. The next
+ * append repairs it on the same line (fragment, then a repair record naming
+ * its size and sha256, then the committing newline), so a committed line is
+ * either a JSON object or a fragment with its matching repair; anything else
+ * fails closed.
  */
 function ledgerLines(root, relative) {
   const path = ledgerPath(root, relative);
@@ -1142,17 +1164,10 @@ function ledgerLines(root, relative) {
   for (let start = 0, end = data.indexOf(0x0a); end >= 0; start = end + 1, end = data.indexOf(0x0a, start)) {
     lines.push(data.subarray(start, end));
   }
-  const values = [];
-  lines.forEach((line, index) => {
-    const value = parseLedgerLine(line);
-    if (value) {
-      values.push(value);
-      return;
-    }
-    const repair = index + 1 < lines.length ? parseLedgerLine(lines[index + 1]) : null;
-    if (!repair || repair.schema !== LEDGER_REPAIR || repair.fragment_sha256 !== sha256(line)) {
-      throw new KnowledgeError('invalid_ledger', `${relative}:${index + 1}: ledger lines must be objects`);
-    }
+  const values = lines.map((line, index) => {
+    const value = parseLedgerLine(line) ?? repairedFragment(line);
+    if (!value) throw new KnowledgeError('invalid_ledger', `${relative}:${index + 1}: ledger lines must be objects`);
+    return value;
   });
   return { path, values };
 }
@@ -1169,10 +1184,13 @@ function ledgerLine(value) {
 
 /**
  * Append one record, durably and whole. An interrupted record left at the
- * tail is first terminated and ledgered as a repair, so the new record starts
- * on its own line. A short or failed write is retried until complete or fails;
- * on failure the uncommitted bytes are truncated away when nothing else was
- * appended since, and the error propagates before any caller acts on it.
+ * tail is repaired first, on its own line: the repair record is written right
+ * after the fragment and the newline that follows commits both at once, so a
+ * crash at any byte leaves either an uncommitted tail (repaired by the next
+ * append) or a fully repaired line, never a malformed committed one. A short
+ * or failed write is retried until complete or fails; on failure the
+ * uncommitted bytes are truncated away when nothing else was appended since,
+ * and the error propagates before any caller acts on it.
  */
 function appendEvent(path, event) {
   mkdirSync(dirname(path), { recursive: true });
@@ -1185,7 +1203,7 @@ function appendEvent(path, event) {
       readSync(fd, existing, 0, size, 0);
       const fragment = existing.subarray(existing.lastIndexOf(0x0a) + 1);
       if (fragment.length) {
-        text += `\n${ledgerLine({
+        text += `${ledgerLine({
           schema: LEDGER_REPAIR,
           at: now(),
           action: 'terminate_interrupted_record',
