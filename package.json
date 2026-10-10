@@ -29,6 +29,9 @@
     "LICENSE"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
     "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
     "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
@@ -60,5 +63,13 @@
   "homepage": "https://github.com/r3dlex/ai-catapult#readme",
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.12.0",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1"
   }
 }
