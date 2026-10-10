@@ -943,6 +943,7 @@ function entryRel(identity) {
 const ENTRY_LOCKED = 'entry lock already exists; explicit unlock required';
 const SERIALIZED = 'held by another writer; writers are serialized (unlock it if stale)';
 const LOCK_CHANGED = 'the lock was removed or replaced during unlock';
+const LOCK_DISPLACED = 'the lock changed since inspection; it is kept under this claim for an explicit unlock';
 
 function entryLockRel(identity) {
   return `${LOCKS_DIR}/${identity.replace(/:/g, '__')}.json.lock`;
@@ -1329,9 +1330,13 @@ function inspectLock(root, relative) {
 /**
  * Take exclusive ownership of the inspected lock incarnation: atomically
  * rename it to a fresh claim name only this process knows, then prove the
- * claimed object is the snapshot (same inode, same owner bytes). Anything else
- * — removed, or replaced since the snapshot — is put back, and the claim fails
- * lock_changed. Deletion then only ever happens under the claim name.
+ * claimed object is the snapshot (same inode, same owner bytes). Deletion then
+ * only ever happens under the claim name. A mismatch (the lock was replaced
+ * since the snapshot) is never renamed back: a rename onto the original path
+ * would replace a lock a new writer created there meanwhile. The displaced
+ * incarnation stays under its claim name, which still blocks writers, and the
+ * claim fails lock_changed naming it; an explicit unlock recovers it once this
+ * process has exited.
  */
 function claimLock(root, relative, claimRelative, snapshot) {
   const from = writerPath(root, relative);
@@ -1349,12 +1354,7 @@ function claimLock(root, relative, claimRelative, snapshot) {
   }
   const owners = (left, right) => (left === null ? right === null : right !== null && left.equals(right));
   if (!claimed || claimed.ino !== snapshot.ino || !owners(claimed.owner, snapshot.owner)) {
-    try {
-      renameSync(to, from);
-    } catch {
-      // The displaced lock's own writer reports lock_changed on release.
-    }
-    throw new KnowledgeError('lock_changed', LOCK_CHANGED);
+    throw new KnowledgeError('lock_changed', `${claimRelative}: ${LOCK_DISPLACED}`);
   }
 }
 
@@ -1416,7 +1416,9 @@ export function executeUnlock(root, identity, targets) {
       if (snapshot.owner !== null) unlinkSync(join(claim, LOCK_OWNER_FILE));
       rmdirSync(claim);
     } catch (error) {
-      appendEvent(ledger, { ...prepared, at: now(), result: 'failed' });
+      const failed = { ...prepared, at: now(), result: 'failed' };
+      if (existsSync(writerPath(root, claimRelative))) failed.claim_path = claimRelative;
+      appendEvent(ledger, failed);
       throw lockChanged(error);
     }
     applied = { ...prepared, at: now(), result: 'applied' };
