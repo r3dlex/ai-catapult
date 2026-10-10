@@ -23,7 +23,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,8 +132,10 @@ function runFlow(root: string): FlowResult {
 }
 
 void test('evolve flow: the identical script on two independent roots produces byte-identical trees', () => {
-  const rootA = mkdtempSync(join(tmpdir(), 'evolve-flow-a-'));
-  const rootB = mkdtempSync(join(tmpdir(), 'evolve-flow-b-'));
+  // Canonical roots: the workspace root must be a symlink-free path (macOS
+  // os.tmpdir() traverses /var → /private/var).
+  const rootA = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-flow-a-')));
+  const rootB = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-flow-b-')));
   const roots = [rootA, rootB];
   try {
     const a = runFlow(rootA);
@@ -184,7 +186,7 @@ void test('judgment serialization: fixed §5.4 order, 2-space indent, independen
 });
 
 void test('judgment recording: duplicate judgment_id is refused write-once and the pinned bytes stay untouched', () => {
-  const root = mkdtempSync(join(tmpdir(), 'evolve-flow-dup-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-flow-dup-')));
   const paths = evolvePaths(root);
   try {
     initEvolveLayout(root);
@@ -219,7 +221,7 @@ void test('judgment recording: duplicate judgment_id is refused write-once and t
 });
 
 void test('audit entries: fenced single-line blocks in fixed order, appended to skill-impact.md', () => {
-  const root = mkdtempSync(join(tmpdir(), 'evolve-flow-audit-'));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-flow-audit-')));
   const paths = evolvePaths(root);
   try {
     initEvolveLayout(root);

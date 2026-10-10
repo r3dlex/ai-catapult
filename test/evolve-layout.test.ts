@@ -65,10 +65,11 @@ const fixtureLayout = JSON.parse(
   purpose_sha256: string;
 };
 
-/** Create a temp root directory for test isolation. Returns absolute path. */
+/** Create a temp root directory for test isolation. Returns a canonical absolute path. */
 function makeTmpRoot(prefix: string): string {
-  const root = mkdtempSync(join(tmpdir(), prefix));
-  return root;
+  // The workspace root must be a symlink-free canonical path (macOS `os.tmpdir()`
+  // traverses /var → /private/var), so canonicalize what mkdtemp hands back.
+  return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 }
 
 /** Recursively collect all files under a directory as sorted relative paths. */
@@ -588,6 +589,104 @@ void test('a workspace root swapped for a symlink at bind time is refused (root 
       }
       assert.equal(fired, true, `${label}: the root substitution must have fired`);
       assert.equal(readFileSync(sentinel, 'utf8'), 'EXTERNAL-SENTINEL', `${label}: external bytes must stay untouched`);
+    }
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('ancestor-of-root substitution is refused at bind time and after bind (caller path walk)', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-ancestor-root-')));
+  try {
+    // Scenario A: the round-3 reproduction shape — substitute the root's parent
+    // immediately before the root's open, with a valid workspace behind it.
+    {
+      const parent = join(base, 'a', 'parent');
+      const outside = join(base, 'a', 'outside');
+      mkdirSync(parent, { recursive: true });
+      mkdirSync(join(outside, 'workspace'), { recursive: true });
+      const root = join(parent, 'workspace');
+      initEvolveLayout(root);
+      initEvolveLayout(join(outside, 'workspace'));
+      const sentinel = join(outside, 'workspace', 'evolve', 'wiki', 'logs.md');
+      writeFileSync(sentinel, 'EXTERNAL-SENTINEL');
+      const originalOpen = Reflect.get(fs, 'openSync') as PatchedFsFunction;
+      let fired = false;
+      withPatchedFs(
+        {
+          openSync: (...args: unknown[]) => {
+            if (!fired && String(args[0]) === root) {
+              fired = true;
+              renameSync(parent, `${parent}-saved`);
+              symlinkSync(outside, parent);
+            }
+            return originalOpen(...args);
+          },
+        },
+        () => {
+          assert.throws(
+            () => appendWikiFile(evolvePaths(root), 'logs.md', 'ATTACK\n'),
+            (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+          );
+        },
+      );
+      assert.equal(fired, true);
+      assert.equal(readFileSync(sentinel, 'utf8'), 'EXTERNAL-SENTINEL');
+    }
+    // Scenario B: the parent is already a symlink when the bind starts.
+    {
+      const parent = join(base, 'b', 'parent');
+      const outside = join(base, 'b', 'outside');
+      mkdirSync(join(outside, 'workspace'), { recursive: true });
+      initEvolveLayout(join(outside, 'workspace'));
+      const sentinel = join(outside, 'workspace', 'evolve', 'wiki', 'logs.md');
+      writeFileSync(sentinel, 'EXTERNAL-SENTINEL');
+      const root = join(parent, 'workspace');
+      mkdirSync(root, { recursive: true });
+      initEvolveLayout(root);
+      renameSync(parent, `${parent}-saved`);
+      symlinkSync(outside, parent);
+      assert.throws(
+        () => appendWikiFile(evolvePaths(root), 'logs.md', 'ATTACK\n'),
+        (err: unknown) =>
+          err instanceof EvolveError && err.kind === 'unsafe-path' && err.message.includes(parent),
+        'the symlinked ancestor must be refused by name',
+      );
+      assert.equal(readFileSync(sentinel, 'utf8'), 'EXTERNAL-SENTINEL');
+    }
+    // Scenario C: an ancestor is substituted after the bind, before a write.
+    {
+      const parent = join(base, 'c', 'parent');
+      const outside = join(base, 'c', 'outside');
+      mkdirSync(join(outside, 'workspace'), { recursive: true });
+      initEvolveLayout(join(outside, 'workspace'));
+      const sentinel = join(outside, 'workspace', 'evolve', 'wiki', 'logs.md');
+      writeFileSync(sentinel, 'EXTERNAL-SENTINEL');
+      const root = join(parent, 'workspace');
+      mkdirSync(root, { recursive: true });
+      initEvolveLayout(root);
+      const originalOpen = Reflect.get(fs, 'openSync') as PatchedFsFunction;
+      let fired = false;
+      withPatchedFs(
+        {
+          openSync: (...args: unknown[]) => {
+            if (!fired && String(args[0]) === 'logs.md') {
+              fired = true;
+              renameSync(parent, `${parent}-saved`);
+              symlinkSync(outside, parent);
+            }
+            return originalOpen(...args);
+          },
+        },
+        () => {
+          assert.throws(
+            () => appendWikiFile(evolvePaths(root), 'logs.md', 'ATTACK\n'),
+            (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+          );
+        },
+      );
+      assert.equal(fired, true);
+      assert.equal(readFileSync(sentinel, 'utf8'), 'EXTERNAL-SENTINEL');
     }
   } finally {
     rmSync(base, { recursive: true, force: true });

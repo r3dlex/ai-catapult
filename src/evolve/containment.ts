@@ -12,19 +12,26 @@
  *
  * Enforced boundary (each clause has regression coverage):
  *
- *   - Root identity: the workspace root is opened once with
- *     O_DIRECTORY|O_NOFOLLOW and its device+inode are compared against the
- *     cwd after the chdir (through a no-follow open of `.`), so a root
- *     symlink — present before the bind or substituted during the chdir — is
- *     refused instead of adopted. Node exposes no fchdir, so cwd is
- *     established by path and then verified against the opened fd's identity.
+ *   - Root identity: the caller-provided path is lexically normalized
+ *     (path.resolve) and walked top-down before anything binds: every
+ *     component of the caller path must be a real directory, and a symlink at
+ *     ANY component — the root's ancestors included — is refused by name with
+ *     a canonicalize-with-realpath hint. The root is then opened once with
+ *     O_DIRECTORY|O_NOFOLLOW and its device+inode compared against the cwd
+ *     after the chdir (through a no-follow open of `.`), so a substitution
+ *     present before the bind, during the walk, during the chdir or before
+ *     the open is refused instead of adopted. Node exposes no fchdir, so cwd
+ *     is established by path and then verified against the opened fd's
+ *     identity. Callers whose root legitimately traverses a symlink (macOS
+ *     /var, /tmp) must canonicalize it with realpath before binding.
  *   - Component substitution at any depth: each component is opened
  *     O_DIRECTORY|O_NOFOLLOW relative to the bound parent and its identity is
  *     recorded; `process.cwd()` must equal the expected physical path and its
  *     inode must equal the opened component after every chdir.
- *   - Anchor chain: every prefix of the resolved anchor path is recorded
- *     (device+inode) at bind time, so an ancestor above the workspace that is
- *     symlinked or replaced mid-operation is detected too.
+ *   - Anchor chain (exact): the walked caller-path chain — every prefix,
+ *     ancestors included — is recorded (device+inode) at bind time and
+ *     re-resolved before every mutation, so an ancestor above the workspace
+ *     that is symlinked, replaced or moved mid-operation is detected too.
  *   - Relocation: before every create/open/append, every recorded level is
  *     re-resolved with lstat and compared with its recorded identity; a
  *     missing, symlinked, replaced or moved level refuses with a distinct
@@ -51,7 +58,7 @@
  */
 import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readSync, rmdirSync, unlinkSync, writeSync } from 'node:fs';
 import type { Stats } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { EvolveError, nodeErrorCode } from './errors.ts';
 
 const NOFOLLOW = constants.O_NOFOLLOW;
@@ -70,8 +77,11 @@ let boundAncestors: readonly BoundLevel[] = [];
 
 /**
  * Bind the process to the workspace root's directory identity for the duration
- * of `fn`; `anchor` is the resolved physical path. Missing roots are created
- * first (init parity); every component below and above them is still verified.
+ * of `fn`; `anchor` is the normalized caller path once every component of it
+ * has been verified to be a real directory. The root must be a symlink-free
+ * canonical path (callers canonicalize, e.g. with realpath, before binding).
+ * Missing roots are created first (init parity); every component is still
+ * verified.
  */
 export function withBoundRoot<T>(root: string, fn: (anchor: string) => T): T {
   const previousCwd = process.cwd();
@@ -95,17 +105,35 @@ interface RootBinding {
 }
 
 function bindRoot(root: string): RootBinding {
-  const fd = openRootDirectory(root);
+  // Lexical normalization makes the walk and the physical path agree; the
+  // caller path must itself be symlink-free (macOS /var, /tmp callers
+  // canonicalize before binding).
+  const anchor = resolve(root);
+  const chain = callerPathChain(anchor);
+  if (chain === null) {
+    mkdirSync(anchor, { recursive: true });
+    const created = callerPathChain(anchor);
+    if (created === null) {
+      throw new EvolveError('unsafe-path', `${anchor} could not be created as a real directory`);
+    }
+    return bindVerifiedRoot(anchor, created);
+  }
+  return bindVerifiedRoot(anchor, chain);
+}
+
+function bindVerifiedRoot(anchor: string, chain: readonly BoundLevel[]): RootBinding {
+  const fd = openRootDirectory(anchor);
   try {
     const id = fstatSync(fd);
-    if (!id.isDirectory()) throw openRootRefusal(root);
-    process.chdir(root);
-    // cwd is established by path; its inode must be the one just opened, or a
-    // substitution slipped in between the check and the chdir.
+    if (!id.isDirectory()) throw openRootRefusal(anchor);
+    process.chdir(anchor);
+    // cwd is established by path; it must still be the walked path and the
+    // opened inode, or a substitution slipped in between walk/check and chdir.
     const cwdId = openCwdIdentity();
-    if (cwdId.dev !== id.dev || cwdId.ino !== id.ino) throw substitutionRefusal(root);
-    const anchor = process.cwd();
-    return { level: { path: anchor, dev: id.dev, ino: id.ino }, ancestors: recordAnchorChain(anchor) };
+    if (cwdId.dev !== id.dev || cwdId.ino !== id.ino || process.cwd() !== anchor) throw substitutionRefusal(anchor);
+    const walked = chain[chain.length - 1];
+    if (walked === undefined || walked.dev !== id.dev || walked.ino !== id.ino) throw substitutionRefusal(anchor);
+    return { level: { path: anchor, dev: id.dev, ino: id.ino }, ancestors: chain };
   } finally {
     closeSync(fd);
   }
@@ -115,40 +143,45 @@ function openRootDirectory(root: string): number {
   try {
     return openSync(root, constants.O_RDONLY | DIRECTORY | NOFOLLOW);
   } catch (error) {
-    const code = nodeErrorCode(error);
-    if (code === 'ENOENT') {
-      mkdirSync(root, { recursive: true });
-      return openSync(root, constants.O_RDONLY | DIRECTORY | NOFOLLOW);
-    }
-    if (code === 'ELOOP' || code === 'ENOTDIR') throw openRootRefusal(root, error);
+    if (nodeErrorCode(error) === 'ELOOP') throw symlinkedRootRefusal(root);
     throw error;
   }
 }
 
-function openRootRefusal(root: string, cause?: unknown): EvolveError {
-  return new EvolveError(
-    'unsafe-path',
-    `${root} must be a real directory; symlinks are refused as the workspace root`,
-    cause === undefined ? undefined : { cause },
-  );
-}
-
-/** Every prefix of the physical anchor path, recorded for relocation checks. */
-function recordAnchorChain(anchor: string): BoundLevel[] {
+/** Walk the caller path top-down; null when some component does not exist yet. */
+function callerPathChain(anchor: string): BoundLevel[] | null {
   const levels: BoundLevel[] = [];
   let prefix = '';
   for (const part of anchor.split('/').filter((segment) => segment !== '')) {
     prefix = `${prefix}/${part}`;
-    const stat = lstatSync(prefix);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    let stat;
+    try {
+      stat = lstatSync(prefix);
+    } catch (error) {
+      if (nodeErrorCode(error) === 'ENOENT') return null;
+      throw error;
+    }
+    if (stat.isSymbolicLink()) throw symlinkedRootRefusal(prefix);
+    if (!stat.isDirectory()) {
       throw new EvolveError(
         'unsafe-path',
-        `${prefix} must be a real directory; the workspace anchor path cannot traverse a symlink`,
+        `${prefix} must be a real directory; the workspace root path cannot traverse a non-directory`,
       );
     }
     levels.push({ path: prefix, dev: stat.dev, ino: stat.ino });
   }
   return levels;
+}
+
+function symlinkedRootRefusal(path: string): EvolveError {
+  return new EvolveError(
+    'unsafe-path',
+    `${path} is a symlink; the workspace root must be a symlink-free canonical path (canonicalize with realpath before binding)`,
+  );
+}
+
+function openRootRefusal(root: string): EvolveError {
+  return new EvolveError('unsafe-path', `${root} must be a real directory; symlinks are refused as the workspace root`);
 }
 
 /** Descend into an existing component of the bound directory; missing is a layout violation. */
