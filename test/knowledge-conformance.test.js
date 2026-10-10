@@ -77,11 +77,12 @@
  *                                 under its claim, never renamed back), refuses
  *                                 a running unlock's claim, and concurrent
  *                                 unlocks remove one stale lock exactly once
- *   review-r5                     ledger appends are whole (short writes
+ *   review-r5/r6                  ledger appends are whole (short writes
  *                                 retried or truncated away before any
- *                                 removal); an interrupted tail is terminated
- *                                 and ledgered; no damaged audit line blocks
- *                                 unlock
+ *                                 removal); an interrupted tail is repaired on
+ *                                 its own line, restartable at every crash
+ *                                 boundary, for the archive ledgers too; no
+ *                                 damaged audit line blocks unlock
  *
  * Every case runs in TWO lanes against the same fixtures:
  *   source:   this checkout's bin/ai-catapult.js
@@ -1720,10 +1721,10 @@ test('XSKP-P4-03 review-r5: an interrupted audit tail is terminated and ledgered
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(unlock.status, 0, `unlock must succeed past an interrupted tail (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
     assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
-    const [committed, cut, repair, prepared, applied, end] = readFileSync(ledger, 'utf8').split('\n');
+    const [committed, repairedLine, prepared, applied, end] = readFileSync(ledger, 'utf8').split('\n');
     assert.equal(committed, '{"note": "committed"}');
-    assert.equal(cut, fragment, 'the fragment is kept, terminated on its own line');
-    const { at, ...repaired } = JSON.parse(repair);
+    assert.ok(repairedLine.startsWith(fragment), 'the fragment is kept, repaired on its own line');
+    const { at, ...repaired } = JSON.parse(repairedLine.slice(fragment.length));
     assert.match(at, /^\d{4}-\d{2}-\d{2}T/);
     assert.deepEqual(repaired, {
       action: 'terminate_interrupted_record',
@@ -1780,5 +1781,85 @@ test('XSKP-P4-03 review-r5: under a file-size limit, unlock either completes wit
       assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false);
       assert.ok(readFileSync(ledger, 'utf8').endsWith('\n'));
     }
+  });
+});
+
+/** A repair record exactly as the writer serializes it (sorted keys, ', ' and ': '). */
+function repairLine(fragment) {
+  const bytes = Buffer.from(fragment, 'utf8');
+  return `{"action": "terminate_interrupted_record", "at": "2026-10-10T00:00:00.000Z", "fragment_bytes": ${bytes.length}, `
+    + `"fragment_sha256": "${createHash('sha256').update(bytes).digest('hex')}", "schema": "knowledge-ledger-repair/1"}`;
+}
+
+test('XSKP-P4-03 review-r6: archive ledgers read past an interrupted repair at every crash boundary (source + packaged)', async () => {
+  const reference = 'docs/ref-link.md';
+  await writeCase('r6-archive-ledgers', {
+    git: true,
+    mutate: (dir) => writeFileSync(join(dir, reference), '# Reference\n\nSee [the example](plans/example.md).\n', 'utf8'),
+  }, (lane, tmp) => {
+    const head = gitIn(tmp, 'rev-parse', 'HEAD');
+    const backup = '.ai/drift/backups/run-6/docs/plans/example.md';
+    mkdirSync(dirname(join(tmp, backup)), { recursive: true });
+    copyFileSync(join(tmp, EXAMPLE_DOC), join(tmp, backup));
+    const manifestRel = '.ai/knowledge/migration/run-6/archive-confirmation.json';
+    const env = { AI_KNOWLEDGE_ARCHIVE_MANIFEST: manifestRel };
+    const writeManifest = (token) => writeFileSync(join(tmp, manifestRel), `${JSON.stringify({
+      backup,
+      confirmation_token: token,
+      confirmed: true,
+      knowledge_id: EXAMPLE_ID,
+      references: [{ path: reference, sha256: sha256File(join(tmp, reference)) }],
+      repo_id: 'example-repo',
+      repo_root: realpathSync(tmp),
+      run_id: 'run-6',
+      schema: 'knowledge-archive-confirmation/1',
+      sha256: CANONICAL_SHA256,
+      source: EXAMPLE_DOC,
+      source_commit: head,
+      target: 'docs/plans/ARCHIVED/example.md',
+    }, null, 2)}\n`, 'utf8');
+    mkdirSync(dirname(join(tmp, manifestRel)), { recursive: true });
+
+    // Every byte boundary a crash can leave while repairing an interrupted record.
+    const fragment = '{"action": "migrate", "at": "2026-10';
+    const repair = repairLine(fragment);
+    const boundaries = [
+      ['fragment only', fragment],
+      ['fragment + partial repair', fragment + repair.slice(0, 30)],
+      ['fragment + committed repair', `${fragment}${repair}\n`],
+      ['repaired + partial next record', `${fragment}${repair}\n{"action": "con`],
+    ];
+
+    // Confirmations ledger: a spent token is still found past every boundary.
+    const confirmations = join(tmp, '.ai/knowledge/migration/confirmations.jsonl');
+    const spent = '{"confirmation_token": "ct-2026-10-10-061", "result": "consumed"}\n';
+    writeManifest('ct-2026-10-10-061');
+    for (const [name, tail] of boundaries) {
+      writeFileSync(confirmations, spent + tail, 'utf8');
+      const result = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+      assert.deepEqual(JSON.parse(result.stdout), { error: 'confirmation_consumed', detail: 'retry requires fresh confirmation' },
+        `confirmations ledger at "${name}"`);
+    }
+    // A fresh token archives past the last boundary, repairing the tail on its way.
+    writeManifest('ct-2026-10-10-062');
+    const archive = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+    assert.equal(archive.status, 0, `archive must succeed past an interrupted tail (exit ${archive.status})\n${archive.stdout}${archive.stderr}`);
+    assert.ok(readFileSync(confirmations, 'utf8').endsWith('\n'));
+
+    // Migration ledger: the idempotent retry still finds its applied migrate past every boundary.
+    const migration = join(tmp, '.ai/knowledge/migration/ledger.jsonl');
+    const applied = readFileSync(migration, 'utf8');
+    for (const [name, tail] of boundaries) {
+      writeFileSync(migration, applied + tail, 'utf8');
+      const retry = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+      assert.equal(retry.status, 0, `migration ledger at "${name}" (exit ${retry.status})\n${retry.stdout}`);
+    }
+    // A committed line that is neither a record nor a repaired fragment still fails closed.
+    writeFileSync(migration, `${applied}${fragment}\n`, 'utf8');
+    const damaged = spawnKnowledge(lane, tmp, ['archive', EXAMPLE_ID], env);
+    assert.equal(damaged.status, 1);
+    assert.deepEqual(JSON.parse(damaged.stdout), {
+      error: 'invalid_ledger', detail: '.ai/knowledge/migration/ledger.jsonl:2: ledger lines must be objects',
+    });
   });
 });
