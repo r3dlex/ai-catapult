@@ -67,6 +67,10 @@
  *                                 dedicated C-case) pins the 9-key item shape
  *   archive                       the contract verb with no C-case: confirmed,
  *                                 ledgered migrate with reference repair
+ *   review-r1 F1                  two identities racing for one canonical or
+ *                                 one archive token are serialized by the
+ *                                 repository guard (locked, then the sequential
+ *                                 refusal)
  *
  * Every case runs in TWO lanes against the same fixtures:
  *   source:   this checkout's bin/ai-catapult.js
@@ -604,6 +608,8 @@ const LANES = ['source', 'packaged'];
 const EXAMPLE_ID = 'example-repo:plan:example';
 const EXAMPLE_DOC = 'docs/plans/example.md';
 const ENTRY_LOCK_REL = '.ai/knowledge/.locks/example-repo__plan__example.json.lock';
+const GUARD_REL = '.ai/knowledge/.locks/repository.lock';
+const GUARD_LOCKED = { error: 'locked', detail: 'repository guard already exists; another writer is active or must be unlocked' };
 const LOCK_EVENTS_REL = '.ai/knowledge/lock-events.jsonl';
 const LOCKED = { error: 'locked', detail: 'entry lock already exists; explicit unlock required' };
 const POLICY = JSON.parse(readFileSync(join(SOURCE_CONTRACT, 'publication-policy.json'), 'utf8'));
@@ -749,11 +755,11 @@ async function writeCase(name, { mutate, git = false } = {}, body) {
 // Real concurrent writers
 // ---------------------------------------------------------------------------
 
-function spawnKnowledgeAsync(lane, rootDir, args) {
+function spawnKnowledgeAsync(lane, rootDir, args, extraEnv = {}) {
   const cli = join(laneRoot(lane), 'bin/ai-catapult.js');
   const distRoot = lane === 'source' ? DIST_SNAPSHOT : join(packaged.dir, 'dist');
   const child = spawn(process.execPath, [cli, 'knowledge', '--root', rootDir, ...args], {
-    env: { ...process.env, AI_CATAPULT_DIST_ROOT: distRoot },
+    env: { ...process.env, AI_CATAPULT_DIST_ROOT: distRoot, ...extraEnv },
   });
   let stdout = '';
   let stderr = '';
@@ -774,12 +780,34 @@ async function waitFor(predicate, what, timeoutMs = 20_000) {
   }
 }
 
-function lockOwnerPid(tmp) {
+function lockOwnerPid(tmp, lockRel = ENTRY_LOCK_REL) {
   try {
-    return JSON.parse(readFileSync(join(tmp, ENTRY_LOCK_REL, 'owner.json'), 'utf8')).pid;
+    return JSON.parse(readFileSync(join(tmp, lockRel, 'owner.json'), 'utf8')).pid;
   } catch {
     return undefined;
   }
+}
+
+/** Await a child's exit, killing and failing it past a deadline so CI never hangs. */
+async function exitWithin(writer, what, timeoutMs = 30_000) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      writer.child.kill('SIGKILL');
+      reject(new Error(`${what} did not exit within ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([writer.exited, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Kill (if still running) and reap a parked writer, bounded. */
+async function reap(writer) {
+  writer.child.kill('SIGKILL');
+  await exitWithin(writer, 'a killed writer', 10_000);
 }
 
 /**
@@ -787,16 +815,16 @@ function lockOwnerPid(tmp) {
  * directory blocks the writer's own entry scan, which runs only after it took
  * the entry lock, so contention is deterministic with no test hook in src/.
  */
-async function parkPublisher(lane, tmp, args) {
+async function parkPublisher(lane, tmp, args, extraEnv = {}) {
   const fifo = join(tmp, '.ai/knowledge/entries/example-repo__plan__zz-parked.json');
   const made = spawnSync('mkfifo', [fifo], { encoding: 'utf8' });
   assert.equal(made.status, 0, `mkfifo failed\n${made.stderr}`);
-  const writer = spawnKnowledgeAsync(lane, tmp, args);
+  const writer = spawnKnowledgeAsync(lane, tmp, args, extraEnv);
   try {
-    await waitFor(() => lockOwnerPid(tmp) === writer.child.pid, 'the parked publisher to own the entry lock');
+    // The guard is taken after the entry lock, so owning it means owning both.
+    await waitFor(() => lockOwnerPid(tmp, GUARD_REL) === writer.child.pid, 'the parked writer to own its locks');
   } catch (error) {
-    writer.child.kill('SIGKILL');
-    await writer.exited;
+    await reap(writer);
     throw error;
   }
   return { fifo, ...writer };
@@ -1106,14 +1134,14 @@ test('XSKP-P4-03 C13-lock-contention: of two concurrent publishes one exits 0, t
       assert.equal(lockOwnerPid(tmp), holder.child.pid, 'the contender must not touch the holder\'s lock');
 
       await feedParked(holder, parkedEntryBytes(tmp));
-      const done = await holder.exited;
+      const done = await exitWithin(holder, 'the released holder');
       assert.equal(done.status, 0, `the holder must complete (exit ${done.status})\n${done.stdout}${done.stderr}`);
       assert.deepEqual(JSON.parse(done.stdout).revisions.map((revision) => revision.rev), [1, 2]);
     } finally {
-      holder.child.kill('SIGKILL');
-      await holder.exited;
+      await reap(holder);
     }
     assert.equal(existsSync(join(tmp, ENTRY_LOCK_REL)), false, 'the holder releases its own lock');
+    assert.equal(existsSync(join(tmp, GUARD_REL)), false, 'the holder releases the repository guard');
     // Swap the drained FIFO for a regular file so later scans read the same entry.
     rmSync(holder.fifo);
     writeFileSync(holder.fifo, parkedEntryBytes(tmp), 'utf8');
@@ -1193,21 +1221,37 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     const holder = await parkPublisher(lane, tmp, ['publish', EXAMPLE_DOC]);
     const pid = holder.child.pid;
     holder.child.kill('SIGKILL');
-    const killed = await holder.exited;
+    const killed = await exitWithin(holder, 'the killed writer', 10_000);
     assert.equal(killed.signal, 'SIGKILL');
     rmSync(holder.fifo);
     const lockDir = join(tmp, ENTRY_LOCK_REL);
+    const guardDir = join(tmp, GUARD_REL);
     const ownerBytes = readFileSync(join(lockDir, 'owner.json'));
+    const guardBytes = readFileSync(join(guardDir, 'owner.json'));
     assert.equal(JSON.parse(ownerBytes).pid, pid);
+    assert.deepEqual(JSON.parse(guardBytes), { knowledge_id: EXAMPLE_ID, pid }, 'the guard names the dead writer\'s identity');
 
     const verify = spawnKnowledge(lane, tmp, ['verify']);
     assert.equal(verify.status, 0, `verify must report, not fail (exit ${verify.status})\n${verify.stdout}`);
-    assert.deepEqual(JSON.parse(verify.stdout).warnings, [{ lock: ENTRY_LOCK_REL, pid, warning: 'stale_lock' }]);
+    assert.deepEqual(JSON.parse(verify.stdout).warnings, [
+      { lock: ENTRY_LOCK_REL, pid, warning: 'stale_lock' },
+      { lock: GUARD_REL, pid, warning: 'stale_lock' },
+    ]);
 
     const blocked = spawnKnowledge(lane, tmp, ['publish', EXAMPLE_DOC]);
     assert.equal(blocked.status, 1);
     assert.deepEqual(JSON.parse(blocked.stdout), LOCKED);
+    // Another identity is serialized behind the stale guard, and leaves no lock of its own.
+    writeFileSync(join(tmp, 'docs/other.md'), '# Other\n', 'utf8');
+    const other = spawnKnowledge(lane, tmp, ['publish', 'docs/other.md']);
+    assert.equal(other.status, 1);
+    assert.deepEqual(JSON.parse(other.stdout), GUARD_LOCKED);
+    assert.equal(existsSync(join(tmp, '.ai/knowledge/.locks/example-repo__doc__other.json.lock')), false);
+    const otherUnlock = spawnKnowledge(lane, tmp, ['unlock', 'example-repo:doc:other', '--confirm-no-writer']);
+    assert.equal(otherUnlock.status, 1, 'a guard naming another identity is not this unlock\'s to remove');
+    assert.deepEqual(JSON.parse(otherUnlock.stdout), GUARD_LOCKED);
     assert.deepEqual(readFileSync(join(lockDir, 'owner.json')), ownerBytes, 'a stale lock is never stolen');
+    assert.deepEqual(readFileSync(join(guardDir, 'owner.json')), guardBytes, 'a stale guard is never stolen');
 
     const refused = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID]);
     assert.equal(refused.status, 2, `unlock without --confirm-no-writer must exit 2 (exit ${refused.status})`);
@@ -1217,22 +1261,28 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
 
     const unlock = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(unlock.status, 0, `confirmed unlock must exit 0 (exit ${unlock.status})\n${unlock.stdout}${unlock.stderr}`);
-    assert.equal(existsSync(lockDir), false, 'the confirmed unlock removes the lock');
+    assert.equal(existsSync(lockDir), false, 'the confirmed unlock removes the entry lock');
+    assert.equal(existsSync(guardDir), false, 'and the guard its dead writer left');
     const event = JSON.parse(unlock.stdout);
     assert.equal(event.schema, 'knowledge-lock-event/1');
     assert.equal(event.result, 'applied');
     const lines = readFileSync(join(tmp, LOCK_EVENTS_REL), 'utf8').split('\n').filter(Boolean);
-    assert.equal(lines.length, 2, 'ledgered as prepared, then applied');
+    assert.equal(lines.length, 4, 'each removed lock is ledgered as prepared, then applied');
     // Python json.dumps(sort_keys=True) line shape, shared with the root writer.
     for (const line of lines) assert.ok(line.startsWith('{"action": "unlock", "at": '), line);
-    const [prepared, applied] = lines.map((line) => JSON.parse(line));
+    const parsed = lines.map((line) => JSON.parse(line));
+    assert.deepEqual(parsed.map((line) => [line.lock_path, line.result]), [
+      [ENTRY_LOCK_REL, 'prepared'], [ENTRY_LOCK_REL, 'applied'], [GUARD_REL, 'prepared'], [GUARD_REL, 'applied'],
+    ]);
+    const [prepared, applied] = parsed;
     assert.deepEqual(applied, event);
     assert.deepEqual({ ...prepared, at: applied.at, result: 'applied' }, applied);
-    assert.equal(prepared.result, 'prepared');
-    assert.deepEqual(
-      { action: applied.action, confirm_no_writer: applied.confirm_no_writer, knowledge_id: applied.knowledge_id, lock_path: applied.lock_path },
-      { action: 'unlock', confirm_no_writer: true, knowledge_id: EXAMPLE_ID, lock_path: ENTRY_LOCK_REL },
-    );
+    for (const line of parsed) {
+      assert.deepEqual(
+        { action: line.action, confirm_no_writer: line.confirm_no_writer, knowledge_id: line.knowledge_id, run_id: line.run_id },
+        { action: 'unlock', confirm_no_writer: true, knowledge_id: EXAMPLE_ID, run_id: applied.run_id },
+      );
+    }
     assert.match(applied.run_id, /^[0-9a-f-]{36}$/);
 
     // Recovery complete: the next edit publishes normally.
@@ -1245,6 +1295,102 @@ test('XSKP-P4-03 C18/C19 stale lock from a killed writer: reported, never stolen
     const again = spawnKnowledge(lane, tmp, ['unlock', EXAMPLE_ID, '--confirm-no-writer']);
     assert.equal(again.status, 1);
     assert.deepEqual(JSON.parse(again.stdout), { error: 'not_locked', detail: 'entry lock directory does not exist' });
+    assert.equal(existsSync(guardDir), false, 'unlock releases the guard it took');
+    assert.equal(readFileSync(join(tmp, LOCK_EVENTS_REL), 'utf8').split('\n').filter(Boolean).length, 4);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-identity serialization (review round 1, F1)
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-03 review-r1 F1: concurrent publishes of two identities to one canonical serialize; the loser gets locked, then canonical_collision (source + packaged)', async () => {
+  await writeCase('r1-cross-collision', {
+    mutate: (dir) => writeFileSync(join(dir, 'docs/shared.txt'), 'shared canonical\n', 'utf8'),
+  }, async (lane, tmp) => {
+    const holder = await parkPublisher(lane, tmp, ['publish', 'docs/shared.txt', '--id', 'example-repo:doc:shared-a']);
+    try {
+      const contender = spawnKnowledge(lane, tmp, ['publish', 'docs/shared.txt', '--id', 'example-repo:doc:shared-b']);
+      assert.equal(contender.status, 1, `the other identity must be serialized (exit ${contender.status})\n${contender.stdout}`);
+      assert.deepEqual(JSON.parse(contender.stdout), GUARD_LOCKED);
+      assert.equal(holder.child.exitCode, null, 'the contender must not wait for the holder');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/.locks/example-repo__doc__shared-b.json.lock')), false,
+        'the contender releases the entry lock it took');
+      await feedParked(holder, parkedEntryBytes(tmp));
+      const done = await exitWithin(holder, 'the released holder');
+      assert.equal(done.status, 0, `the holder must complete (exit ${done.status})\n${done.stdout}${done.stderr}`);
+    } finally {
+      await reap(holder);
+    }
+    rmSync(holder.fifo);
+    writeFileSync(holder.fifo, parkedEntryBytes(tmp), 'utf8');
+    const retry = spawnKnowledge(lane, tmp, ['publish', 'docs/shared.txt', '--id', 'example-repo:doc:shared-b']);
+    assert.equal(retry.status, 1);
+    assert.deepEqual(JSON.parse(retry.stdout), { error: 'canonical_collision', detail: 'canonical belongs to another identity' });
+    assert.equal(existsSync(join(tmp, '.ai/knowledge/entries/example-repo__doc__shared-b.json')), false);
+    const verify = spawnKnowledge(lane, tmp, ['verify']);
+    assert.equal(verify.status, 0, `one canonical, one owner: verify must pass (exit ${verify.status})\n${verify.stdout}`);
+  });
+});
+
+test('XSKP-P4-03 review-r1 F1: concurrent archives of two identities cannot both spend one confirmation token (source + packaged)', async () => {
+  await writeCase('r1-cross-token', {
+    git: true,
+    mutate: (dir) => writeFileSync(join(dir, 'docs/plans/second.md'), '# Second\n', 'utf8'),
+  }, async (lane, tmp) => {
+    const second = spawnKnowledge(lane, tmp, ['publish', 'docs/plans/second.md']);
+    assert.equal(second.status, 0, `setup publish failed\n${second.stdout}${second.stderr}`);
+    const secondId = JSON.parse(second.stdout).knowledge_id;
+    gitIn(tmp, 'add', '-A');
+    gitIn(tmp, 'commit', '-q', '-m', 'second entry');
+    const head = gitIn(tmp, 'rev-parse', 'HEAD');
+    const token = 'ct-2026-10-10-007';
+    const manifest = (runId, knowledgeId, source) => {
+      const backup = `.ai/drift/backups/${runId}/${source}`;
+      mkdirSync(dirname(join(tmp, backup)), { recursive: true });
+      copyFileSync(join(tmp, source), join(tmp, backup));
+      const rel = `.ai/knowledge/migration/${runId}/archive-confirmation.json`;
+      mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+      writeFileSync(join(tmp, rel), `${JSON.stringify({
+        backup,
+        confirmation_token: token,
+        confirmed: true,
+        knowledge_id: knowledgeId,
+        references: [],
+        repo_id: 'example-repo',
+        repo_root: realpathSync(tmp),
+        run_id: runId,
+        schema: 'knowledge-archive-confirmation/1',
+        sha256: sha256File(join(tmp, source)),
+        source,
+        source_commit: head,
+        target: source.replace('docs/plans/', 'docs/plans/ARCHIVED/'),
+      }, null, 2)}\n`, 'utf8');
+      return { AI_KNOWLEDGE_ARCHIVE_MANIFEST: rel };
+    };
+    const envA = manifest('run-a', EXAMPLE_ID, EXAMPLE_DOC);
+    const envB = manifest('run-b', secondId, 'docs/plans/second.md');
+
+    const holder = await parkPublisher(lane, tmp, ['archive', EXAMPLE_ID], envA);
+    try {
+      const contender = spawnKnowledge(lane, tmp, ['archive', secondId], envB);
+      assert.equal(contender.status, 1, `the second archive must be serialized (exit ${contender.status})\n${contender.stdout}`);
+      assert.deepEqual(JSON.parse(contender.stdout), GUARD_LOCKED);
+      assert.equal(holder.child.exitCode, null, 'the contender must not wait for the holder');
+      await feedParked(holder, parkedEntryBytes(tmp));
+      const done = await exitWithin(holder, 'the released archive');
+      assert.equal(done.status, 0, `the holder must complete (exit ${done.status})\n${done.stdout}${done.stderr}`);
+    } finally {
+      await reap(holder);
+    }
+    rmSync(holder.fifo);
+    writeFileSync(holder.fifo, parkedEntryBytes(tmp), 'utf8');
+    const retry = spawnKnowledge(lane, tmp, ['archive', secondId], envB);
+    assert.equal(retry.status, 1);
+    assert.deepEqual(JSON.parse(retry.stdout), { error: 'confirmation_consumed', detail: 'retry requires fresh confirmation' });
+    assert.ok(existsSync(join(tmp, 'docs/plans/second.md')), 'the refused archive moves nothing');
+    assert.equal(readLedger(tmp, '.ai/knowledge/migration/confirmations.jsonl').length, 1, 'the token was spent once');
+    assert.deepEqual(readLedger(tmp, '.ai/knowledge/migration/ledger.jsonl').map((event) => [event.seq, event.run_id]), [[1, 'run-a']]);
   });
 });
 
@@ -1377,11 +1523,13 @@ test('XSKP-P4-03 contract pin: write verbs refuse a mutated contract pack with c
       mkdirSync(join(tmp, '.ai/init'), { recursive: true });
       writeFileSync(join(tmp, '.ai/init/repo-profile.json'), '{"repo_id": "example-repo"}\n', 'utf8');
       appendFileSync(join(copy, '.ai/knowledge/contract/publication-policy.json'), ' ');
+      const before = guardedDigests(tmp);
       const result = spawnSync(process.execPath, [join(copy, 'bin/ai-catapult.js'), 'knowledge', '--root', tmp, 'publish', EXAMPLE_DOC], {
         encoding: 'utf8', timeout: 30_000, env: { ...process.env, AI_CATAPULT_DIST_ROOT: join(copy, 'dist') },
       });
       assert.equal(result.status, 1, `a mutated pack must fail closed (exit ${result.status})\n${result.stdout}${result.stderr}`);
       assert.deepEqual(JSON.parse(result.stdout), { error: 'contract_mismatch', detail: 'publication-policy.json' });
+      assert.deepEqual(guardedDigests(tmp), before, 'AC-7: contract-pin changed a native or immutable file in the staged root');
     } finally {
       rmSync(copy, { recursive: true, force: true });
       rmSync(tmp, { recursive: true, force: true });
