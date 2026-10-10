@@ -21,13 +21,15 @@
  * Write-half divergences from publish.py, each forced by the runtime or the
  * package layout:
  * - Locking. A per-entry lock is an atomic mkdirSync of
- *   .ai/knowledge/.locks/<entry file>.lock, as the contract specifies. Node has
- *   no advisory flock, so publish.py's outer repository guard is not
- *   reproduced: writers of different identities are not serialized against
- *   each other, and a race between them can leave registry.json stale. verify
- *   reports that as aggregate_stale and rebuild regenerates the aggregate from
- *   the entry files, which stay the authority (D10). A stale entry lock is
- *   reported by verify and removed only by `unlock --confirm-no-writer`.
+ *   .ai/knowledge/.locks/<entry file>.lock, as the contract specifies.
+ *   publish.py also holds a repository guard (flock) that serializes writers
+ *   of different identities; Node has no flock, so that guard is an atomic
+ *   mkdirSync of .ai/knowledge/.locks/repository.lock, taken after the entry
+ *   lock and released on every exit of a live writer. Contention on either
+ *   fails at once with `locked`. Unlike a flock, a killed writer leaves the
+ *   guard behind, next to its entry lock and naming that identity: verify
+ *   reports both as stale_lock, and `unlock <id> --confirm-no-writer` removes
+ *   both, ledgered. Nothing removes a lock automatically.
  * - Secret patterns. JavaScript has no leading inline-flag group and Node
  *   rejects the policy's `(?i)`, so compileSecretPattern turns it into the i
  *   flag. Every pattern compiles with u, for Python's code-point semantics.
@@ -937,6 +939,11 @@ function entryRel(identity) {
   return `${ENTRIES_DIR}/${identity.replace(/:/g, '__')}.json`;
 }
 
+// Repository guard: never an entry lock name (those end in .json.lock).
+export const REPOSITORY_GUARD = `${LOCKS_DIR}/repository.lock`;
+const ENTRY_LOCKED = 'entry lock already exists; explicit unlock required';
+const GUARD_LOCKED = 'repository guard already exists; another writer is active or must be unlocked';
+
 function entryLockRel(identity) {
   return `${LOCKS_DIR}/${identity.replace(/:/g, '__')}.json.lock`;
 }
@@ -1007,24 +1014,24 @@ function publicBytes(path, policy) {
 }
 
 /**
- * Hold the per-entry lock around body(marker): an atomic mkdirSync that
- * survives a killed writer. Contention fails at once with `locked`; nothing
- * here ever removes a lock it did not create. body may clear marker.release to
- * keep its own marker for manual recovery.
+ * Hold one atomic mkdirSync lock around body(marker). The lock survives a
+ * killed writer; contention fails at once with `locked`; nothing here removes
+ * a lock it did not create. body may clear marker.release to keep the marker
+ * for manual recovery.
  */
-function withEntryLock(root, identity, body) {
-  const lock = writerPath(root, entryLockRel(identity));
+function holdLock(root, relative, ownerInfo, lockedDetail, body) {
+  const lock = writerPath(root, relative);
   mkdirSync(dirname(lock), { recursive: true });
   try {
     mkdirSync(lock);
   } catch (error) {
-    if (error.code === 'EEXIST') throw new KnowledgeError('locked', 'entry lock already exists; explicit unlock required');
+    if (error.code === 'EEXIST') throw new KnowledgeError('locked', lockedDetail);
     throw error;
   }
   const inode = lstatSync(lock, { bigint: true }).ino;
   const owner = join(lock, LOCK_OWNER_FILE);
   try {
-    writeFileSync(owner, canonical({ pid: process.pid }), { encoding: 'utf8', flag: 'wx' });
+    writeFileSync(owner, canonical(ownerInfo), { encoding: 'utf8', flag: 'wx' });
     const ownerInode = lstatSync(owner, { bigint: true }).ino;
     const marker = { release: true };
     let result;
@@ -1048,6 +1055,20 @@ function withEntryLock(root, identity, body) {
       rmdirSync(lock);
     }
   }
+}
+
+/**
+ * The per-entry lock, then the repository guard, around body(marker). The
+ * guard serializes state shared across identities (canonical ownership, the
+ * aggregate, archive tokens and ledgers), as publish.py's flock does. Node has
+ * no flock, so the guard is an atomic mkdirSync too: a live writer releases it
+ * on every exit, while a killed writer leaves it beside its own entry lock,
+ * naming that identity, for `unlock <id> --confirm-no-writer` to recover.
+ */
+function withEntryLock(root, identity, body) {
+  return holdLock(root, entryLockRel(identity), { pid: process.pid }, ENTRY_LOCKED, (marker) => holdLock(
+    root, REPOSITORY_GUARD, { knowledge_id: identity, pid: process.pid }, GUARD_LOCKED, () => body(marker),
+  ));
 }
 
 function ledgerLines(root, relative) {
@@ -1249,31 +1270,34 @@ function cmdRetire(root, args) {
   });
 }
 
-/**
- * Manual stale-lock recovery, run only after the operator confirmed no writer
- * remains (C19). Never automatic; ledgered as prepared, then applied.
- */
-function cmdUnlock(root, args) {
-  const policy = loadPolicy();
-  requireRegistry(root);
-  validateIdentity(root, args.id, policy);
-  const lockRel = entryLockRel(args.id);
-  const lock = writerPath(root, lockRel);
-  if (!existsSync(lock) || !statSync(lock).isDirectory()) {
-    throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
+function isLockDirectory(path) {
+  return existsSync(path) && statSync(path).isDirectory();
+}
+
+/** The identity a repository guard was taken for, or null when unreadable. */
+function guardIdentity(root) {
+  try {
+    const owner = JSON.parse(readFileSync(writerPath(root, `${REPOSITORY_GUARD}/${LOCK_OWNER_FILE}`), 'utf8'));
+    return owner !== null && typeof owner === 'object' ? owner.knowledge_id ?? null : null;
+  } catch {
+    return null;
   }
+}
+
+/** Remove one confirmed-stale lock: prepared is ledgered before removal, applied after. */
+function removeLockLedgered(root, ledger, identity, lockRel, runId) {
+  const lock = writerPath(root, lockRel);
   const owner = writerPath(root, `${lockRel}/${LOCK_OWNER_FILE}`);
   checkDestination(root, owner);
   if (readdirSync(lock).some((name) => name !== LOCK_OWNER_FILE)) {
     throw new KnowledgeError('unknown_lock_contents', 'refusing recursive lock removal');
   }
   const original = existsSync(owner) ? readFileSync(owner) : null;
-  const { path: ledger } = ledgerLines(root, LOCK_EVENTS);
   const prepared = {
     schema: 'knowledge-lock-event/1',
     at: now(),
-    run_id: randomUUID(),
-    knowledge_id: args.id,
+    run_id: runId,
+    knowledge_id: identity,
     action: 'unlock',
     lock_path: lockRel,
     confirm_no_writer: true,
@@ -1292,6 +1316,34 @@ function cmdUnlock(root, args) {
     throw error;
   }
   return applied;
+}
+
+/**
+ * Manual stale-lock recovery, run only after the operator confirmed no writer
+ * remains (C19). Never automatic; every removed lock is ledgered as prepared,
+ * then applied. Unlock serializes on the repository guard like any writer; a
+ * guard left by this identity's killed writer is recovered with its entry lock
+ * (and keeps other writers out meanwhile), while any other guard fails locked.
+ */
+function cmdUnlock(root, args) {
+  const policy = loadPolicy();
+  requireRegistry(root);
+  validateIdentity(root, args.id, policy);
+  const lockRel = entryLockRel(args.id);
+  const lock = writerPath(root, lockRel);
+  const runId = randomUUID();
+  if (isLockDirectory(writerPath(root, REPOSITORY_GUARD))) {
+    if (guardIdentity(root) !== args.id) throw new KnowledgeError('locked', GUARD_LOCKED);
+    const { path: ledger } = ledgerLines(root, LOCK_EVENTS);
+    const entryEvent = isLockDirectory(lock) ? removeLockLedgered(root, ledger, args.id, lockRel, runId) : null;
+    const guardEvent = removeLockLedgered(root, ledger, args.id, REPOSITORY_GUARD, runId);
+    return entryEvent ?? guardEvent;
+  }
+  return holdLock(root, REPOSITORY_GUARD, { knowledge_id: args.id, pid: process.pid }, GUARD_LOCKED, () => {
+    if (!isLockDirectory(lock)) throw new KnowledgeError('not_locked', 'entry lock directory does not exist');
+    const { path: ledger } = ledgerLines(root, LOCK_EVENTS);
+    return removeLockLedgered(root, ledger, args.id, lockRel, runId);
+  });
 }
 
 const ARCHIVE_MANIFEST = /^\.ai\/knowledge\/migration\/([a-z0-9][a-z0-9-]*)\/archive-confirmation\.json$/;
