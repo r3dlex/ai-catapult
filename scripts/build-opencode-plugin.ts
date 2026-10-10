@@ -85,10 +85,11 @@ export function run(): void {
 
   // --- Fail closed if vendor missing (before touching dist) ---
   // NOTE: the trailing " >&2" is reproduced on purpose — the original shell
-  // echo quoted it, sending both the message and the suffix to stdout.
+  // echo quoted it, sending both the message and the suffix to stdout. The
+  // original's second line was properly redirected to stderr and stays there.
   if (!existsSync(VENDOR_SKILLS)) {
     process.stdout.write(`ERROR: vendor/skills directory not found at ${VENDOR_SKILLS} >&2\n`);
-    process.exit(1);
+    fail('       Run node scripts/setup.ts first to vendor skills.');
   }
 
   // --- Fail closed: a failing or empty resolver aborts the build ---

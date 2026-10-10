@@ -269,7 +269,7 @@ function readGraphHookTemplates(templatesDir: string, engine: string): GraphHook
   if (!existsSync(gaDir)) {
     process.stderr.write(
       `Error: graph-automation templates not found at ${gaDir}\n` +
-      `  For a dev checkout: run bash setup.sh to populate vendor/\n` +
+      `  For a dev checkout: run node scripts/setup.ts to populate vendor/\n` +
       `  For an npx install: try npm install -g ai-catapult to reinstall\n`,
     );
     process.exit(1);

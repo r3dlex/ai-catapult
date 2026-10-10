@@ -41,7 +41,7 @@ function resolveTemplatesDir(): string {
   if (existsSync(DIST_TEMPLATES)) return DIST_TEMPLATES;
   process.stderr.write(
     'Error: template directory not found.\n' +
-    '  For a dev checkout: run  bash setup.sh  to populate vendor/\n' +
+    '  For a dev checkout: run  node scripts/setup.ts  to populate vendor/\n' +
     '  For an npx install:  try  npm install -g ai-catapult  to reinstall the package\n',
   );
   process.exit(1);

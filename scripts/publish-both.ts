@@ -180,7 +180,10 @@ function publishPackage(packageDir: string, packageName: string, version: string
 
 function publishPackageOrExit(packageDir: string, packageName: string, version: string, options: PublishOptions): void {
   publishPackage(packageDir, packageName, version, options);
-  if (process.exitCode !== 0) process.exit(process.exitCode);
+  // process.exitCode stays `undefined` on success (publishPackage only sets it
+  // on failure) — a `!== 0` check would treat undefined as failure and abort
+  // after the unscoped leg before the scoped mirror publishes.
+  if (process.exitCode) process.exit(process.exitCode);
 }
 
 /** Stage the scoped package: copy published files + write patched package.json. */
