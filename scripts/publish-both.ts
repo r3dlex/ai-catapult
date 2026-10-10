@@ -187,14 +187,26 @@ function publishPackageOrExit(packageDir: string, packageName: string, version: 
 }
 
 /** Stage the scoped package: copy published files + write patched package.json. */
-function stageScopedPackage(repoRoot: string, dest: string): void {
+export function stageScopedPackage(
+  repoRoot: string,
+  dest: string,
+  options: { distSource?: string } = {},
+): void {
   const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
     files?: string[];
   } & Record<string, unknown>;
   const files = pkg.files ?? [];
 
   for (const rel of files) {
-    const src = join(repoRoot, rel);
+    // The `dist/` entry can be supplied from a substitute source tree: a publish
+    // packs the freshly built live dist/, while tests copy the stable
+    // dist-snapshot/ instead — the suite's plugin tests wipe and rebuild the
+    // live dist/ concurrently, and a test staging directly from it races a
+    // half-wiped tree (the same reason packed-init.test.ts stages npm pack
+    // from dist-snapshot/). Only the source path swaps; the staged layout
+    // keeps the published `dist/...` shape.
+    const sourceRel = rel === 'dist/' ? (options.distSource ?? 'dist') : rel;
+    const src = join(repoRoot, sourceRel);
     const dst = join(dest, rel);
     mkdirSync(dirname(dst), { recursive: true });
     try {
@@ -215,8 +227,16 @@ function stageScopedPackage(repoRoot: string, dest: string): void {
     name: '@r3dlex/ai-catapult',
     publishConfig: { access: 'public' },
   };
-  // Remove lifecycle scripts not needed in the published artifact
+  // Artifact-only scoped lifecycle: the staged tree is already a complete
+  // built artifact (dist/ was built before staging), so packaging must never
+  // rebuild it. The v0.2.0 incident (missing stage-readme-contract.sh → the
+  // mirror's prepack exited 127) closed the missing-script hole; the TS wave
+  // reopened a sibling through `npm run build` inside prepack (tsc and
+  // prepare-dist.ts are never staged, review round 1 F3 — the static
+  // prepack-vs-files checks only see literal scripts/* invocations). Removing
+  // prepack/pretest/test closes the whole class: pack here runs zero scripts.
   const scripts = { ...(scoped.scripts as Record<string, string>) };
+  delete scripts.prepack;
   delete scripts.pretest;
   delete scripts.test;
   scoped.scripts = scripts;

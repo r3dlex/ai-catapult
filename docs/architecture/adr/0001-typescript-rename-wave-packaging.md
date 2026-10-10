@@ -38,6 +38,8 @@ the skills commit pinned by `skills.lock.json` before the build chain runs.
 
 ### D2 — Shipped compiled output (AC-3 interpretation, disclosed)
 
+> Errata (review round 1, 2026-10-10): the bin map below is superseded — see Errata 1.
+
 `package.json` `files[]` keeps `dist/`, `bin/`, `src/` and the `scripts/*.ts`
 builders; the npm `bin` map is `"ai-catapult": "bin/ai-catapult.ts"`. AC-3's
 parenthetical ("bin → dist output") is interpreted as the faithful rewire the
@@ -71,7 +73,9 @@ converts to TypeScript (TSF-03) in the same PR.
 - **Node floor is truthful to the runtime need.** `engines` moves from `">=18"`
   to `">=22.18"`: Node v22.18.0 (LTS line, release notes July 2025) is where
   running `.ts` entrypoints via type stripping is default-on, which is how the
-  shipped `bin/ai-catapult.ts` and every test file execute. CI pins
+  shipped `bin/ai-catapult.ts` and every test file execute. (Errata, review
+  round 1: installed execution of the shipped CLI does NOT rely on type
+  stripping — see Errata 1 and 2.) CI pins
   `node-version: '22'` on all four `ci.yml` jobs; workflow commands are rewired
   from shells to `node scripts/setup.ts`, `node scripts/verify-vendor.ts`, and
   (in `release.yml`) `node scripts/release-context.ts`, `node scripts/setup.ts`,
@@ -233,6 +237,59 @@ complexity-11/12 hotspots in the converted harness/test were refactored
 (`assertCase`/`isDependencyCase` extraction in the fixture; lane-extraction into
 `assertVendoredLane`/`assertPackedLane`) rather than disabled.
 
+## Errata — blinded review round 1 (2026-10-10, PR #61)
+
+The independent blinded review returned REQUEST_CHANGES with three majors and
+one follow-on defect was proven while chasing them green. Each is closed by a
+failing-first test (captures under the session receipts, `phase-g/`).
+
+1. **Bin map (supersedes the D2 sentence recording the npm `bin` map).** D2
+   recorded `"bin": { "ai-catapult": "bin/ai-catapult.ts" }`. Installed use
+   breaks that map: npm puts the package inside `node_modules`, where Node
+   refuses type stripping (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), so
+   the installed CLI could not run at all. The bin map is now
+   `"ai-catapult": "dist/bin/ai-catapult.js"`. `bin/ai-catapult.ts` stays
+   tracked and shipped as the development entrypoint; the compiled
+   `dist/bin/ai-catapult.js` is the bin-of-record for installed execution.
+   Regression: `test/installed-bin.test.ts` (map + staged-install execution).
+2. **Entry guard.** The port guarded
+   the `bin/ai-catapult.ts` module body with
+   `process.argv[1] === fileURLToPath(import.meta.url)`. v1 ran the body
+   unconditionally. Through npm's bin symlink chain (`<prefix>/bin/ai-catapult`
+   → `node_modules/.bin/ai-catapult` → entry file), `process.argv[1]` is the
+   invoked link path while `import.meta.url` resolves the entry's real path, so
+   the guard never matched and the CLI silently printed nothing and exited 0.
+   The entry body is unconditional `run()` again (v1-faithful). Regression:
+   `test/installed-bin.test.ts` (symlink dispatch).
+3. **Scoped-mirror prepack (closes the D1 sibling of the v0.2.0 127).**
+   `"prepack": "node scripts/setup.ts && npm run build"` still ran inside the
+   staged `@r3dlex/ai-catapult` mirror, whose `files[]` copy lacks `tsc`,
+   `tsconfig.build.json`, and `scripts/prepare-dist.ts`. The static
+   prepack-vs-`files` checks only see literal `scripts/*` invocations and passed
+   this form; the mirror either exited 127 (v0.2.0's incident class through a
+   new hole) or silently rebuilt from a half-staged tree. `stageScopedPackage`
+   now deletes `prepack`, `pretest` and `test` from the staged package.json:
+   the staged tree is a complete built artifact and packs with zero lifecycle
+   scripts. Regression: `test/scoped-mirror-staging.test.ts` (real staged-pack
+   run, scriptless and complete).
+4. **Mode fidelity on the compiled bin (proven while chasing 1–2 green).**
+   tsc emits 0644, npm's POSIX bin shim resolves exec permission on its target,
+   so every installed invocation died EACCES even with the JS target. The
+   tracked `bin/ai-catapult.ts` keeps its 0755 mode; `prepare-dist.ts` now
+   chmods `dist/bin/ai-catapult.js` to 0755 so the shipped artifact carries
+   mode fidelity. Red/green: `phase-g/mode-red-staged-install.txt` vs
+   `phase-g/installed-bin-green2.txt`.
+5. **Staged-copy dist source (exposed by the first vendored-driver run after
+   the landing captures).** The round's staged-install regression copied the
+   LIVE `dist/` mid-suite, where plugin tests wipe and rebuild `dist/`
+   concurrently — nondeterministically racing a half-wiped staging source (one
+   driver run: `ERR_MODULE_NOT_FOUND dist/src/scaffold.js`; suite runs: passed
+   by timing). `stageScopedPackage` gained an optional `distSource` option and
+   the regression supplies `dist/` from the stable `dist-snapshot/`, the same
+   trade `packed-init.test.ts` makes for its `npm pack`; snapshot copies
+   preserve file modes so the 0755 bin bit survives. The publish path is
+   unchanged — it still packs the live, freshly built `dist/`.
+
 ## Consequences
 
 - Consumers and contributors need Node ≥ 22.18 (engines-enforced), matching the
@@ -248,7 +305,8 @@ complexity-11/12 hotspots in the converted harness/test were refactored
 ## Verification links
 
 - Gates: `npm run build`, `npm run typecheck`, `npm run lint`, `npm test`
-  (297/297), `prek run --all-files`.
+  (301/301 — 297 at plan execution, +4 review-round regression tests),
+  `prek run --all-files`.
 - Negative fixtures (S1–S4) and determinism digests:
   `.ai/evidence/tswc-ac-a2.json`.
 - Local-ci record: `.ai/ci/local-ci.json` (local-ci/2, vendored-validated).

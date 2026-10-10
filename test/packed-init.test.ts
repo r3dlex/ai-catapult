@@ -33,10 +33,10 @@ let extractDir: string | undefined;   // holds the extracted package/
 
 before(() => {
   packTmpDir = mkdtempSync(join(tmpdir(), 'ai-catapult-pack-'));
-  // realPathSync: the extracted bin carries a process.argv[1] ===
-  // fileURLToPath(import.meta.url) entry guard; spawning a path under a
-  // symlinked tmpdir (/var/folders/... vs /private/var/folders/...) would
-  // break that comparison and make the CLI refuse to run.
+  // realPathSync: spawning a path under a symlinked tmpdir (/var/folders/...
+  // vs /private/var/folders/...) must not depend on which alias the harness
+  // hands the child; spawning from the realpathed tree keeps every recorded
+  // path in captures and assertions stable.
   extractDir = realpathSync(mkdtempSync(join(tmpdir(), 'ai-catapult-extract-')));
 
   // Packing strategy: copy the repo tree into a staging dir and replace its

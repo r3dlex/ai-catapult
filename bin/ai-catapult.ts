@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, resolve } from 'node:path';
 import { scaffold } from '../src/scaffold.ts';
 import { runInstall } from '../src/install.ts';
@@ -309,4 +308,11 @@ function run(): void {
   dispatchVerb(verb, rawArgv.slice(firstPositionalIdx + 1));
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) run();
+// The bin is an entrypoint, never an imported module, and it must dispatch on
+// every invocation path: npm installs expose it through a symlink chain
+// (<prefix>/bin → node_modules/.bin → entry), where process.argv[1] is the
+// link path, not the real module path. v1 executed its module body
+// unconditionally; the port's `argv[1] === fileURLToPath(import.meta.url)`
+// guard silently skipped dispatch through those links (review round 1 F2).
+// The `scripts/*.ts` guard stays for library-style scripts.
+run();

@@ -344,6 +344,51 @@
       "local-ci/2 bootstrap is ['npm ci --ignore-scripts'] backed by a pinned package-lock.json; the bash <pinned source> bootstrap form ceased to be possible after the wave because the previous shell entrypoint is now a converted .ts surface and the vendored contract's allowlist has no node-spawned bootstrap form. The vendored contract files themselves are byte-locked and untouched (vendored pin 28f813bf, skills.lock.json unchanged).",
       "dist/matrix-runtime.py is the vendored matrix-contract Python staged as a build artifact (ADR 0001 D2), not first-party code; it remains outside the rename wave like its origin under vendor/.",
       "prek run --all-files exits 1 from exactly one hook: the test/fixtures/init-standalone fixture project's validate-rules hook (fixture prek.toml -> bash scripts/validate-rules.sh, exit 127). The fixture is tracked and byte-frozen (zero diff vs the merge-base) and never contained a scripts/ directory in its scaffold output, so this failure is byte-identical to base — pre-existing and untouched by the wave; fixing it would drift the golden init fixture, which is out of goal scope. The root workspace prek hooks that AC-6 wires both pass (typecheck via npm run typecheck, eslint via npx eslint) — the typecheck hook in fact went from impossible-at-base (no tsc config) to green with this wave."
-    ]
+    ],
+    "review_round_1": {
+      "verdict": "REQUEST_CHANGES",
+      "reviewer": "independent blinded agent reviewer lane (fresh `omc ask codex` session with no session context), reviewing PR #61 head cd8755250d543b6effff5f7c0359fb9876c67a85",
+      "prompt": ".omc/plans/receipts-a2-impl-20261010/review-prompt-round1.md (AiTool workspace root)",
+      "artifact": ".omc/plans/receipts-a2-impl-20261010/round1/codex-you-are-an-independent-peer-reviewer-code-reviewer-lane-for--2026-10-10T11-45-08-508Z.md (AiTool workspace root)",
+      "log": ".omc/plans/receipts-a2-impl-20261010/review-codex-round1.log (AiTool workspace root)",
+      "artifact_relocation_disclosure": "The ask tool originally wrote the artifact into the repo checkout (ai-catapult/.omc/artifacts/ask/...md). The repo's own dead-refs grep-gate (scripts/check-dead-refs.ts) scans the entire untracked working tree and flagged the artifact's quoted corpus text (a retired identity name in backticked form) as a live reference, so test/dead-refs.test.ts 'grep-gate passes on the clean tree' failed in every full-suite run after 11:45 (visible in npm-test-review-fixes.txt: two failures — the old e2e flake and this gate). The artifact was relocated to the receipts home above; the gate then passes (61 raw matches, all excluded) with zero repo-content changes. This relocation is hygiene, not suppression: the round-1 verdict text itself remains quoted in the artifact and log. Follow-on: this evidence file initially re-tripped the same gate because the disclosure above embedded the banned name literally; the gate's 61-match baseline was re-verified after rephrasing.",
+      "findings": [
+        "F1 (major): package.json declared bin 'ai-catapult': 'bin/ai-catapult.ts'. npm installs put the package inside node_modules, where Node refuses type stripping (ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING, reproduced empirically) — the installed CLI could not execute at all.",
+        "F2 (major): bin/ai-catapult.ts guarded its module body with process.argv[1] === fileURLToPath(import.meta.url). v1 executed the body unconditionally; through npm's bin symlink chain argv[1] is the invoked link path while import.meta.url resolves the entry's real path, so link-style invocations silently printed nothing and exited 0 (empirically reproduced via a staged npm-bin-style symlink).",
+        "F3 (major): stageScopedPackage left 'prepack': 'node scripts/setup.ts && npm run build' in the staged @r3dlex/ai-catapult package.json. The staged files[] copy lacks tsc, tsconfig.build.json and scripts/prepare-dist.ts, so the mirror's prepack would exit 127 (v0.2.0's incident class through a new hole) or silently rebuild a half-staged tree; the static prepack-vs-files checks only see literal scripts/* invocations and missed it."
+      ],
+      "fixes": [
+        "F1: package.json bin is 'dist/bin/ai-catapult.js'; bin/ai-catapult.ts stays tracked and shipped as the development entrypoint. Regression: test/installed-bin.test.ts (bin map + staged-install execution, direct and via bin link).",
+        "F2: bin/ai-catapult.ts executes run() unconditionally (v1-faithful); fileURLToPath import dropped. Regression: symlink-dispatch subtest in test/installed-bin.test.ts.",
+        "F3: scripts/publish-both.ts stageScopedPackage now deletes prepack (and pretest/test) from the staged package.json — the staged tree packs as a complete artifact with zero lifecycle scripts. Regression: real staged-pack subtest added to test/scoped-mirror-staging.test.ts (npm pack inside the staged dir, assert no lifecycle scripts and dist/bin/ai-catapult.js + skills.lock.json in the tarball). stageScopedPackage is exported for test reuse.",
+        "F4 (discovered while chasing F1/F2 green): tsc emits 0644 while npm's POSIX bin shim resolves exec permission on its TARGET file, so installed invocation would die EACCES even with the JS target. scripts/prepare-dist.ts now chmods dist/bin/ai-catapult.js to 0755 (mode fidelity with the tracked bin's 0755), and the staged-install test asserts the exec bit explicitly.",
+        "F5 (exposed by the first vendored-driver run after the fix landing captures): the staged-install e2e copied the LIVE dist/ mid-suite, where plugin tests wipe and rebuild dist/ concurrently — it raced a half-wiped staging source (ERR_MODULE_NOT_FOUND dist/src/scaffold.js in one driver run) and passed in others by timing, exactly the nondeterminism pack.test.ts/packed-init.test.ts document. Fix: stageScopedPackage gained an optional distSource option (publish path unchanged — it still packs the live fresh dist/), and the e2e supplies dist/ from the stable dist-snapshot/ the way packed-init.test.ts does. The suite's own precedent turned out to be the designed seam: dist-snapshot/ is the cpSync mode preserving mirror created by snapshot-dist.ts as the last prepare-dist step."
+      ],
+      "red_green_captures": [
+        "installed-bin-red.txt: pre-fix, exit 1 — ERR_ASSERTION bin .ts target; symlinked invocation printed empty output; ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING executing under node_modules.",
+        "scoped-pack-red.txt: pre-F3, exit 1 — 'staged scoped package.json still carries lifecycle scripts prepack'.",
+        "mode-red-staged-install.txt: post-F1..F3, dist forced back to 0644, exit 1 — 'compiled bin staged with mode 644 — npm's bin link needs exec on the target or every installed invocation fails with EACCES'.",
+        "installed-bin-green2.txt / scoped-pack-green2.txt / full-suite-green3.txt: first green series after F1-F4 (3/3, 4/4, and npm test 301/301).",
+        "s4-fresh-green2.txt: first vendored-driver run FAILED — it exercised the suite under fresh bootstrap (npm ci --ignore-scripts) and exposed F5's live-dist staging race plus the evidence-file literal noted in artifact_relocation_disclosure; 301 tests, 299 pass, 2 fail.",
+        "installed-bin-green3.txt / scoped-pack-green3.txt: green on the distSource path (3/3, 4/4).",
+        "dead-refs-green2.txt: gate green after the disclosure rephrase.",
+        "full-suite-green4.txt: npm test exit 0 — 301 tests, 301 pass, 0 fail.",
+        "s4-fresh-green3.txt: vendored driver exit 0 with the refreshed package.json pin — all pins validated, bootstrap npm ci --ignore-scripts, then npm test 301/301 under the driver."
+      ],
+      "post_fix_gates": {
+        "full_suite": { "command": "npm test", "exit_code": 0, "tests": 301, "passed": 301 },
+        "vendored_local_ci": { "command": "bash skills/04-validate-handoff/autobahn/local-ci.sh --root .", "exit_code": 0, "bootstrap": ["npm ci --ignore-scripts"] },
+        "typecheck": { "command": "npm run typecheck", "exit_code": 0 },
+        "lint": { "command": "npx eslint .", "exit_code": 0 },
+        "git_diff_check": { "command": "git diff --check", "exit_code": 0 }
+      },
+      "reviewer_positives_recorded": [
+        "Full suite 297/297 and pins verified at the reviewed head, including independently recomputed setup/ci.yml pin hashes.",
+        "Vendored tree, skills.lock.json, handoff contract and retained v1 bytes byte-unchanged.",
+        "Per-slice negative-fixture survivors exactly match the attributed set.",
+        "The void-test failure-signal claim was independently probed and verified."
+      ],
+      "scope_note": "Fix landing commit touches only package.json, bin/ai-catapult.ts, scripts/publish-both.ts (prepack deletion + distSource option), scripts/prepare-dist.ts, test/installed-bin.test.ts (new), test/scoped-mirror-staging.test.ts, test/packed-init.test.ts (stale-comment-only), this evidence file, .ai/ci/local-ci.json (package.json pin refresh), and the ADR 0001 errata section. A blinded round-2 review of the follow-up commit re-adjudicates before approval."
+    }
   }
 }

@@ -4,7 +4,7 @@
   "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
   "type": "module",
   "bin": {
-    "ai-catapult": "bin/ai-catapult.ts"
+    "ai-catapult": "dist/bin/ai-catapult.js"
   },
   "files": [
     ".ai/knowledge/contract/",

@@ -5,7 +5,7 @@
     ".github/workflows/release.yml": "3b04f9243715a3405ae47d1b70935a5332665cad172929fe4af97baf967425e1"
   },
   "sources": {
-    "package.json": "e22b543710090eb911e9444663075b1c54f116c8bb22c4629bd033510c3d8730",
+    "package.json": "d4bf1a73585dd48511ae3cfe98583ddeee473bb0c2534c33be41adaf7c6d4f31",
     "package-lock.json": "a88be3ff3e96a1c972e4078b6bda186a052c0033be0f9749d229c43f00fa83df",
     "scripts/build-claude-plugin.ts": "d7ea0fffed8495258cc8d20d433886b4c85164e29c7fb7a7303f62e86f3c0ac9",
     "scripts/build-codex-plugin.ts": "3e61182f16831b07ef7b3a5a4ab7056981cecdee47ea73c8b1b036b11ab3fe1d",
