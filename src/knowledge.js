@@ -25,7 +25,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, isAbsolute, join, resolve as resolvePath, sep } from 'node:path';
+import { dirname, join, resolve as resolvePath, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const SCHEMA = 'knowledge-registry/1';
@@ -615,22 +615,18 @@ function cmdRebuild(root, args) {
 }
 
 function cmdSerialize(root, args) {
-  const source = isAbsolute(args.source) ? resolvePath(args.source) : resolvePath(join(root, args.source));
-  let resolved;
-  try {
-    resolved = realpathSync(source);
-  } catch {
-    resolved = source;
-  }
-  if (resolved !== root && !resolved.startsWith(root + sep)) {
-    emit({ error: 'unsafe_path', detail: 'source resolves outside the repository root' });
+  // Component-wise trust check BEFORE any resolution: resolvePath/realpath
+  // normalize away traversal segments and happily follow an in-root symlink
+  // that can redirect the read (resolve-first was round-1 review finding F1).
+  // unsafeReason is the same component-wise rule verify enforces (C05/C06);
+  // registry.py's resolve-first ordering stays a known reference divergence.
+  safePath(root, args.source);
+  const source = join(root, args.source);
+  if (!existsSync(source) || !statSync(source).isFile()) {
+    emit({ error: 'source_unavailable', path: String(source) });
     return USAGE;
   }
-  if (!existsSync(resolved) || !statSync(resolved).isFile()) {
-    emit({ error: 'source_unavailable', path: String(resolved) });
-    return USAGE;
-  }
-  emit(JSON.parse(readFileSync(resolved, 'utf8')));
+  emit(JSON.parse(readFileSync(source, 'utf8')));
   return OK;
 }
 
@@ -743,8 +739,8 @@ export function runKnowledge(argv) {
       break;
     }
     case 'verify': {
-      const { flags, usage } = parseVerbTokens(tokens);
-      if (usage || Object.keys(flags).length || argv.length > (parsed.rootArg === null ? 0 : 2) + 1 + (parsed.rest.length - tokens.length)) {
+      const { flags, positionals, usage } = parseVerbTokens(tokens);
+      if (usage || Object.keys(flags).length || positionals.length) {
         return writeUsageError(`ai-catapult knowledge: ${usage ?? 'unrecognized arguments'}`);
       }
       args = flags;

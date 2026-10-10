@@ -488,3 +488,59 @@ test('XSKP-P4-02 list-smoke: list emits the fixture aggregate item and no skippe
     assert.deepEqual(report, { entries: [EXPECTED_ITEM], skipped: [] });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Review regressions — codex PR #56 round 1 (F1 major, F2 minor)
+// ---------------------------------------------------------------------------
+
+test('XSKP-P4-02 review-r1 F1: serialize rejects an in-root symlink source (source + packaged)', () => {
+  perLane('r1-symlink', (lane, tmp) => {
+    symlinkSync(join(tmp, EXPECTED_REGISTRY_FILE), join(tmp, 'alias.json'));
+    const result = spawnKnowledge(lane, tmp, ['serialize', 'alias.json']);
+    assert.equal(result.status, 1, `serialize must reject the symlink source (exit ${result.status})\n${result.stderr}`);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      error: 'unsafe_path',
+      detail: 'alias.json: symlink_component',
+    });
+  });
+});
+
+test('XSKP-P4-02 review-r1 F1: serialize rejects traversal, even when normalization would hide it (source + packaged)', () => {
+  perLane('r1-traversal', (lane, tmp) => {
+    // resolvePath(join(root, source)) normalizes to docs/plans/example.md — an
+    // existing file — so resolve-first ordering silently accepts the `..`
+    // segment. The component-wise check must run before resolution.
+    const normalized = spawnKnowledge(lane, tmp, ['serialize', 'docs/plans/../plans/example.md']);
+    assert.equal(normalized.status, 1, `serialize must reject the traversal source (exit ${normalized.status})\n${normalized.stderr}`);
+    assert.deepEqual(JSON.parse(normalized.stdout), {
+      error: 'unsafe_path',
+      detail: 'docs/plans/../plans/example.md: traversal',
+    });
+    const escape = spawnKnowledge(lane, tmp, ['serialize', '../escapes.json']);
+    assert.equal(escape.status, 1, `traversal must exit 1 (exit ${escape.status})\n${escape.stderr}`);
+    assert.deepEqual(JSON.parse(escape.stdout), {
+      error: 'unsafe_path',
+      detail: '../escapes.json: traversal',
+    });
+  });
+});
+
+test('XSKP-P4-02 review-r1 F2: verify rejects extra positional args with usage exit 2 (source + packaged)', () => {
+  perLane('r1-verify-extra', (lane, tmp) => {
+    const withRoot = spawnKnowledge(lane, tmp, ['verify', 'unexpected']);
+    assert.equal(withRoot.status, 2, `verify with an extra positional must be a usage error (exit ${withRoot.status})\n${withRoot.stderr}`);
+    assert.ok(withRoot.stderr.startsWith('ai-catapult knowledge: unrecognized arguments'), withRoot.stderr);
+    // Usage errors must also precede any root resolution, so run without
+    // --root (root defaults to cwd) on an otherwise valid fixture root.
+    const withoutRoot = spawnSync(
+      process.execPath,
+      [join(laneRoot(lane), 'bin/ai-catapult.js'), 'knowledge', 'verify', 'unexpected'],
+      {
+        encoding: 'utf8', cwd: tmp, timeout: 30_000,
+        env: { ...process.env, AI_CATAPULT_DIST_ROOT: lane === 'source' ? DIST_SNAPSHOT : join(packaged.dir, 'dist') },
+      },
+    );
+    assert.equal(withoutRoot.status, 2, `verify with an extra positional must be a usage error, with or without --root (exit ${withoutRoot.status})\n${withoutRoot.stderr}`);
+    assert.ok(withoutRoot.stderr.startsWith('ai-catapult knowledge: unrecognized arguments'), withoutRoot.stderr);
+  });
+});
