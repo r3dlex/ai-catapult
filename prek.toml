@@ -1,0 +1,20 @@
+# prek configuration — pre-commit hook manager (Rust-based, github.com/j178/prek)
+# Schema mirrors `.pre-commit-config.yaml` (top-level `repos` field).
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "typecheck"
+name = "Typecheck all TypeScript (tsc --noEmit)"
+entry = "npm run typecheck"
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "eslint"
+name = "ESLint on changed .ts files"
+entry = "npx eslint"
+language = "system"
+files = '\.ts$'
+pass_filenames = true

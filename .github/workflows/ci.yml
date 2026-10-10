@@ -11,11 +11,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
-        run: bash setup.sh
+        run: node scripts/setup.ts
       - name: Verify vendor integrity
-        run: bash scripts/verify-vendor.sh
+        run: node scripts/verify-vendor.ts
       - run: npm test
 
   vendor:
@@ -24,11 +26,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
-        run: bash setup.sh
+        run: node scripts/setup.ts
       - name: Verify vendor integrity
-        run: bash scripts/verify-vendor.sh
+        run: node scripts/verify-vendor.ts
 
   codex-plugin:
     runs-on: ubuntu-latest
@@ -36,9 +40,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
-        run: bash setup.sh
+        run: node scripts/setup.ts
       - name: Build Codex plugin
         run: npm run build:plugin:codex
       - name: Validate plugin.json parses and has required fields
@@ -70,11 +76,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+      - name: Install locked dependencies (TypeScript toolchain)
+        run: npm ci --ignore-scripts
       - name: Vendor skills
-        run: bash setup.sh
+        run: node scripts/setup.ts
       - name: Verify vendor integrity
-        run: bash scripts/verify-vendor.sh
+        run: node scripts/verify-vendor.ts
       - name: Build Claude Code plugin
         run: npm run build:plugin:claude
       - name: Test (includes plugin assembly + no-committed-mirrors assertions)

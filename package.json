@@ -4,38 +4,42 @@
   "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
   "type": "module",
   "bin": {
-    "ai-catapult": "bin/ai-catapult.js"
+    "ai-catapult": "dist/bin/ai-catapult.js"
   },
   "files": [
     ".ai/knowledge/contract/",
     "bin/",
     "src/",
     "dist/",
-    "scripts/build-claude-plugin.sh",
-    "scripts/build-codex-plugin.sh",
-    "scripts/build-opencode-plugin.sh",
-    "scripts/snapshot-dist.sh",
-    "scripts/stage-skill-templates.sh",
-    "scripts/stage-readme-contract.sh",
-    "scripts/stage-matrix-runtime.sh",
-    "scripts/stage-ci-adapters-runtime.sh",
-    "scripts/resolve-vendor-skill.js",
-    "scripts/list-bundled-skills.js",
+    "scripts/build-claude-plugin.ts",
+    "scripts/build-codex-plugin.ts",
+    "scripts/build-opencode-plugin.ts",
+    "scripts/snapshot-dist.ts",
+    "scripts/stage-skill-templates.ts",
+    "scripts/stage-readme-contract.ts",
+    "scripts/stage-matrix-runtime.ts",
+    "scripts/stage-ci-adapters-runtime.ts",
+    "scripts/resolve-vendor-skill.ts",
+    "scripts/list-bundled-skills.ts",
     "scripts/opencode-commands/northstar.json",
     "scripts/opencode-commands/autobahn.json",
-    "setup.sh",
+    "scripts/setup.ts",
     "skills.lock.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "prepack": "bash setup.sh && bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh",
-    "pretest": "bash scripts/build-claude-plugin.sh && bash scripts/build-codex-plugin.sh && bash scripts/build-opencode-plugin.sh && bash scripts/stage-skill-templates.sh && bash scripts/stage-readme-contract.sh && bash scripts/stage-matrix-runtime.sh && bash scripts/stage-ci-adapters-runtime.sh && bash scripts/snapshot-dist.sh",
-    "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
-    "regen:fixture": "bash scripts/regen-fixture.sh",
-    "build:plugin:codex": "bash scripts/build-codex-plugin.sh",
-    "build:plugin:claude": "bash scripts/build-claude-plugin.sh",
-    "build:plugin:opencode": "bash scripts/build-opencode-plugin.sh"
+    "build": "tsc -p tsconfig.build.json && node scripts/prepare-dist.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "prepare": "node scripts/setup.ts",
+    "prepack": "node scripts/setup.ts && npm run build",
+    "pretest": "npm run build",
+    "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/*.test.ts",
+    "regen:fixture": "node scripts/regen-fixture.ts",
+    "build:plugin:codex": "node scripts/build-codex-plugin.ts",
+    "build:plugin:claude": "node scripts/build-claude-plugin.ts",
+    "build:plugin:opencode": "node scripts/build-opencode-plugin.ts"
   },
   "keywords": [
     "ai-sdlc",
@@ -47,7 +51,7 @@
     "claude"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22.18"
   },
   "license": "MIT",
   "repository": {
@@ -60,5 +64,13 @@
   "homepage": "https://github.com/r3dlex/ai-catapult#readme",
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.12.0",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1"
   }
 }
