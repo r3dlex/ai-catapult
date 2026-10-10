@@ -4,26 +4,26 @@
   "description": "CLI + Claude Code and Codex plugins for init-ai-repo v3 AI-SDLC governance scaffolding",
   "type": "module",
   "bin": {
-    "ai-catapult": "bin/ai-catapult.js"
+    "ai-catapult": "bin/ai-catapult.ts"
   },
   "files": [
     ".ai/knowledge/contract/",
     "bin/",
     "src/",
     "dist/",
-    "scripts/build-claude-plugin.sh",
-    "scripts/build-codex-plugin.sh",
-    "scripts/build-opencode-plugin.sh",
-    "scripts/snapshot-dist.sh",
-    "scripts/stage-skill-templates.sh",
-    "scripts/stage-readme-contract.sh",
-    "scripts/stage-matrix-runtime.sh",
-    "scripts/stage-ci-adapters-runtime.sh",
-    "scripts/resolve-vendor-skill.js",
-    "scripts/list-bundled-skills.js",
+    "scripts/build-claude-plugin.ts",
+    "scripts/build-codex-plugin.ts",
+    "scripts/build-opencode-plugin.ts",
+    "scripts/snapshot-dist.ts",
+    "scripts/stage-skill-templates.ts",
+    "scripts/stage-readme-contract.ts",
+    "scripts/stage-matrix-runtime.ts",
+    "scripts/stage-ci-adapters-runtime.ts",
+    "scripts/resolve-vendor-skill.ts",
+    "scripts/list-bundled-skills.ts",
     "scripts/opencode-commands/northstar.json",
     "scripts/opencode-commands/autobahn.json",
-    "setup.sh",
+    "scripts/setup.ts",
     "skills.lock.json",
     "README.md",
     "LICENSE"
@@ -34,7 +34,7 @@
     "lint": "eslint .",
     "prepack": "node scripts/setup.ts && npm run build",
     "pretest": "npm run build",
-    "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test",
+    "test": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/*.test.ts",
     "regen:fixture": "node scripts/regen-fixture.ts",
     "build:plugin:codex": "node scripts/build-codex-plugin.ts",
     "build:plugin:claude": "node scripts/build-claude-plugin.ts",
@@ -50,7 +50,7 @@
     "claude"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22.18"
   },
   "license": "MIT",
   "repository": {

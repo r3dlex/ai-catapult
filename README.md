@@ -74,16 +74,16 @@ npm install -g ai-catapult@latest
 Source checkouts refresh the pinned skill and rebuild artifacts with:
 
 ```sh
-bash setup.sh
-bash scripts/prepare-dist.sh
+node scripts/setup.ts
+node scripts/prepare-dist.ts
 ```
 
 ## Local verification
 
-After `bash setup.sh`, run `npm test` for the complete plugin builds and test suite.
+After `node scripts/setup.ts`, run `npm test` for the complete plugin builds and test suite.
 `.ai/ci/local-ci.json` binds that supporting check to the current workflow and
 build-source hashes. Autobahn uses this explicit contract rather than translating
-GitHub triggers or release jobs. Local success does **not** prove hosted Node 20
+GitHub triggers or release jobs. Local success does **not** prove hosted Node 22
 CI, publication, harness registration, or merge authority; those remain separate.
 
 ## Release recovery
@@ -95,7 +95,7 @@ package's registry contents/provenance; do not rebuild a different release or
 claim both packages succeeded. Dry-run the missing package only:
 
 ```sh
-bash scripts/publish-both.sh --package @r3dlex/ai-catapult
+node scripts/publish-both.ts --package @r3dlex/ai-catapult
 ```
 
 In the authorized publishing environment, retry that same selection with
@@ -128,9 +128,9 @@ trusted-publisher policy, credentials, or staged-publication settings.
 ## Troubleshooting
 
 - **`init would overwrite existing file`** — inspect the existing scaffold first; rerun with `--force` only when replacement is intended.
-- **`canonical README contract not found`** — in a source checkout, run `bash setup.sh` and `bash scripts/stage-readme-contract.sh`. Reinstall the npm package if the error comes from `npx`.
+- **`canonical README contract not found`** — in a source checkout, run `node scripts/setup.ts` and `node scripts/stage-readme-contract.ts`. Reinstall the npm package if the error comes from `npx`.
 - **Plugin installed but not visible** — reload the host and complete its printed registration steps. Codex registration details are in [docs/codex-install.md](docs/codex-install.md).
-- **Vendor SHA mismatch** — run `bash setup.sh`, then `bash scripts/verify-vendor.sh`. The checkout must match `skills.lock.json` exactly.
+- **Vendor SHA mismatch** — run `node scripts/setup.ts`, then `node scripts/verify-vendor.ts`. The checkout must match `skills.lock.json` exactly.
 
 ## Documentation
 

@@ -2,7 +2,7 @@ name: Release
 
 # Triggered on semver tag push (e.g. v0.1.0).
 # Publishes both ai-catapult (unscoped) and @r3dlex/ai-catapult (scoped)
-# via publish-both.sh — the single source of truth for both names.
+# via publish-both.ts — the single source of truth for both names.
 #
 # Auth: npm TRUSTED PUBLISHING (OIDC) — no NPM_TOKEN secret needed.
 # Prerequisite (one-time, npmjs.com web UI, per package — both ai-catapult and
@@ -55,7 +55,7 @@ jobs:
 
       - name: Validate exact release tag and package selection
         id: release-context
-        run: bash scripts/release-context.sh
+        run: node scripts/release-context.ts
         env:
           RELEASE_PACKAGE: ${{ inputs.package }}
 
@@ -65,10 +65,10 @@ jobs:
           npm --version
 
       - name: Vendor skills
-        run: bash setup.sh
+        run: node scripts/setup.ts
 
       - name: Verify vendor integrity
-        run: bash scripts/verify-vendor.sh
+        run: node scripts/verify-vendor.ts
 
       - name: Build both plugins
         run: |
@@ -85,14 +85,14 @@ jobs:
           mkdir -p "${FAKE_HOME}/.claude"
           export HOME="${FAKE_HOME}"
           export CODEX_HOME="${FAKE_CODEX}"
-          node bin/ai-catapult.js install --harness all
+          node bin/ai-catapult.ts install --harness all
 
       - name: Publish selected names via OIDC trusted publishing (provenance automatic)
         run: |
           if [[ "$RELEASE_PACKAGE" == both ]]; then
-            AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes
+            AI_CATAPULT_PUBLISH=1 node scripts/publish-both.ts --yes
           else
-            AI_CATAPULT_PUBLISH=1 bash scripts/publish-both.sh --yes --package "$RELEASE_PACKAGE"
+            AI_CATAPULT_PUBLISH=1 node scripts/publish-both.ts --yes --package "$RELEASE_PACKAGE"
           fi
         env:
           RELEASE_PACKAGE: ${{ steps.release-context.outputs.package }}

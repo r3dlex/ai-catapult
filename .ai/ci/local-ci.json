@@ -1,41 +1,40 @@
 {
   "schema": "local-ci/2",
   "workflows": {
-    ".github/workflows/ci.yml": "0a29e2711bd98db48a6be24d51d24c98b926fb077a745ab8121d5e4e076f28c6",
-    ".github/workflows/release.yml": "0bf5ef9e01d1f7361ce30682e3a17b9fe3e0c17bef6d71fd8a41e0d7726aec2d"
+    ".github/workflows/ci.yml": "c9f4afd9c7f771d85dce4252045342988fc5df485daabc686f6c665d7bdf1a87",
+    ".github/workflows/release.yml": "44c1c2a4e3bcd71bdf51312fb1cfbc2f62c7e13983cb19e29ab2ae95a3b404a9"
   },
   "sources": {
-    "package.json": "1525de8bc55b77304656e5704460c3f4f4548da5bda6c230862f8a704b492fbf",
-    "scripts/build-claude-plugin.sh": "04b29f2c9d0d479b8ce27018862ef44fbd030fc50637884a6302945536ede1c6",
-    "scripts/build-codex-plugin.sh": "a2b571cc614249f9f39a5b3f53c47f8a8f6978935f068dd3bd808f1f7c1da009",
-    "scripts/build-opencode-plugin.sh": "a8af152e8830390e18eff9fa01f8ccdd0641b5657c66561cc5757e40dea0e850",
-    "scripts/list-bundled-skills.js": "388a4b3377057b5e992283ac474042eefec6dff0b5cb6fc6a1da9294edde29ae",
-    "scripts/publish-both.sh": "7fc2eac9bf3022a1b7a76805623549a744381927ffaf57c979a96edcad62d763",
-    "scripts/release-context.sh": "b13f8d874910cc346b7c59f771c352470dec2af3535741b01d72f4db372b2be8",
-    "scripts/resolve-vendor-skill.js": "2a7993eedf2dad5a9d98d70e72e9cc5612910f227f0cbeedbd1d20b50540e28d",
-    "scripts/snapshot-dist.sh": "b0cada040efb3333796728e82cc87d08bf8918c1dfdbd8634aeac23604266ca8",
-    "scripts/stage-ci-adapters-runtime.sh": "af04a051042bbaafa104877a5d182fc7e69662fcbf0c6b7239a64a6f411cd8c1",
-    "scripts/stage-matrix-runtime.sh": "ac77e80d140e4d1510f1907c2a6c106ea0d86195bffc88c886c02ff2d8222a96",
-    "scripts/stage-readme-contract.sh": "50cc86490416e12694193e68be537c6eca877073f1ac8e01a846e8d795858e81",
-    "scripts/stage-skill-templates.sh": "63d5eb33ed757eb6ac9dad6c0d524d81c4fff37673135370fa043bad9131ffc0",
-    "scripts/verify-vendor.sh": "5be8789cab3c08f7e4576644292821c9ca0af1fdee109f8b10011d7bef797f6a",
-    "setup.sh": "c301958e5a894a9dee22205a6f2858a48acd23dda6444a35fe0d2891afb4809e",
+    "package.json": "e22b543710090eb911e9444663075b1c54f116c8bb22c4629bd033510c3d8730",
+    "package-lock.json": "a88be3ff3e96a1c972e4078b6bda186a052c0033be0f9749d229c43f00fa83df",
+    "scripts/build-claude-plugin.ts": "d7ea0fffed8495258cc8d20d433886b4c85164e29c7fb7a7303f62e86f3c0ac9",
+    "scripts/build-codex-plugin.ts": "3e61182f16831b07ef7b3a5a4ab7056981cecdee47ea73c8b1b036b11ab3fe1d",
+    "scripts/build-opencode-plugin.ts": "8bb3e432d4fabd5ed471c476f8a76f4cb4259c781af119b547506ce33ec7261a",
+    "scripts/list-bundled-skills.ts": "1c12d5cfcc25cdcc76b3d3e260c3fdb49d4895c85c1996f1231009a66a0f6be5",
+    "scripts/resolve-vendor-skill.ts": "9b6f589ffeb0ac07b8e8916e2033edd37180665b4d292c60e4015e6ea415cdf3",
+    "scripts/setup.ts": "4c1f59189654cc20b3be8993cbd5650b77c626bf8329c72b0e0e74ac36143980",
+    "scripts/snapshot-dist.ts": "39f0d66e37641898a6c1677c1d6484389641e82bec4dbcac0180d9551c6ef522",
+    "scripts/stage-ci-adapters-runtime.ts": "a4e6c6d277da91ec97939c52c055114d720da81a74bba57f604f3d145a81113d",
+    "scripts/stage-matrix-runtime.ts": "0641043cfe566c4ad291cf8ff872d0c1cedce1d3878be522ecd9901a181edcb3",
+    "scripts/stage-readme-contract.ts": "637179e42c1a4c56776bd1ccaa92f96420a58c5a92285dc449d5167089305fc2",
+    "scripts/stage-skill-templates.ts": "2c1fb08ed87329f8a540b6a06ce28deabf5dbe9cb32e186ee141a4fab8223a4b",
+    "scripts/verify-vendor.ts": "bad7df47566e9d37a06f371172f9168feea8f6a6f664908b6b21469c7613fbe4",
     "skills.lock.json": "96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb",
-    "src/skill-resolver.js": "7581a9faff559ceeaf6dd5975c3ced6f456fe5aa152d596d3be3201f816c9b25",
-    "test/fixtures/readiness-delivery.py": "ec6637cfb2088bb2e974bb266b08452de8630612bc886a68c3bfd727d1bf42d0",
-    "test/publish-recovery.test.js": "8e0db95f657e295bc48864cfb42d42afd81801ecf3253cdabb0a3aca6f6d8b9c",
-    "test/readiness-delivery.test.js": "ceea75c9922889acbef853274a7031f45438d6c5b7bf9e24c3b5bb1ce90a32ae",
-    "test/release-dispatch.test.js": "ace85922dd3ea4680a7cf135d27c7612918a6d1bf98afbcddd057ad3590e063b",
-    "test/publish-lifecycle.test.js": "c4048f550cc7358ee40be6f95dcf3f48d694deecedd1879b995d714079fe8498",
-    "test/autobahn-startup.test.js": "17bea9509370428685bc893fe7415958e5935370337703a8bef46c4e54cd0bf5",
-    "test/release-0.4.3.test.js": "74259efa7602dc051640918eab6d16af7783ea72131398dd7046cbdf2cb500d3"
+    "src/skill-resolver.ts": "84c4ad817cffabdd08d744d18a604a1e9bbea1ade866e5ceaef9c099923da9eb",
+    "test/fixtures/readiness-delivery.ts": "f2924098fe33379e47a5e4d7b3921ee68075924159e95f1304b7e0ab2ee56e94",
+    "test/autobahn-startup.test.ts": "a7f17be3ff77d4ccba6ae1b2643c62b8c67ca22dec7df7a428d551757049332d",
+    "test/publish-lifecycle.test.ts": "0b33b19f7564fedd491bde52a2562c06566fd9390b9915a40d176aca889cb2a0",
+    "test/publish-recovery.test.ts": "33a9ff1c86e7c7847685013f8d423f5d1753799aedd8d08ebbdc5266b64bc43f",
+    "test/readiness-delivery.test.ts": "7cc0e429408b9f9a63dab2f8c3dc9c45e6eae55478c581ded625e2ae8f3efd94",
+    "test/release-0.4.3.test.ts": "9469cfcef01da35a2545d2a5fb8575848bbe85f24244cbad31544124a17443b8",
+    "test/release-dispatch.test.ts": "028bc939bfac3d8856f93dd5bb4da5b902ef0ed8f68e4b3abb2209ba5ca637b4"
   },
   "verification": [
     "npm test"
   ],
   "workspace": {
     "bootstrap": [
-      "bash setup.sh"
+      "npm ci --ignore-scripts"
     ],
     "dependencies": [
       "vendor"
