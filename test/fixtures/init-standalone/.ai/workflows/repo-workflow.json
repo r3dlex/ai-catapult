@@ -38,5 +38,9 @@
       "status": "available",
       "enabled": false
     }
-  ]
+  ],
+  "local_ci": {
+    "surfaces": [],
+    "sole_source_of_truth": false
+  }
 }

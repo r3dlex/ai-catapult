@@ -27,6 +27,7 @@ import {
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { sweepContractDrift } from './contract-drift.js';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -450,6 +451,40 @@ export function runInstall(argv, envOverride = {}) {
       process.stdout.write(`Skipping OpenCode: ${opencodeDir} not found\n`);
     } else {
       installOpenCode({ opencodeDir, dryRun });
+    }
+  }
+
+  // ACH-C-02 (AC-8): after any real install, sweep the six readiness-contract
+  // deployment surfaces — every file named in the vendored readiness-dependency
+  // manifests must match its pinned sha256 wherever the plugin payload lives.
+  // Dry-run writes nothing, so there is nothing to verify. Drift exits
+  // non-zero naming path/expected/actual; loaded-cache drift additionally
+  // prints the marketplace refresh commands.
+  if (!dryRun) {
+    const sweep = sweepContractDrift({
+      env: { HOME: home, CODEX_HOME: codexHome, XDG_CONFIG_HOME: xdgConfig },
+      vendorRoot: join(REPO_ROOT, 'vendor', 'skills'),
+      distRoot: DIST_ROOT,
+    });
+    if (sweep.ok) {
+      const matched = sweep.surfaces.filter((s) => s.status === 'ok').length;
+      const skipped = sweep.surfaces.filter((s) => s.status === 'absent').length;
+      process.stdout.write(`Readiness contract drift sweep: ok (${matched} surfaces match pinned bytes, ${skipped} absent skipped)\n`);
+    } else {
+      process.stderr.write('Readiness contract drift sweep FAILED: installed payload differs from the pinned readiness-contract bytes.\n');
+      for (const surface of sweep.surfaces) {
+        if (surface.status === 'absent') continue;
+        process.stderr.write(`  ${surface.status}: ${surface.label}\n`);
+        for (const finding of surface.findings) {
+          process.stderr.write(`    path: ${finding.path} (${finding.kind})\n`);
+          process.stderr.write(`    expected: ${finding.expected}\n`);
+          process.stderr.write(`    actual:   ${finding.actual}\n`);
+        }
+        for (const hint of surface.refreshHints) {
+          process.stderr.write(`    refresh: ${hint}\n`);
+        }
+      }
+      process.exit(sweep.exitCode);
     }
   }
 }

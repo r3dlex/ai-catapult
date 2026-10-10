@@ -1,0 +1,427 @@
+{
+  "goal_id": "ACH-C-02",
+  "plan_id": "ach-catapult-delivery",
+  "generation": "0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0",
+  "summary": "Skills lock bumped 26d25105b028903ea1b34aebe9fbf4595b550051 to 28f813bf9fd767960b96e9d54857964de8181a53 (O8 accepted release pin per AC[0]; exact ancestor chain O8 f5e338b9) with the AC-8 six-surface readiness-contract drift sweep built test-first (src/contract-drift.js + 15 tests: 10 AC-8 + 5 review-round hardening tests, wired into src/install.js post-install, dry-run skips, non-zero exit naming path/expected/actual, loaded-cache refresh hints, installed-payload fail-closed absence rule, every loaded-cache registration inspected), the amended lock-coupled fixture delta bound from two byte-identical regen runs (coordinator decision 2026-10-10T04:31Z, cited byte-exactly after review round 1), local-ci/2 re-pinned on its two changed declared sources with the C-01 workspace object preserved exactly, and the full npm suite 273/273 green in the sanitized environment. Review round 2 then stopped pending coordinator dispatch (findings 2 and the OpenCode ownership major at the standing 2-round budget); the coordinator granted a final round 3 with a condition-4 interpretation (admit-v2 exit 0/gaps [] at each head proves the contract tooling accepted the amended scope — condition (2) satisfied by the recorded receipt; no amendment primitive required). P4-02 (PR #56) landed mid-flight as 5de9a311 and the branch was rebased; round-3 honest red legs (d09b027) and fixes (f984239) are receipted below with the full suite at 290/290 sanitized.",
+  "red": {
+    "command": "node --test test/contract-drift.test.js",
+    "exit_code": 1,
+    "round_4_observation": "Recorded at red commit 6dd3c41 (test-only child of the round-3 terminal head 98bd804, committed BEFORE the fix): 18 pass / 2 fail / 20 tests, exit 1 — exactly the two new sole-present-surface tests failing under the round-3 parity gate. Receipt: .omc/plans/receipts-c02-20261010/round4-red-leg.log (+ round4-red-leg-summary.txt). Canonical entry written post-hoc (the tool was not driven during the round because the fix landed after the red run); the command and exit code are the observed ones."
+  },
+  "green": {
+    "command": "node --test test/contract-drift.test.js",
+    "exit_code": 0,
+    "round_4_observation": "Recorded at fix commit b0e7c57 through the merge-stage head e8c16f4: 20/20 pass; full sanitized suite 292/292 exit 0. Receipts: .omc/plans/receipts-c02-20261010/round4-green-full-suite.log, contract-drift 20/20 in round3/round4 logs."
+  },
+  "verification": {
+    "allowlist": [
+      "npm test",
+      "git diff --check"
+    ],
+    "npm_test": {
+      "command": "npm test",
+      "environment_disclosure": "Executed with HOME, CODEX_HOME and XDG_CONFIG_HOME pointed at fresh temp directories under $TMPDIR/opencode (ach-c02-verify.*), created solely for the verification run. Rationale: the out-of-scope pre-existing test/finish-prompt.test.js drift-guard stub-probe runs `node bin/ai-catapult.js install` with the real environment inside npm test; with the AC-8 sweep active on a machine whose installed plugin lags the pin (the state registered AC[4] declares expected until the end-of-programme release), that probe correctly exits non-zero and the probe misreads it as an install stub, failing its forthcoming-marker assertion against exactly one test. Sanitized env is the hygiene standard AC[2] prescribes for install-related tests ('uses temporary HOME and CODEX_HOME fixtures, never the real home') and matches what a fresh CI runner presents. No test file was edited; no AC was weakened; the collision is flagged in the PR body for review and a follow-up ticket (give the drift-guard probe a temp HOME).",
+      "exit_code": 0,
+      "tests": 268,
+      "passed": 268,
+      "failed": 0,
+      "note": "268 = 256-test baseline at 26d25105 (baseline-npm-test-26d25105.log) + 12 tests this goal adds (10 contract-drift + the v2 pinned-bytes packaged-lane test + the amended F1 fixture-delta test).",
+      "log": ".omc/plans/receipts-c02-20261010/npm-test-verification-sanitized-home.log"
+    },
+    "unsanitized_disclosure_run": {
+      "command": "npm test (real home)",
+      "exit_code": 1,
+      "failing_tests": 1,
+      "failing_test": "finish-prompt drift-guard: if install is still a stub, prompt must contain forthcoming-marker (test/finish-prompt.test.js:390 — out of registered scope, unmodified)",
+      "reason": "The sweep's AC-8 behaviour on the real machine: the only drifted surface is the loaded cache resolved from ~/.claude/plugins/installed_plugins.json installPath (~/.claude/plugins/cache/ai-catapult/ai-catapult/0.4.3 — the published marketplace payload, pre-bump bytes: no readiness-dependency-v2.json, v1 manifest sha 0d0ac7e7... vs pinned e95f145f...), whose lag registered AC[4] explicitly declares expected and report-only. All other surfaces were ok. See also the standalone probe capture.",
+      "logs": [
+        ".omc/plans/receipts-c02-20261010/npm-test-full-green.log",
+        ".omc/plans/receipts-c02-20261010/real-home-install-probe.log"
+      ]
+    },
+    "ac4_machine_report_pre_merge_capture": {
+      "note": "AC[4] report-only data captured at the probe run (never authoritative): vendored pin 28f813bf manifests, marketplace/codex/opencode surfaces refreshed ok by the install, loaded cache at 0.4.3 lags with refresh commands 'claude plugin marketplace update' and 'claude plugin update' printed.",
+      "log": ".omc/plans/receipts-c02-20261010/real-home-install-probe.log"
+    }
+  },
+  "determinism": {
+    "basis": "Coordinator delegation decision PARALLEL-LANES.md 2026-10-10T04:31Z condition (1): prove delta determinism with two independent regen runs at re-verified pins.",
+    "pins_reverified": {
+      "catapult_origin_main": "2b63eb4ca3eef6ef9ecb5b47cbfbb616ea9a9ca1",
+      "skills_origin_main": "28f813bf9fd767960b96e9d54857964de8181a53",
+      "ls_remote_at": "2026-10-10T04:37:07Z",
+      "log": ".omc/plans/receipts-c02-20261010/pin-freshness-at-determinism.txt"
+    },
+    "runs": [
+      {
+        "id": "run1",
+        "command": "PYTHONDONTWRITEBYTECODE=1 npm run regen:fixture",
+        "exit_code": 0,
+        "log": ".omc/plans/receipts-c02-20261010/determinism-run1.log"
+      },
+      {
+        "id": "run2",
+        "command": "PYTHONDONTWRITEBYTECODE=1 npm run regen:fixture (after git clean -fd + git checkout -- of the fixture, porcelain verified 0)",
+        "exit_code": 0,
+        "log": ".omc/plans/receipts-c02-20261010/determinism-run2.log"
+      }
+    ],
+    "delta_porcelain_both_runs": "exactly: M test/fixtures/init-standalone/.ai/workflows/repo-workflow.json; ?? .ai/knowledge/; ?? .ai/policies/readiness-policy.json",
+    "delta_digests": {
+      "test/fixtures/init-standalone/.ai/policies/readiness-policy.json": "8b192952a445abb6e6b3e264c6e312998863683156397414837aef17b2e7da55",
+      "test/fixtures/init-standalone/.ai/knowledge/registry.json": "fa35ebcc2996d4a606fc58207a8230ebdbd210d490747d5d2fcbfc019551b412",
+      "test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test/fixtures/init-standalone/.ai/workflows/repo-workflow.json": "d64721df3dd786427d5e3555976739a1a1c8e5ed5e76aa509bad808568ca4e3c"
+    },
+    "byte_identical_proof": "diff of the two runs' digest lines is empty (determinism-run1.txt vs determinism-run2.txt); run #2's tree kept as the binding state.",
+    "no_hand_editing": "All four fixture paths are pure regen output; no fixture byte was hand-edited at any point."
+  },
+  "amendment_receipt": {
+    "basis_log": "PARALLEL-LANES.md (workspace repo .omc/handoffs/ach-20261004/)",
+    "entries_cited_verbatim": {
+      "2026-10-10T04:18Z": "C-02 UNBLOCK DECISION (coordinator): #127 (the last wave-1 implementation slice) settled; P5-03 is now a separate planning cycle not an implementation PR — §2.3 batching applies to issued skills changes, so C-02 bumps skills.lock to skills origin/main 28f813bf NOW; P5-03's publication rides the NEXT batch.",
+      "2026-10-10T04:31Z": "(1) runner verifies delta determinism (two independent regen runs at the pinned target, byte-identical, digests recorded); (2) the repo's own documented amendment/decision mechanism is used if the contract tooling provides one, else the decision is recorded in evidence + PR body quoting this entry as authority; (3) the 40→42 boundary-manifest correction rides the same PR with its own red→green leg; (4) if contract tooling REFUSES admission for the widened scope or provides no amendment primitive → STOP and report — no scope weakening, no fixture forgeries; the coordinator will then commission the successor-generation publication path. Attempt budget continues (2 of 3)."
+    },
+    "citation_method": "Byte-exact sentence excerpts of PARALLEL-LANES.md line 459 (04:18Z entry) and line 461 (04:31Z entry); the full entries are extracted verbatim into .omc/plans/receipts-c02-20261010/ledger-line-459.txt and ledger-line-461.txt. Correction disclosure: the citation first committed at head f68c28c was an inaccurate paraphrase ('Option 1 (fixture-scope amendment) granted…' as the 04:18Z quote; a condensed, clause-omitting rendition of the 04:31Z conditions) — replaced by this byte-true block as independent review finding 3.",
+    "ledger_conflict_disclosure": "The 04:31Z entry's own condition (4) reads 'if contract tooling REFUSES admission for the widened scope or provides no amendment primitive → STOP and report' while its condition (2) prescribes the receipt route ('else the decision is recorded in evidence + PR body quoting this entry as authority') for exactly the no-primitive case; the two clauses conflict on that case. Resolution used: the 04:31Z decision grants this runner's Option 1 and its condition (2) else-branch (this receipt) is the prescribed no-primitive route; condition (4)'s 'provides no amendment primitive' STOP clause is referred to the coordinator in the PR body as a ledger-text conflict. Neither condition-(4) STOP leg fired in fact: the contract tooling provided admission and did not refuse (admission receipt below); had it refused, this runner would have stopped.",
+    "admission_receipt": {
+      "command": "bash 04-validate-handoff/autobahn/contract-run-v2.sh admit-v2 --root <goal worktree> --handoff .ai/handoff/readiness-v2/ach-catapult-delivery/0516ba2ca7e9180e4235bd74680fe44d42875283a91e71e9f1987920e8cf88f0/handoff.md --goal-id ACH-C-02 --stage implementation --pr 57 — invoked from the pinned skills clone at 28f813bf (driver bytes == pin), per the sanctioned Lane-S #127 invocation shape",
+      "exit_code": 0,
+      "admitted": true,
+      "gaps": 0,
+      "authority": "plan-approval/1 (approval tag approval/ach-catapult-delivery/0516ba2ca7e9, digest 243e7e7bdeaf156b00c30f03ab8c6bda42b42988f9e99c39dfa2a5dade002956, expires 2026-10-23T12:30:42Z)",
+      "log": ".omc/plans/receipts-c02-20261010/admit-v2-pr57-full.log"
+    },
+    "tooling_recon": "No goal-scope amendment primitive exists in the contract tooling: the vendored contract-run-v2.sh header states 'Unknown arguments exit 2. No text, flag or variable maps to a waiver.', and the only 'amendment' surface (observer.py policy-amendment mode) publishes policy, not goal scope. Condition (2) else-branch therefore applies: this receipt, plus the same citation in the PR body.",
+    "fixture_delta_implemented": [
+      "+ test/fixtures/init-standalone/.ai/policies/readiness-policy.json (registered F1 file, moved from C-03)",
+      "+ test/fixtures/init-standalone/.ai/knowledge/registry.json (amended)",
+      "+ test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep (amended; .gitkeep count 4 -> 5)",
+      "M test/fixtures/init-standalone/.ai/workflows/repo-workflow.json (amended; #105 local_ci {surfaces: [], sole_source_of_truth: false})"
+    ],
+    "template_invariants_preserved": "readiness-policy/2 schema, identity_model multi, approval.accept [agent-self, ssh-tag, in-session], approval.default_mode agent, approval.anchor_sha256 null, required_checks [] and repository.id rendered from the canonical regen input example-repo are all asserted verbatim by the pinned F1 test."
+  },
+  "mechanical_count_correction": {
+    "registered_value": "F1 said boundary-manifest mechanical entries go 40 to 41",
+    "byte_verified_truth": "40 (paths 50) at lock 26d25105, 42 (paths 52) at the pinned 28f813bf — the knowledge-registry template (#121) and the readiness-policy template (#102) are both already ancestors at the goal's own anchor",
+    "correction_authority": "the same 2026-10-10T04:31Z SOLE COORDINATOR DECISION",
+    "own_red_green_leg": "red3a (fixture-delta red pre-binding) + red3b (pre-bump lock flip, 0/4) + green3 (4/4 at binding); the test additionally pins mechanical_count == 42 and vendored == locked so any future regression to 41 fails (forward cross-bind)",
+    "log": ".omc/plans/receipts-c02-20261010/mechanical-count-40-vs-42.log"
+  },
+  "local_ci_rebinding": {
+    "file": ".ai/ci/local-ci.json",
+    "schema": "local-ci/2",
+    "changed_declared_sources": {
+      "skills.lock.json": "530c153bd1bc75ab8e3e94e40e5a21afa1a53150c492a94c9c472e7b191417e6 -> 96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb",
+      "test/readiness-delivery.test.js": "8b68489e936c2769adc815d6fee2a36466201c728ac195cf4a1b8b845620a302 -> ceea75c9922889acbef853274a7031f45438d6c5b7bf9e24c3b5bb1ce90a32ae"
+    },
+    "authorization_class": "goal 13f85bb's standing authorization to re-bind legitimately changed hash-bound sources; both changed sources were changed by this goal itself (lock bump; leg-carrying test file). Always re-reviewed and re-certified: post-rebind verification recomputed every declared digest — 24 sources + 2 workflows, zero mismatches against the tree.",
+    "workspace_object_preserved_exactly": {
+      "bootstrap": [
+        "bash setup.sh"
+      ],
+      "dependencies": [
+        "vendor"
+      ],
+      "outputs": [
+        "dist",
+        "dist-snapshot"
+      ]
+    },
+    "verification_preserved": [
+      "npm test"
+    ],
+    "diff": "exactly 2 lines changed"
+  },
+  "tests": {
+    "command": "npm test",
+    "tests": 290,
+    "passed": 290,
+    "failed": 0,
+    "environment": "sanitized temp HOME/CODEX_HOME/XDG_CONFIG_HOME (disclosure in verification.npm_test); the pre-review green runs at head f68c28c (268/268) are receipts in verification.npm_test",
+    "environment_command": "SAN=$(mktemp -d /tmp/ach-c02-sanitized.XXXXXX) && env HOME=\"$SAN/home\" CODEX_HOME=\"$SAN/codex\" XDG_CONFIG_HOME=\"$SAN/xdg\" PYTHONDONTWRITEBYTECODE=1 npm test — cwd: the goal worktree; the scratch dir is removed after the run",
+    "receipt": ".omc/plans/receipts-c02-20261010/round3-green-full-suite.log"
+  },
+  "review_round_1": {
+    "reviewer": "omc ask codex (independent reviewer lane, separate advisor artifact)",
+    "artifact": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/.omc/artifacts/ask/codex-independent-pr-review-request-r3dlex-ai-catapult-pr-57-goal--2026-10-10T04-51-51-471Z.md",
+    "prompt": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/.omc/plans/receipts-c02-20261010/review-prompt-round1.md",
+    "verdict": "REQUEST_CHANGES",
+    "findings_and_resolutions": {
+      "F1_major": "an installed payload with skills/autobahn deleted was skipped as 'absent' with exit 0 (reviewer reproduced on the marketplace surface) — fixed: absence keyed on per-surface installRoot; installed-but-incomplete payloads drift naming path with a 'missing-contract-dir' finding; regression tests red4→green4 (marketplace + dist variants)",
+      "F2_major": "loaded-cache inspection read only the first ai-catapult@* key's first array record — fixed: resolveLoadedCachePaths scans every key and every registered record, deduplicated by resolved payload dir; records with invalid installPaths fail closed as unreadable-installed-plugins findings; regression tests red4→green4 (later record + later key)",
+      "F3_major": "the evidence quoted the coordinator ledger inaccurately (paraphrase instead of bytes; the 04:31Z condition-4 STOP clause was omitted) — fixed: byte-exact excerpts extracted from ledger lines 459/461 (receipts ledger-line-459.txt / ledger-line-461.txt), the prior citation retained as an explicit correction disclosure, and the genuine conflict between the 04:31Z condition-(2) else-branch and its condition-(4) no-primitive STOP clause disclosed in ledger_conflict_disclosure and referred to the coordinator in the PR body",
+      "F4_minor": "unreadable pinned files (e.g. EISDIR) threw before findings and refresh hints — fixed: manifest, pinned-file and cross-parity reads guarded; structured 'unreadable (<errno>)' findings; loaded-cache refresh hints preserved; regression test red4→green4",
+      "F5_minor": "the red3b red-leg description exceeded its proof — fixed: red3b now states the leg failed on lock/vendor consistency (not a boundary-count assertion) and that a 40-count suite leg at the old pin cannot exist on this machine (depth-1 vendored db), with the boundary byte-proof living in mechanical-count-40-vs-42.log"
+    },
+    "scope_of_fix_commit": "src/contract-drift.js, test/contract-drift.test.js, .ai/evidence/ACH-C-02.json — all within the registered goal scope; excluded files byte-untouched; .ai/ci/local-ci.json unchanged (none of the three files is a declared source)",
+    "suite_after_fix": "npm test sanitized 273/273 exit 0 at the fix head; git diff --check exit 0",
+    "round_2": {
+      "artifact": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/.omc/artifacts/ask/codex-independent-review-round-2-r3dlex-ai-catapult-pr-57-goal-ach-2026-10-10T05-02-52-813Z.md",
+      "prompt": "/Users/andresilvaburgstahler/Ws/Personal/AiTool/.omc/plans/receipts-c02-20261010/review-prompt-round2.md",
+      "verdict": "REQUEST_CHANGES",
+      "resolved": "findings 1 (missing-contract-dir), 4 (guarding), 5 (red3b wording) verified RESOLVED by the reviewer at a5de872",
+      "finding2_unresolved": "cross-surface pin parity covers only the first registration dir (autobahnDir = firstPayloadDir); a later registered payload with self-consistent-but-stale contract bytes exits 0/ok (reviewer repro re-confirmed locally by the runner: later array record and later key both exit 0, the same stale payload placed first exits 1 with surface-pin-parity findings + refresh hints)",
+      "finding3_partial": "evidence citations verified byte-exact (substrings of ledger lines 459/461; extraction receipts equal their ledger lines) but the live PR body still carried the old paraphrases when round 2 ran — corrected by the post-round-2 body edit (gh pr edit 57, byte-true quotes + ledger-text conflict referral); the reviewer additionally holds that admission does not resolve the 04:31Z condition-(4) no-primitive STOP clause — that interpretation is referred to the coordinator (disclosure + referral recorded in the evidence and PR body; this runner treats the clause's meaning as coordinator-owned)",
+      "new_major_unresolved": "an unrelated OpenCode skill present under the shared ${XDG_CONFIG_HOME}/opencode/skills dir makes install --harness claude exit 1 (opencode installRoot exists but is not ai-catapult-owned; reviewer repro re-confirmed locally: unrelated skill + install → exit 1 on opencode missing-contract-dir)",
+      "budget": "findings 2 and 3 consumed their 2 rounds; per the standing ≤2-rounds/defect constraint the review loop stops unresolved — no round 3, no merge from this runner"
+    }
+  },
+  "provenance": {
+    "worktree": "/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/opencode/ach-c02-wt (worktree only; local ai-catapult/ checkout untouched)",
+    "catapult_base": "origin/main 2b63eb4ca3eef6ef9ecb5b47cbfbb616ea9a9ca1",
+    "skills_pin_target": "28f813bf9fd767960b96e9d54857964de8181a53",
+    "skills_pin_old": "26d25105b028903ea1b34aebe9fbf4595b550051",
+    "o8_accepted_release": "f5e338b92bb754c2bfffdf542b498530258fdbc0 (verified ancestor among the batch)",
+    "skills_sha_required_in_pr_body": "28f813bf9fd767960b96e9d54857964de8181a53",
+    "regen_canonical_inputs": {
+      "repo_id": "example-repo",
+      "date": "2026-01-01",
+      "upstream_url": "https://github.com/example-org/example-repo.git",
+      "upstream_ref": "main"
+    },
+    "dist_snapshot_note": "dist/ and dist-snapshot/ are gitignored generated artifacts regenerated by scripts/prepare-dist.sh against the bumped vendor (northstar SKILL.md 5373 -> 5688 bytes verified post-refresh); they are machine-local bootstrap outputs, rebuilt fresh by CI, and are not PR files."
+  },
+  "inventory": {
+    "registered_scope_files": [
+      "skills.lock.json",
+      "src/install.js",
+      "src/contract-drift.js",
+      "test/contract-drift.test.js",
+      "test/readiness-delivery.test.js",
+      ".ai/ci/local-ci.json",
+      ".ai/evidence/ACH-C-02.json",
+      "test/fixtures/init-standalone/.ai/policies/readiness-policy.json"
+    ],
+    "amendment_fixture_paths": [
+      "test/fixtures/init-standalone/.ai/knowledge/registry.json",
+      "test/fixtures/init-standalone/.ai/knowledge/entries/.gitkeep",
+      "test/fixtures/init-standalone/.ai/workflows/repo-workflow.json"
+    ],
+    "unique_file_count": 11,
+    "out_of_scope_files_touched": [],
+    "excluded_files_untouched": [
+      "scripts/regen-fixture.sh",
+      "src/scaffold.js",
+      "test/init.test.js",
+      "test/packed-init.test.js",
+      "src/knowledge.js",
+      "bin/ai-catapult.js",
+      "test/knowledge-contract.test.js"
+    ]
+  },
+  "limits": [
+    "Local RED/GREEN and the full npm test are not hosted CI, exact merge admission, installed-lane evidence or live authority.",
+    "The sanitized-HOME execution of the verification suite is disclosed above; it re-produces the fresh-CI environment class and is not a weakening of AC-8, which is additionally proven live on the real machine by the disclosure run.",
+    "The loaded-cache lag on this machine is the state AC[4] declares expected; the post-merge report-only lane records it without assuming a current installed version.",
+    "The pre-bump lock bytes are not readable from the depth-1 vendored db; the 40-count pre-bump value is byte-proven from the full skills-repo history receipt instead.",
+    "The packed pinned-bytes test asserts the real tarball shape (dist/<harness>-plugin flat payloads); the earlier invented top-level skills/ shape was corrected inside this goal's own in-scope test file before first green and is disclosed here.",
+    "No commit, push, tag, merge, release, readiness context or provider change is performed by this evidence."
+  ],
+  "round_3": {
+    "triggered_by": "SOLE COORDINATOR — C-02 round-3 grant + condition-4 interpretation (.omc/handoffs/ach-20261004/PARALLEL-LANES.md), read verbatim before any round-3 work",
+    "round_scope": [
+      "finding 2 (review round 2, unresolved): surface-pin-parity extended to EVERY registration dir, with an honest red-first bypass leg and the 2ede4ce safePath()-before-resolution convention as parity authority",
+      "OpenCode shared-root ownership major (review round 2, new): minimal fix after determining where the correct fix lives; outside-scope would STOP unimplemented for re-slicing"
+    ],
+    "breaker": "coordinator: round 3 is FINAL for these two defects; if finding 2 fails review again → terminal STOP, no round 4, full attempt history escalated",
+    "condition_4_interpretation": {
+      "status": "accepted (coordinator decision, no further referral)",
+      "text": "admit-v2 exit 0 / gaps [] at f68c28c, a5de872 and 1e33769 proves the contract tooling ACCEPTED the amended scope — condition (2) is satisfied by the already-recorded coordinator-decision receipt; no amendment primitive was required and none is owed",
+      "consequence": "the round-2 PR-body referral no longer blocks; PR body updated accordingly at closeout"
+    },
+    "p4_02_midflight": {
+      "event": "XSKP-P4-02 (PR #56) merged on catapult origin/main mid-flight as squash 5de9a31176b9b310dbb6cc5aa7a2e7c8137e992f",
+      "files": [
+        ".ai/evidence/XSKP-P4-02.json",
+        "bin/ai-catapult.js",
+        "src/knowledge.js",
+        "test/knowledge-conformance.test.js"
+      ],
+      "overlap_check": "zero overlap with this goal's 11 registered files AND zero overlap with the 24 local-ci/2 declared sources; skills.lock.json untouched by P4-02, so the local-ci rebind stays valid at 5de9a311",
+      "action": "git fetch; branch REBASED onto 5de9a311 (3 commits replayed cleanly, no conflicts); pre-round-3 head 191a7b2 (rebased); round-3 legs d09b027 (red) → f984239 (green)",
+      "suite_arithmetic": "goal's 273 (256 baseline + 12 AC-8 + 5 review-round incl. v2 packaged lane and amended fixture delta) + 14 knowledge-conformance tests riding the rebase (P4-02) + 3 round-3 tests = 290"
+    },
+    "finding_2": {
+      "red_leg": {
+        "commit": "d09b027 (test-only, committed BEFORE the fix)",
+        "tests": [
+          "stale-but-self-consistent bytes in a later registration KEY fail cross-surface pin parity",
+          "stale-but-self-consistent bytes in a later array RECORD fail cross-surface pin parity"
+        ],
+        "reproduction": "makeSelfConsistent() rewrites all four manifest copies of the later payload to match its current (mutated) bytes: in-surface hashing passes, later registrations were invisible to parity — both variants exit 0/ok under the round-2 code",
+        "run": "node --test test/contract-drift.test.js at d09b027: 15 pass / 3 fail / 18 tests, exit 1 (round3-red-leg.log, round3-red-leg-summary.txt)"
+      },
+      "fix_commit": "f984239",
+      "design": [
+        "loaded-cache record carries registrationDirs = every deduplicated registered payload dir's skills/autobahn (first + all later); the first registration keeps autobahnDir for packaged-context anchoring",
+        "parity loop walks record.registrationDirs ?? [record.autobahnDir]; only the anchor's OWN dir is skipped (it is the comparison base); a later registration of the anchor record itself still compares against the anchor dir",
+        "pre-existing first-registration coverage is preserved (registrationDirs includes it) so new registrations and every pre-existing registration dir are covered identically",
+        "unsafeRegistrationPathReason(): component-wise trust check BEFORE resolution, mirroring the 2ede4ce (XSKP-P4-02, src/knowledge.js) safePath()/unsafeReason() convention — '\\0'/empty → 'missing'; '.', '..', or empty components (absolute, ~/ and HOME-relative forms alike) → 'traversal'; unresolved registrations fail closed as unreadable-installed-plugins findings",
+        "invalidKeys now carry {key, reason}; missing/empty/\u0000 keep actual 'missing-or-invalid-installPath' (round-1 regression expectation unchanged); traversal reports 'unsafe-installPath (traversal)'"
+      ],
+      "convention_note": "knowledge.js's symlink-chain + realpath containment rules are NOT transferred to machine-local registration install roots: those are manager-declared external locations, and parity compares CONTENT against the vendored pin, so a redirected read fails parity rather than passing — disclosed, not hidden",
+      "green_leg": {
+        "commit": "f984239",
+        "contract_drift_suite": "18/18 pass",
+        "full_suite": "290/290 pass, exit 0, sanitized env (round3-green-full-suite.log)",
+        "git_diff_check": "exit 0"
+      }
+    },
+    "opencode_ownership": {
+      "scope_determination": "the absence/ownership semantics of the six surfaces live in src/contract-drift.js — this goal's registered file; the reviewer's finding cites exactly those semantics, so the correct fix home is INSIDE the C-02 coordinator-amended scope. The alternatives the coordinator named (skills repo, harness fixtures, another goal's files) are not where this rule lives; no sibling repo touched, scope not expanded",
+      "red_leg": {
+        "test": "unrelated OpenCode skills do not make the opencode surface a false-positive drift",
+        "at": "d09b027",
+        "before_fix": "shared xdgConfig/opencode/skills root with an unrelated skill only → status drift (missing-contract-dir) → install --harness claude exit 1; module-level red mirrors the reviewer's repro shape (the CLI path is install.js consuming this same sweep)"
+      },
+      "fix": "opencode spec marked sharedRoot: true; ownership evidence = existsSync(autobahnDir) || existsSync(northstarDir) instead of installRoot existence; path-scoped surfaces (vendor/dist/marketplace/codex cache) keep the installRoot existence rule (their roots are ai-catapult-owned by construction)",
+      "semantics": "an ai-catapult payload partially installed on the shared surface still drifts (missing-peer-dir / hash / parity); unrelated-only roots report absent; AC-8's non-zero-on-drift guarantee unchanged",
+      "green_leg": "18/18 within the contract-drift suite at f984239"
+    },
+    "tests": {
+      "command": "npm test",
+      "tests": 290,
+      "passed": 290,
+      "failed": 0,
+      "environment": "sanitized temp HOME/CODEX_HOME/XDG_CONFIG_HOME (disclosure in verification.npm_test); the pre-review green runs at head f68c28c (268/268) are receipts in verification.npm_test",
+      "environment_command": "SAN=$(mktemp -d /tmp/ach-c02-sanitized.XXXXXX) && env HOME=\"$SAN/home\" CODEX_HOME=\"$SAN/codex\" XDG_CONFIG_HOME=\"$SAN/xdg\" PYTHONDONTWRITEBYTECODE=1 npm test — cwd: the goal worktree; the scratch dir is removed after the run",
+      "receipt": ".omc/plans/receipts-c02-20261010/round3-green-full-suite.log"
+    },
+    "review": {
+      "status": "terminal stop executed",
+      "verdict": "REQUEST_CHANGES",
+      "artifact": ".omc/artifacts/ask/codex-independent-review-round-3-r3dlex-ai-catapult-pr-57-goal-ach-2026-10-10T05-17-36-193Z.md",
+      "prompt": ".omc/plans/receipts-c02-20261010/review-prompt-round3.md",
+      "reviewer": "omc ask codex (fresh independent review at exact head 2e78e31)",
+      "answered": {
+        "opencode_ownership": "RESOLVED (independent northstar-only partial-install probe exit 1 with structured finding)",
+        "safepath_convention": "RESOLVED (component validation precedes resolution; {key,reason} shape; missing/empty/NUL and traversal probes all exit 1 unreadable-installed-plugins; disclosure judged sound with the conditional note that byte-identical redirected content passes content parity by authority, differing bytes fail)",
+        "condition_4_recording": "RESOLVED (receipt, PR body and evidence agree with the coordinator's granted entry)",
+        "finding_2": "NOT RESOLVED again"
+      },
+      "finding_2_residual": {
+        "defect": "parity block gated on `present.length > 1` (src/contract-drift.js:426, reviewed head): when the loaded cache is the ONLY present surface (no vendor/dist/marketplace/codex/opencode), cross-registration parity is skipped entirely — later key/record payloads with stale-but-self-consistent bytes exit 0/ok with no findings and no refresh hints",
+        "reviewer_repro": "reviewer-authored test/independent-round3.test.js run in their disposable copy against the reviewed head: both later-key and later-array-record variants returned ok:true / exitCode 0 (expected-drift assertions failed); d09b027's red tests do not cover the sole-present case",
+        "reviewer_classification": "an incomplete closure of finding 2, rather than a separate new defect"
+      },
+      "breaker_execution": {
+        "rule": "coordinator granted entry: 'Breaker: round 3 is FINAL for these two defects. If finding 2 fails review again → terminal STOP, no round 4, report the full attempt history for human escalation.'",
+        "applied": "finding 2 failed review in round 3 → TERMINAL STOP: no round 4, no fix attempt on the residual, no merge; full attempt history reported to the coordinator for human escalation"
+      },
+      "merge": "NOT performed; PR #57 stays OPEN at 2e78e31 marked DO-NOT-MERGE",
+      "verified_by_reviewer": "rebase clean (range-diff maps all three prior commits unchanged; P4-02 files byte-identical to origin/main); scope matches registered inventory; 290/290 sanitized, zero skips; hosted checks 8/8 SUCCESS at exact head; AC-8 semantics unchanged (one post-install sweep, dry-run skip, non-zero propagation)"
+    },
+    "out_of_scope_note": "pre-existing test/finish-prompt.test.js:390 real-home collision stays untouched (disclosed in round 1); sanitized runs are unaffected"
+  },
+  "round_4": {
+    "triggered_by": "SOLE COORDINATOR — C-02 ROUND 4 GRANTED BY HUMAN ACKNOWLEDGEMENT per breaker protocol (.omc/handoffs/ach-20261004/PARALLEL-LANES.md 2026-10-10T05:39Z entry, read verbatim before any round-4 work); the round-3 terminal stop was resolved by the user explicitly authorizing a fourth attempt",
+    "round_scope": "ONLY the round-3 reviewer-identified residual: the parity trigger gate at src/contract-drift.js:426 (`present.length > 1`) skipped the parity block when the loaded cache was the ONLY present surface; parity must fire whenever parity-relevant surfaces exist including the sole-present case (reviewer's two stale-self-consistent probe variants must exit nonzero). Everything else frozen; any NEW reviewer findings are recorded for escalation, not fixed (budget covers the residual only)",
+    "breaker": "if the residual fails review again -> TERMINAL, no round 5, re-slice decision returns to the coordinator/user",
+    "red_leg": {
+      "commit": "6dd3c41 (test-only, committed BEFORE the fix, at round-3-terminal head lineage 98bd804)",
+      "tests": [
+        "contract drift: sole-present loaded cache — stale-self-consistent bytes in a later registration KEY fail cross-registration parity",
+        "contract drift: sole-present loaded cache — stale-self-consistent bytes in a later array RECORD fail cross-registration parity"
+      ],
+      "premise_guard": "each test asserts every non-loaded-cache surface status === 'absent' before asserting the drift, so the bypass premise cannot degrade silently",
+      "reproduction": "loaded cache as ONLY present surface (installed_plugins.json registered, payloads outside plugin dirs; no vendorRoot/distRoot/marketplace/codex/opencode); first registration fresh, later key/record stale-self-consistent via makeSelfConsistent() — under the round-3 code both variants exited 0/ok with no findings (the round-3 reviewer probe, re-verified by the runner)",
+      "run": "node --test test/contract-drift.test.js at 6dd3c41: 18 pass / 2 fail / 20 tests, exit 1 (round4-red-leg.log, round4-red-leg-summary.txt)"
+    },
+    "fix": {
+      "commit": "b0e7c57",
+      "change": "src/contract-drift.js:426 parity gate `anchor?.autobahnDir && present.length > 1` -> `anchor?.autobahnDir` (one line + comment): the parity walk runs whenever an anchor exists; the dir-level skip (record === anchor && dir === record.autobahnDir) already prevents the anchor comparing to itself, so in the sole-present case a lone loaded-cache record's later registrations compare against its own first (anchor-carrying) dir — matching the reviewer's suggested fix shape (the record's first dir acts as the intra-record comparison base; no vendor anchor needed)",
+      "no_other_change": "no other file, no refactor, no scope growth; the whole round-4 diff is one gate line + its comment + the two red tests (+ evidence)"
+    },
+    "green_leg": {
+      "commit": "b0e7c57",
+      "contract_drift_suite": "20/20 pass",
+      "full_suite": "292/292 pass, exit 0, sanitized env (round4-green-full-suite.log; = 290 floor + 2 round-4 tests)",
+      "git_diff_check": "exit 0"
+    },
+    "rebase_note": "catapult origin/main unchanged at 5de9a311 during round 4 (XSKP-P4-03 PR not merged at round-4 start); branch base already current main — no rebase required",
+    "review": {
+      "status": "pending — fresh omc ask codex review at the exact round-4 head after push + hosted checks"
+    }
+  },
+  "leg_history": {
+    "red": [
+      {
+        "id": "red1",
+        "command": "node --test test/contract-drift.test.js",
+        "exit_code": 1,
+        "reason": "src/contract-drift.js did not exist: ERR_MODULE_NOT_FOUND (recorded at the pre-bump lock baseline 26d25105).",
+        "log": ".omc/plans/receipts-c02-20261010/red1-contract-drift-26d25105.log (outside the worktree, workspace-repo receipts)"
+      },
+      {
+        "id": "red2",
+        "command": "node --test test/readiness-delivery.test.js",
+        "exit_code": 1,
+        "reason": "At the pre-bump lock the vendored autobahn tree carries no readiness-dependency-v2.json: ENOENT on vendor/skills/04-validate-handoff/autobahn/readiness-dependency-v2.json (2 of the suite's then-tests passed; the appended v2 packaged-lane test failed).",
+        "log": ".omc/plans/receipts-c02-20261010/red2-readiness-delivery-26d25105.log"
+      },
+      {
+        "id": "red3a",
+        "command": "node --test test/readiness-delivery.test.js",
+        "exit_code": 1,
+        "reason": "F1 amended fixture-delta test red pre-binding at the target pin: none of the four amended fixture paths existed (.ai/policies/readiness-policy.json ENOENT among them) and the 42-count assertions could not pass. Exactly one failing test (3 pass / 1 fail) after the harness's own reference-equality bugs were corrected.",
+        "log": ".omc/plans/receipts-c02-20261010/red3a-fixture-delta-missing.log"
+      },
+      {
+        "id": "red3b",
+        "command": "node --test test/readiness-delivery.test.js",
+        "exit_code": 1,
+        "reason": "Vendored-lane red at the pre-bump pin: skills.lock.json temporarily flipped to 26d25105 (uncommitted, disclosed, restored byte-exactly — sha256 96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb re-verified) so the same command runs against the before-the-change state; it failed 0 pass / 4 fail (sentinel vendor-HEAD mismatch, build/pack lanes, pinned-bytes loop, F1 test) — i.e. the old pin combined with the re-vendored (newer) bytes fails lock/vendor consistency, not a 40!==42 boundary assertion; the boundary-count comparison never ran in this leg. Disclosure: a suite leg asserting mechanical_count == 40 at the old pin cannot exist on this machine — the vendored db is depth-1, so the pre-bump boundary-manifest blob is unresolvable from vendor (the pre-bump pin never shipped that object). The mechanical_count 40 (paths 50) pre-bump value is byte-proven from the full skills-repo history instead (mechanical-count-40-vs-42.log): 26d25105 -> 40, 28f813bf -> 42.",
+        "log": ".omc/plans/receipts-c02-20261010/red3b-prebump-lock-flip.log"
+      },
+      {
+        "id": "red4",
+        "command": "node --test test/contract-drift.test.js",
+        "exit_code": 1,
+        "tests": 15,
+        "passed": 10,
+        "failed": 5,
+        "reason": "Review-round red at head f68c28c: five new tests, one per hole the independent reviewer (omc ask codex round 1) reproduced — an installed marketplace payload with deleted skills/autobahn silently skipped as 'absent' with exit 0, the same hole on a dist payload, a later registered loaded-cache array record never inspected, a later ai-catapult@* registration key never inspected, and an unreadable (EISDIR) pinned file throwing instead of producing a structured finding. The ten pre-existing tests stayed green.",
+        "log": ".omc/plans/receipts-c02-20261010/red4-review-round-contract-drift.log"
+      }
+    ],
+    "green": [
+      {
+        "id": "green1",
+        "command": "node --test test/contract-drift.test.js",
+        "exit_code": 0,
+        "tests": 10,
+        "passed": 10,
+        "failed": 0,
+        "reason": "Same command as red1: the sweep module exists and passes all ten AC-8 tests (fresh all-match ok; loaded-cache absent skip; one-byte mutation failure naming path/expected/actual for vendored, each dist harness, marketplace, loaded-cache installPath with both refresh hints, codex cache, opencode skills; northstar/ key resolution; tampered northstar v2 copy fails producer/consumer fingerprint parity).",
+        "log": ".omc/plans/receipts-c02-20261010/green1-contract-drift-module.log"
+      },
+      {
+        "id": "green3",
+        "command": "node --test test/readiness-delivery.test.js",
+        "exit_code": 0,
+        "tests": 4,
+        "passed": 4,
+        "failed": 0,
+        "reason": "Same command as red3a/red3b at the bound state: sentinel bytes, build/pack/install delivery, the v1+v2 pinned-bytes lane (including the npm pack tarball carrying dist/<harness>-plugin flat payloads byte-identical to lock) and the amended F1 fixture-delta test all pass.",
+        "log": ".omc/plans/receipts-c02-20261010/green3-fixture-delta-bound.log"
+      },
+      {
+        "id": "green4",
+        "command": "node --test test/contract-drift.test.js",
+        "exit_code": 0,
+        "tests": 15,
+        "passed": 15,
+        "failed": 0,
+        "reason": "Same command as red4 after the src/contract-drift.js hardening: absence keyed on per-surface installRoot (an installed payload missing its contract dirs drifts with a missing-contract-dir finding), every ai-catapult@* key and every registered installPath inspected (deduplicated by resolved payload dir), and all manifest/pinned/cross-parity read failures converted to structured 'unreadable' findings while preserving the loaded-cache refresh hints.",
+        "log": ".omc/plans/receipts-c02-20261010/green4-review-round-contract-drift.log"
+      },
+      {
+        "id": "diff-check",
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ],
+    "note": "Original per-round leg arrays (rounds 1-3 evidence, reviewer-verified at heads f68c28c/a5de872/1e33769/98bd804), renamed during round-4 merge-stage canonicalization so .ai/evidence/ACH-C-02.json satisfies the tdd-evidence.sh canonical shape the merge-certificate gate verifies (same command on both legs, red exit_code != 0, green exit_code == 0). Bytes were never rewritten — only the key names carrying them."
+  }
+}
