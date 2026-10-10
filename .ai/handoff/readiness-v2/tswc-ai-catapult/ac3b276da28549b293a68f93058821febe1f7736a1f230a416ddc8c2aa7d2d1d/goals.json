@@ -1,0 +1,157 @@
+{
+  "attachments": {
+    "consensus_plan": "aitool-root .omc/plans/ralplan-tswc-ai-catapult.md (local, gitignored, non-authoritative; its goal objects are restated verbatim here)",
+    "cross_lane": "B2 (skills lane plan tswc-skills) <- B1 layout vocabulary; B5 <- A-gates across lanes (A2 here + skills-lane A4). Plan-level prose records: handoff-goals/2 keeps cross-lane records at bundle level; never cross-repo bundle dependencies. Carried from the retired v1 goal objects \u2014 tswc-ac-b1: \"B2 (skills lane, plan tswc-skills) consumes this goal's evolve/ layout vocabulary: the three role skills (evolution-rollout, wiki-maintainer, skill-proposer) in r3dlex/skills speak raw//wiki//proposals/ + PURPOSE.md as defined here (master \u00a76-B2, mega W2 edge B2<-B1). Prose cross-lane record only; no cross-repo bundle dependency is minted.\" \u2014 tswc-ac-b5: \"B5 <- A-gates across lanes: consumes the gate stack from this lane's A2 (strict tsc, eslint complexity 10, sonarjs cognitive 15) and from the skills-lane A4 (ruff C901 10, xenon, shellcheck -S error, shfmt -d, mypy strict over proposed skill scripts) \u2014 A4 is deliverable of plan tswc-skills. Prose cross-lane record only; no cross-repo bundle dependency is minted.\"",
+    "d1_gate": "Mega-plan \u00a70.6 / PARALLEL-LANES \u00a71.2: every goal in this plan is pre-D1 blocked (certify byte-clean: vendor/ and dist* isolation); autobahn dispatch opens only after the D1 gate-isolation plan merges (=O8).",
+    "harness_scope": "Master \u00a73e: payloads cover native Claude Code, Codex and OpenCode CLI v2 plugins (payload merges + commands/skills, never the v2 plugin array); supported harnesses include OMC, OMX, OpenCode CLI v2, omo-ai (standalone CLI only \u2014 the oh-my-openagent adapter stays retired/quarantined), auggie, copilot, gemini/antigravity.",
+    "interview_record": "aitool-root .omc/specs/deep-interview-tswc-ai-catapult.md (local, gitignored, non-authoritative; agent-run confirmations of master \u00a78 + agent-run adversarial pass)",
+    "master_intake": "aitool-root .ai/work-intake/typescript-wikiskill-convergence.md sha256 5f54c26aa8017844b1ddf457a038d03411071a2c10aad891ce42b0ea19f2ed38 (byte-level pin; root-workspace work-intake file, tracked at the aitool root)",
+    "megaplan": "aitool-root .omc/plans/ralplan-mega-consolidation.md sha256 1bfd161533dfa8f0610737f65bc4329c476cdfb8accbccf33af38b50512a020f (local, gitignored, non-authoritative coordination record) + .omc/handoffs/ach-20261004/PARALLEL-LANES.md",
+    "paper_boundary": "WikiSkill (arXiv:2608.27454v1) supplies the workspace/loop/Eq. 4 architecture only; no threshold is cited to it (master \u00a73a). OKF v0.3 is advisory-only (master \u00a73b).",
+    "plan_amendments": "2026-10-10 rebuild (lane A2-R): this readiness-contract/2 generation supersedes v1 generation 676cafbc423bb3993ab6b847109923a2e871c92ca8c93650f04043af4ee67112; b1/b3/b4/b5 carry v1 content verbatim and tswc-ac-a2 is rebuilt (planning-only re-registration of this lane). TSF correction (2026-10-08 typescript-only-plan-alignment-20261008/FINAL-STATE.md, recounted at this registration's head after independent review round 1): v1 AC-1's count of ~39 first-party .js files is corrected to the verified 49 .js (12 non-test under bin/, src/, scripts/ plus 37 tests under test/, including this registration's pin test) at this registration's head \u2014 48 at the decision-time base (12 non-test plus 36 tests) \u2014 and the wave extends to all 17 tracked .sh (setup.sh plus the 14 scripts/*.sh converted and removed; the two test/fixtures/init-standalone/graph-automation/{graph-refresh,hook-body}.sh are the committed golden emitted tree of the ai-catapult init graph automation rather than handwritten repo implementation, and git hooks execute under sh, so they carry an explicit emission disposition on AC-2: kept as tracked fixture data with no conversion, attributed to the reviewed TypeScript generator), so v1's shellcheck/shfmt gates on owned .sh retire with the removal; the converted tree keeps no handwritten JS/shell/Python tail (TSF-01/TSF-03 \u2014 the tracked, runnable Python delivery harness test/fixtures/readiness-delivery.py converts under AC-1) and tsc-generated JS under dist/ is the shipped runtime (TSF-02); tswc-ac-a2's scope adds setup.sh accordingly, and its full TSF-01..08 local mapping is carried on AC-8 (per TSF-08) with TSF-04's recording home for each removed .js/.sh/.py path at AC-4. Rename-first ordering is normative: the tswc-ac-a2 rename wave is the merge base for this plan's tswc-ac-b1/b3/b4/b5, its lane's C-03/C-04 gates and the external XSKP P4-03..05 gates, which rebase onto A2 and ship in TS on the converted tree (mega-plan \u00a72.5, W1). Re-registration provenance: draft generation 01369bfd876b44fbfb992fe0c4b9585ef22da730ad26106b7b39c4ed667040d3 was first registered in this same planning PR, was refused by independent review round 1 (B1: its registered tree counts were false at head; B2: its TSF-03 arm wrongly declared no project-owned Python) and is superseded unmerged by this corrected generation, which is the only live tswc-ai-catapult registration. Source-policy disposition (retained C10.03 workspace rule, verbatim): \"A2-driven bootstrap/toolchain/output changes require explicit source-policy disposition and actual matched local-ci/2 support before final binding.\" master_intake and scoped_intake re-pin the current digest of the ai-tool root work-intake files (now tracked at the aitool root).",
+    "rename_wave": "A2 (tswc-ac-a2) lands first as the repo-wide rename wave (mega-plan \u00a72.5, W1); B3/B4/B5 and external C-03/C-04, P4-* rebase onto it and ship in TS on the converted tree.",
+    "root_pin_note": "handoff-goals/1 pins repository.root to the resolved publish root (readiness_contract.py repository()); this bundle therefore records the planning worktree path /Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ai-catapult-plan-20261004, never the primary checkout (worktree-only rule). handoff-goals/2 (in construction on skills main) drops the root field; admission for this plan must pass --root resolving to the pinned path or migrate when v2 lands.",
+    "scoped_intake": "aitool-root .ai/work-intake/tswc-ai-catapult.md sha256 f46bd0e5f2b1f1a106597fe57c1d0cfbc8c4efdc183103ad3b3860459e8631f4"
+  },
+  "goals": [
+    {
+      "acceptance_criteria": [
+        "AC-1: All first-party .js files are authored in strict TypeScript with ai-factory-grade flags and the old .js paths are removed in the same PR (TSF-01: no handwritten JS tail); the repo-wide rename wave lands as one PR and is the rename-first rebase base for the gates pinned in the plan_amendments attachment (mega-plan \u00a72.5, W1). Registration-time tracked enumeration: 49 .js at this registration's head \u2014 12 non-test under bin/, src/, scripts/ plus 37 tests under test/, including this registration's own pin test \u2014 and 48 at the decision-time base (12 non-test plus 36 tests); the counts are registration snapshots, not caps, and the wave re-enumerates tracked first-party .js at execution and converts all of them. The one tracked Python delivery harness test/fixtures/readiness-delivery.py (runnable Python, executed by test/readiness-delivery.test.js and hash-bound in .ai/ci/local-ci.json) converts in the same PR, retiring the handwritten Python tail (TSF-03) with its declared inventory entry refreshed (AC-7).",
+        "AC-2: The shell wave dispositions every tracked .sh in the same PR: all 17 tracked at this registration's head \u2014 setup.sh, the 14 scripts/*.sh, and the two graph-automation golden emitted-output fixtures test/fixtures/init-standalone/graph-automation/{graph-refresh,hook-body}.sh. The 15 implementation shells (setup.sh plus the 14 scripts/*.sh) are removed and their logic is authored in strict TypeScript (TSF-01: no handwritten shell tail); the two fixtures are not handwritten repo implementation \u2014 they are the committed golden emitted tree of the ai-catapult init graph automation, regenerated by scripts/regen-fixture.sh, asserted against the emitted tree by test/init.test.js and consumed as the standalone delivery sandbox by test/readiness-delivery.test.js, with the runtime source of truth in the vendored ai-catapult-init git-hook wrapper/hook-body templates staged into dist/skill-templates/; git hooks execute under sh, so per the retained C10.03 rule they carry an explicit emission disposition: kept as tracked fixture data with no conversion, attributed to the reviewed TypeScript generator (the TSF-02 replacement-owner shape). tsc-generated JavaScript under dist/ is the shipped runtime attributable to the reviewed TypeScript build (TSF-02), not an alternate-language implementation.",
+        "AC-3: package.json rewires to the compiled artifact (bin \u2192 dist output, files keeps dist/, prepack runs the build) with zero runtime dependencies preserved; typescript/eslint tooling is devDeps only (AGENTS.md contract, master \u00a72/\u00a74.1).",
+        "AC-4: A packaging-change ADR lands in docs/architecture/adr/ (new directory) recording the build step, the shipped compiled output, the Node/CI test-execution mechanism (.ts tests under node --test on the CI Node pin) and the preserved zero-runtime-dep contract (master \u00a74.1).",
+        "AC-5: The two complexity-34/22 hotspots (src/install.js runInstall, src/graph-hooks.js runGraphHooksInstall at a87c912) are refactored under the \u00a74.2 caps (cyclomatic 10 / cognitive 15) with behavior preserved by the existing suite.",
+        "AC-6: Gates land and pass: strict tsc --noEmit typecheck and eslint over the converted tree (complexity 10 labeled project decision, sonarjs cognitive-complexity 15 documented default, no-floating-promises error), wired as prek hooks and package.json scripts (build/typecheck); v1's shellcheck/shfmt gates on the owned .sh implementation retire with AC-2's removals (the only tracked .sh remaining are the two AC-2-dispositioned emitted-template fixtures). Per-slice red-leg proof per \u00a74.7 is recorded in .ai/evidence/tswc-ac-a2.json as negative fixtures: S1 toolchain (a seeded violation trips a gate), S2 rename (a residual old .js/.sh path reference fails typecheck/lookup), S3 packaging (the rewired package.json fails with dist/ absent), S4 local-ci (the refreshed inventory refuses drift).",
+        "AC-7: The hash-bound .ai/ci/local-ci.json source inventory is refreshed for every touched file so the declared local CI stays green; verification stays npm test per the repo's documented local verification (README); the source-policy disposition and actual matched local-ci/2 support bind before final binding per the retained C10.03 workspace rule quoted in the plan_amendments attachment.",
+        "AC-8: TSF-01..08 local mapping (typescript-only-plan-alignment-20261008/FINAL-STATE.md, per TSF-08): TSF-01 \u2192 AC-1/AC-2; TSF-02 \u2192 AC-2/AC-4; TSF-03 \u2192 AC-1 (not conforming at registration: the tracked, runnable Python delivery harness test/fixtures/readiness-delivery.py is project-owned; the wave converts it and retires the handwritten Python tail), guarded by the S1 negative fixtures; TSF-04 \u2192 AC-2/AC-3 with the recording home AC-4 (each removed .js/.sh/.py path retires in the same PR with its replacement owner recorded in the ADR); TSF-05 \u2192 the retained v1 generations and the v1 registry stay byte-unchanged immutable evidence; TSF-06 \u2192 every v1 functional criterion is preserved by AC-3..AC-7 with language as the only change; TSF-07 \u2192 the per-slice negative fixtures prove the final checks catch planted violations; TSF-08 \u2192 this mapping."
+      ],
+      "dependencies": [],
+      "id": "tswc-ac-a2",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "scope": [
+        "bin",
+        "src",
+        "scripts",
+        "setup.sh",
+        "test",
+        "package.json",
+        "tsconfig.json",
+        "eslint.config.js",
+        "prek.toml",
+        "docs/architecture/adr",
+        ".ai/ci/local-ci.json"
+      ],
+      "verification": [
+        "npm run build",
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: The evolve/ workspace layout is implemented as deterministic CLI machinery: raw/<run-id>/ write-once traces, wiki/ with append-only logs.md and skill-impact.md, proposals/ overlays, and the PURPOSE.md convention (master \u00a73a three-layer workspace, \u00a76-B1).",
+        "AC-2: The audit-entry schema (metadata, target skill, unified diff, score, Accepted/Rejected \u2014 append-only, never rolled back) and the judgment-record schema from master \u00a75.4 ({judgment_id, run_id, candidate_overlay_sha256, skill_under_test, task_set_id, task_set_version, judge_model, rubric_sha256, per_criterion_scores[], weighted_aggregate, verdict, cost_usd, recorded_at, recorder}) are delivered as versioned schemas; judgment records live under evolve/raw/<run-id>/.",
+        "AC-3: Structural tests (node --test) plus golden fixtures prove layout invariants, write-once enforcement, append-only enforcement and schema rejection of malformed records; red-leg mutation proof per \u00a74.7 in .ai/evidence/tswc-ac-b1.json.",
+        "AC-4: D_train/D_val split and frozen-D_val-per-cycle semantics (evalset version stamped on task sets; scores never compared across versions) and the held-out T_test reservation are representable in the task-set schema (master \u00a75.4)."
+      ],
+      "dependencies": [],
+      "id": "tswc-ac-b1",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "scope": [
+        "src/evolve",
+        "schemas",
+        "test",
+        "test/fixtures"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: `ai-catapult evolve --validate` implements WikiSkill Eq. 4 over recorded judgments: accept iff R(T_val,k) > R_best; early-stop iff R_best = 1.0 (weighted aggregate at rubric maximum); else revert to S_{k-1} and drop the overlay (master \u00a73a, \u00a76-B3). No threshold is cited to the paper (\u00a73a boundary).",
+        "AC-2: Seeding honors F1 (master \u00a74.9): S_0 = current catalog state and R_best = the current skill set's validation score \u2014 never a skill-disabled baseline; S_{k-1} = last accepted state; reject drops the overlay while the wiki keeps its learnings (append-only structurally, even on reject).",
+        "AC-3: Provenance is enforced (master \u00a75.4): a judgment not bound to candidate_overlay_sha256 + task_set_version + judge_model is refused with judgment_unbound; unrecorded invocations surface as attribution gaps in the audit entry.",
+        "AC-4: Spend veto (master \u00a75.5): recorded per-cycle cost_usd is summed and the gate refuses to dispatch or accept past $100/cycle with cycle_budget_exhausted; robustness prefers 3 samples + majority/mean within the ceiling.",
+        "AC-5: Unit vectors cover accept, reject, early-stop, revert, unbound-reject and budget-exhaust; a negative fixture (mutation) proves each refusal fires (\u00a74.7). TDD evidence in .ai/evidence/tswc-ac-b3.json.",
+        "AC-6: The command is deterministic CLI machinery with no runtime LLM dependency (master \u00a73d); judge calls stay out-of-band human runs (\u00a74.4)."
+      ],
+      "dependencies": [
+        "tswc-ac-b1",
+        "tswc-ac-a2"
+      ],
+      "id": "tswc-ac-b3",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "scope": [
+        "bin",
+        "src/evolve",
+        "test"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: Accept path: an accepted overlay flows as an atomic single-skill PR to the skills/ SSOT, then a skills.lock.json SHA bump, then revendor and per-host payload rebuilds (resolveBundledSkills, fail-closed) \u2014 the \u00a73c pipeline direction, never in-place skill mutation.",
+        "AC-2: Reject path: the overlay is dropped and the wiki keeps its learnings; no upstream write occurs on reject (master \u00a73c, \u00a76-B4).",
+        "AC-3: The lock bump is a runtime action of the flow, batched per mega-plan \u00a72.3; implementation-time scope excludes skills.lock.json and vendor/.",
+        "AC-4: E2E proof is a fixture run through the opencode-e2e-style harness (local fixture repo + stub upstream): the full accept flow and the reject flow both run green; red-leg fixture proves a broken handoff (e.g. mutated lock SHA) is refused (\u00a74.7). TDD evidence in .ai/evidence/tswc-ac-b4.json.",
+        "AC-5: All harness payloads stay parity-clean for the \u00a73e harness set (OMC/OMX consume claude/codex payloads; OpenCode v2 rides payload merges + commands/skills, never the v2 plugin array; omo-ai standalone only)."
+      ],
+      "dependencies": [
+        "tswc-ac-b1",
+        "tswc-ac-b3"
+      ],
+      "id": "tswc-ac-b4",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "scope": [
+        "src",
+        "scripts",
+        "test"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "AC-1: Structural/complexity pre-reject runs on proposed skill scripts before any judge invocation: a gnarly proposal costs zero judge dollars (master \u00a75.5 mechanism 1, \u00a76-B5).",
+        "AC-2: The OKF v0.3 frontmatter check (name/description present) rides as findings-only advisory output; it never blocks and never emits okf_version:\"0.3\" (master \u00a73b).",
+        "AC-3: A stub judge harness asserts zero invocations on the gnarly fixture proposal; red-leg fixture per \u00a74.7 in .ai/evidence/tswc-ac-b5.json.",
+        "AC-4: Pre-reject uses the A-gates: this lane's A2 gate stack (strict tsc, eslint complexity 10, sonarjs cognitive-complexity 15) plus the skills-lane A4 gates (ruff C901 10, xenon, shellcheck, shfmt) over proposed skill scripts \u2014 the gates are consumed, not redefined (master \u00a74.2 thresholds)."
+      ],
+      "dependencies": [
+        "tswc-ac-a2",
+        "tswc-ac-b3"
+      ],
+      "id": "tswc-ac-b5",
+      "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+      "scope": [
+        "src/evolve",
+        "test"
+      ],
+      "verification": [
+        "npm run typecheck",
+        "npm test",
+        "git diff --check"
+      ]
+    }
+  ],
+  "id": "tswc-ai-catapult",
+  "issue_ref": "issue:ai-catapult:tswc-ai-catapult",
+  "repository": {
+    "id": "ai-catapult"
+  },
+  "schema": "handoff-goals/2",
+  "spec": {
+    "path": "docs/specifications/ACTIVE/typescript-wikiskill-convergence-tswc-ai-catapult.md"
+  }
+}
