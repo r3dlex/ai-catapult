@@ -18,7 +18,7 @@
  */
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, existsSync, readFileSync, realpathSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, realpathSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -296,4 +296,108 @@ void test('packed-init: dist/skill-templates/ IS present in extracted tarball', 
     existsSync(skillTemplatesDir),
     `dist/skill-templates/ must be present in the extracted tarball\nChecked: ${skillTemplatesDir}`,
   );
+});
+
+// ---------------------------------------------------------------------------
+// ACH-C-03: packed policy bytes equal the source path; policy collision/--force
+// ---------------------------------------------------------------------------
+
+const POLICY_REL = '.ai/policies/readiness-policy.json';
+const FIXED_POLICY_ARGS = [
+  '--repo-id', 'example-repo',
+  '--date', '2026-01-01',
+  '--upstream-url', 'https://github.com/example-org/example-repo.git',
+  '--upstream-ref', 'main',
+];
+const N3_ACCEPT = ['agent-self', 'ssh-tag', 'in-session'];
+
+type SeededPolicy = {
+  schema: string;
+  identity_model: string;
+  required_checks: unknown[];
+  repository: { id: string };
+  approval: { accept: string[]; default_mode: string; anchor_sha256: string | null };
+};
+
+function assertN3(policy: SeededPolicy): void {
+  assert.equal(policy.schema, 'readiness-policy/2');
+  assert.equal(policy.identity_model, 'multi');
+  assert.equal(policy.repository.id, 'example-repo');
+  assert.equal(policy.approval.anchor_sha256, null);
+  assert.deepEqual(policy.required_checks, []);
+  assert.deepEqual(policy.approval.accept, N3_ACCEPT);
+  assert.equal(policy.approval.default_mode, 'agent');
+}
+
+function listFiles(dir: string, base: string = dir, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) listFiles(full, base, acc);
+    else acc.push(full.slice(base.length + 1));
+  }
+  return acc;
+}
+
+function writeSentinelPolicy(target: string): string {
+  const full = join(target, POLICY_REL);
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, '{"sentinel":true}\n', 'utf8');
+  return full;
+}
+
+function sourcePolicyBytes(): string {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-source-policy-'));
+  try {
+    const result = spawnSync(process.execPath, [join(root, 'bin/ai-catapult.ts'), 'init', target, ...FIXED_POLICY_ARGS], {
+      encoding: 'utf8',
+      timeout: 30_000,
+    });
+    assert.equal(result.status, 0, `source init failed\nstderr: ${result.stderr}`);
+    return readFileSync(join(target, POLICY_REL), 'utf8');
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+}
+
+void test('ACH-C-03 packed-init emits the same policy bytes as source init', () => {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-policy-'));
+  try {
+    const packed = runExtractedInit([target, ...FIXED_POLICY_ARGS]);
+    assert.equal(packed.status, 0, `packed init failed\nstdout: ${packed.stdout}\nstderr: ${packed.stderr}`);
+    const packedBytes = readFileSync(join(target, POLICY_REL), 'utf8');
+    assert.equal(packedBytes, sourcePolicyBytes(), 'packed policy bytes must equal the source path at fixed inputs');
+    assertN3(JSON.parse(packedBytes) as SeededPolicy);
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+void test('ACH-C-03 packed-init refuses a policy-only collision without --force', () => {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-policy-collision-'));
+  try {
+    const policyPath = writeSentinelPolicy(target);
+    const before = readFileSync(policyPath, 'utf8');
+    const packed = runExtractedInit([target, ...FIXED_POLICY_ARGS]);
+    assert.notEqual(packed.status, 0, 'packed policy-only collision must refuse');
+    assert.match(packed.stderr, /--force/);
+    assert.match(packed.stderr, /\.ai\/policies\/readiness-policy\.json/);
+    assert.deepEqual(listFiles(target), [POLICY_REL]);
+    assert.equal(readFileSync(policyPath, 'utf8'), before);
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+void test('ACH-C-03 packed-init --force restores the seeded policy bytes', () => {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-policy-force-'));
+  try {
+    writeSentinelPolicy(target);
+    const packed = runExtractedInit([target, ...FIXED_POLICY_ARGS, '--force']);
+    assert.equal(packed.status, 0, `packed init --force failed\nstderr: ${packed.stderr}`);
+    const emitted = readFileSync(join(target, POLICY_REL), 'utf8');
+    assert.equal(emitted, sourcePolicyBytes(), '--force must restore the same bytes the source path emits');
+    assert.ok(!emitted.includes('sentinel'));
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
 });

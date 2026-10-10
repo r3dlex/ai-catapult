@@ -15,7 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { rmSync, readFileSync, writeFileSync, existsSync, readdirSync, mkdtempSync } from 'node:fs';
+import { rmSync, readFileSync, writeFileSync, existsSync, readdirSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -353,5 +353,187 @@ void test('scaffold rejects path traversal in manifest template path', async () 
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
     rmSync(fakeTemplatesDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ACH-C-03: seeded readiness-policy/2 (N3) — semantics, validator gaps, collision
+// ---------------------------------------------------------------------------
+
+const POLICY_REL = '.ai/policies/readiness-policy.json';
+const N3_ACCEPT = ['agent-self', 'ssh-tag', 'in-session'];
+
+type SeededPolicy = {
+  schema: string;
+  identity_model: string;
+  required_checks: unknown[];
+  repository: { id: string };
+  approval: { accept: string[]; default_mode: string; anchor_sha256: string | null };
+};
+
+type AdmissionStage = { admitted: boolean; policy_codes: string[] };
+
+type ValidatorReport = {
+  accept: string[];
+  default_mode: string;
+  policy_gaps: string[];
+  stages: Record<string, AdmissionStage>;
+};
+
+// Disposable pure-validator seam. Not a live admission and not authority.
+const VALIDATOR_SCRIPT = `
+import json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+autobahn, policy_path = map(Path, sys.argv[1:3])
+assert sys.flags.isolated and sys.dont_write_bytecode, "python3 -I -B required"
+sys.path.insert(0, str(autobahn / "lib"))
+import readiness_contract_v2 as v2
+data = policy_path.read_bytes()
+policy = json.loads(data)
+v2.validate_policy(policy)
+bundle = {
+    "schema": "handoff-goals/2", "id": "seed-check", "repository": policy["repository"],
+    "spec": {"path": "spec.md"},
+    "goals": [{"id": "G1", "scope": ["src/probe.txt"],
+               "acceptance_criteria": ["Seeded policy admission gaps"],
+               "dependencies": [], "verification": ["bash tests/check.sh"]}],
+}
+sidecar = {
+    "schema": "readiness-sidecar/1", "plan_id": "seed-check",
+    "goals": {"G1": {
+        "readiness": {"preparation": "unknown", "implementation": "unknown", "merge": "unknown"},
+        "coverage_status": "unknown", "legacy_safe_tdd": True,
+        "legacy_risk_reason": "Disposable seeded-policy admission check; coverage unknown",
+    }},
+}
+digests = {
+    "bundle_sha256": v2.bundle_sha256(bundle), "spec_sha256": "0" * 64,
+    "policy_sha256": v2.sha256(data), "anchor_sha256": policy["approval"]["anchor_sha256"],
+}
+generation = v2.generation_v2(**digests)
+stages = {}
+for stage in ("planning", "preparation", "implementation", "merge"):
+    context = v2.admission({
+        "stage": stage, "goals": ["G1"], "now": datetime(2026, 10, 10, tzinfo=timezone.utc),
+        "registered": {"id": "disposable", "generation": generation},
+        "policy": policy, "policy_mode": "live", "bundle": bundle, "sidecar": sidecar,
+        "digests": digests, "carrier": None,
+        "observation": {"schema": "observation/1", "adapter": "none", "facts": {}},
+        "errors": [],
+    })
+    stages[stage] = {
+        "admitted": context["admitted"],
+        "policy_codes": [gap["code"] for gap in context["gaps"] if gap.get("source") == "policy"],
+    }
+json.dump({
+    "accept": policy["approval"]["accept"], "default_mode": policy["approval"]["default_mode"],
+    "policy_gaps": v2.policy_gaps(policy), "stages": stages,
+}, sys.stdout)
+`;
+
+function renderedPolicyTemplate(): string {
+  const raw = readFileSync(join(vendorTemplatesDir, 'dot-ai/policies/readiness-policy.json'), 'utf8');
+  return raw
+    .replaceAll('{{REPO_ID}}', FIXED_TOKENS.REPO_ID)
+    .replaceAll('{{DATE}}', FIXED_TOKENS.DATE)
+    .replaceAll('{{UPSTREAM_URL}}', FIXED_TOKENS.UPSTREAM_URL)
+    .replaceAll('{{UPSTREAM_REF}}', FIXED_TOKENS.UPSTREAM_REF);
+}
+
+function assertN3(policy: SeededPolicy): void {
+  assert.equal(policy.schema, 'readiness-policy/2');
+  assert.equal(policy.identity_model, 'multi');
+  assert.equal(policy.repository.id, FIXED_TOKENS.REPO_ID);
+  assert.equal(policy.approval.anchor_sha256, null);
+  assert.deepEqual(policy.required_checks, []);
+  assert.deepEqual(policy.approval.accept, N3_ACCEPT);
+  assert.equal(policy.approval.default_mode, 'agent');
+}
+
+function runFixedInit(target: string, extra: string[] = []) {
+  return spawnSync(process.execPath, [bin, 'init', target, ...FIXED_ARGS, ...extra], { encoding: 'utf8' });
+}
+
+function writeSentinelPolicy(target: string): string {
+  const full = join(target, POLICY_REL);
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, '{"sentinel":true}\n', 'utf8');
+  return full;
+}
+
+function validateEmittedPolicy(policyPath: string): void {
+  const autobahn = join(root, 'vendor/skills/04-validate-handoff/autobahn');
+  const result = spawnSync('python3', ['-I', '-B', '-c', VALIDATOR_SCRIPT, autobahn, policyPath], {
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, `validator failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  const report = JSON.parse(result.stdout) as ValidatorReport;
+  assert.deepEqual(report.policy_gaps, ['anchor_unset', 'required_checks_unset']);
+  assert.deepEqual(report.accept, N3_ACCEPT);
+  assert.equal(report.default_mode, 'agent');
+  for (const stage of ['planning', 'preparation', 'implementation', 'merge']) {
+    const named = report.stages[stage];
+    assert.ok(named, `admission missing stage ${stage}`);
+    assert.equal(named.admitted, false, `${stage} must stay unadmitted while placeholders are unset`);
+    assert.ok(named.policy_codes.includes('anchor_unset'), `${stage} admission must name anchor_unset`);
+    assert.ok(named.policy_codes.includes('required_checks_unset'), `${stage} admission must name required_checks_unset`);
+  }
+}
+
+void test('ACH-C-03 init emits the seeded readiness-policy from the vendored template', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-');
+  try {
+    const result = runFixedInit(tmpDir);
+    assert.equal(result.status, 0, `init failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+    const emitted = readFileSync(join(tmpDir, POLICY_REL), 'utf8');
+    const rendered = renderedPolicyTemplate();
+    const fixture = readFileSync(join(fixtureDir, POLICY_REL), 'utf8');
+    assert.equal(emitted, rendered, 'emitted policy must be the vendored template with fixed tokens');
+    assert.equal(emitted, fixture, 'emitted policy must match the C-02 fixture; do not regenerate it here');
+    assertN3(JSON.parse(emitted) as SeededPolicy);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+void test('ACH-C-03 init seeded policy admission names anchor_unset and required_checks_unset', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-gaps-');
+  try {
+    const result = runFixedInit(tmpDir);
+    assert.equal(result.status, 0, `init failed\nstderr: ${result.stderr}`);
+    validateEmittedPolicy(join(tmpDir, POLICY_REL));
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+void test('ACH-C-03 init refuses a policy-only collision without --force and writes nothing', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-collision-');
+  try {
+    const policyPath = writeSentinelPolicy(tmpDir);
+    const before = readFileSync(policyPath, 'utf8');
+    const result = runFixedInit(tmpDir);
+    assert.notEqual(result.status, 0, 'policy-only collision must refuse');
+    assert.match(result.stderr, /--force/, 'refusal must name --force');
+    assert.match(result.stderr, /\.ai\/policies\/readiness-policy\.json/, 'refusal must name the policy path');
+    assert.deepEqual(collectFiles(tmpDir), [POLICY_REL], 'collision must not emit any other file');
+    assert.equal(readFileSync(policyPath, 'utf8'), before, 'existing policy bytes must be unchanged');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+void test('ACH-C-03 init --force restores the seeded policy bytes', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-force-');
+  try {
+    writeSentinelPolicy(tmpDir);
+    const result = runFixedInit(tmpDir, ['--force']);
+    assert.equal(result.status, 0, `init --force failed\nstderr: ${result.stderr}`);
+    const emitted = readFileSync(join(tmpDir, POLICY_REL), 'utf8');
+    assert.equal(emitted, renderedPolicyTemplate(), '--force must restore the vendored template render');
+    assert.ok(!emitted.includes('sentinel'), 'sentinel policy must be overwritten');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
   }
 });
