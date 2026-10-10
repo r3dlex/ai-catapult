@@ -1,0 +1,338 @@
+/**
+ * TDD tests for Goal tswc-ac-b1 AC-1/AC-3 — evolve/ workspace layout machinery.
+ *
+ * The evolve/ workspace is the WikiSkill three-layer workspace (master intake
+ * §3a) implemented as deterministic CLI machinery:
+ *
+ *   evolve/raw/<run-id>/   write-once immutable traces (incl. judgment records)
+ *   evolve/wiki/           append-only logs.md + skill-impact.md — never rolled back
+ *   evolve/proposals/      overlay staging (single-skill proposals until accepted)
+ *   evolve/PURPOSE.md      the PURPOSE.md convention — declares the three-layer
+ *                          workspace, its role split and its invariants
+ *
+ * Red-leg mutation proof per §4.7 lives inside these tests: every invariant is
+ * paired with a negative fixture that plants a violation and asserts the
+ * deterministic machinery refuses or detects it (a mutated PURPOSE.md byte, a
+ * foreign file, a write-once overwrite, a truncating transition).
+ *
+ * All filesystem work happens in mkdtemp() dirs under os.tmpdir(); nothing in
+ * the checkout is ever written.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+import {
+  EVOLVE_DIR,
+  evolvePaths,
+  initEvolveLayout,
+  verifyEvolveLayout,
+} from '../src/evolve/layout.ts';
+import { recordTrace } from '../src/evolve/write-once.ts';
+import { appendWikiFile, assertAppendOnly } from '../src/evolve/append-only.ts';
+import { EvolveError } from '../src/evolve/errors.ts';
+import type { EvolvePaths } from '../src/evolve/layout.ts';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const fixtureLayout = JSON.parse(
+  readFileSync(join(__dirname, 'fixtures/evolve/layout.expected.json'), 'utf8'),
+) as {
+  schema: string;
+  root_dir: string;
+  files: string[];
+  dirs: string[];
+  files_must_not_exist: string[];
+  purpose_sha256: string;
+};
+
+/** Create a temp root directory for test isolation. Returns absolute path. */
+function makeTmpRoot(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  return root;
+}
+
+/** Recursively collect all files under a directory as sorted relative paths. */
+function collectFiles(dir: string, base: string = dir, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      collectFiles(fullPath, base, acc);
+    } else {
+      acc.push(relative(base, fullPath));
+    }
+  }
+  return acc;
+}
+
+/** Recursively collect all directories under a directory as sorted relative paths. */
+function collectDirs(dir: string, base: string = dir, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      acc.push(relative(base, fullPath));
+      collectDirs(fullPath, base, acc);
+    }
+  }
+  return acc;
+}
+
+function sha256(buf: Buffer): string {
+  return createHash('sha256').update(buf).digest('hex');
+}
+
+/** Hash an entire tree byte-exactly, walking files in sorted order. */
+function treeDigest(root: string): string {
+  const parts: string[] = [];
+  for (const rel of collectFiles(root)) {
+    parts.push(`${rel}:${sha256(readFileSync(join(root, rel)))}`);
+  }
+  return sha256(Buffer.from(parts.join('\n'), 'utf8'));
+}
+
+/** Init a fresh evolve/ workspace in a temp root and return its paths. */
+function initTmpLayout(prefix: string): { paths: EvolvePaths; root: string } {
+  const root = makeTmpRoot(prefix);
+  const paths = evolvePaths(root);
+  initEvolveLayout(root);
+  return { paths, root };
+}
+
+void test('evolve layout golden: init produces exactly the fixture-conforming three-layer tree', () => {
+  const { paths, root } = initTmpLayout('evolve-layout-golden-');
+  const evolveDir = paths.evolveDir;
+
+  try {
+    assert.equal(evolveDir.startsWith(root), true);
+    assert.equal(evolveDir.endsWith(EVOLVE_DIR), true);
+
+    // Exact file set (no .keep placeholders — dirs are structurally implied).
+    assert.deepEqual(collectFiles(evolveDir).sort(), fixtureLayout.files.slice().sort());
+    assert.deepEqual(collectDirs(evolveDir).sort(), fixtureLayout.dirs.slice().sort());
+
+    for (const rel of fixtureLayout.files) {
+      assert.equal(existsSync(join(evolveDir, rel)), true, `expected file: ${rel}`);
+    }
+    for (const rel of fixtureLayout.dirs) {
+      assert.equal(statSync(join(evolveDir, rel)).isDirectory(), true, `expected dir: ${rel}`);
+    }
+    for (const rel of fixtureLayout.files_must_not_exist) {
+      assert.equal(existsSync(join(evolveDir, rel)), false, `must not exist: ${rel}`);
+    }
+
+    // PURPOSE.md convention is pinned byte-level by the fixture digest.
+    assert.equal(sha256(readFileSync(paths.purposeFile)), fixtureLayout.purpose_sha256);
+
+    // The three wiki/layer files start deterministically.
+    assert.equal(readFileSync(paths.wikiLogsFile, 'utf8'), '');
+    assert.equal(readFileSync(paths.wikiSkillImpactFile, 'utf8'), '');
+
+    // Structural verification is green on a fresh workspace.
+    const verified = verifyEvolveLayout(root);
+    assert.deepEqual(verified, { ok: true, violations: [] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('evolve layout idempotency: re-init on a conforming workspace creates nothing and changes no bytes', () => {
+  const { root } = initTmpLayout('evolve-layout-idem-');
+  try {
+    const before = treeDigest(root);
+    const second = initEvolveLayout(root);
+    assert.deepEqual(second, { created: [], existed: true });
+    assert.equal(treeDigest(root), before);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('evolve layout init fails closed on a mutated PURPOSE.md instead of silently keeping it', () => {
+  const root = makeTmpRoot('evolve-layout-mutated-');
+  try {
+    const paths = evolvePaths(root);
+    mkdirSync(join(root, EVOLVE_DIR), { recursive: true });
+    writeFileSync(paths.purposeFile, '# evolve workspace — purpose\n\nTAMPERED\n', 'utf8');
+    // Red-leg mutation fixture: init must refuse to bless a tampered PURPOSE.md.
+    assert.throws(() => initEvolveLayout(root), (err: unknown) =>
+      err instanceof EvolveError && err.kind === 'layout-violation',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('evolve verify: mutated PURPOSE.md and foreign files are detected; restored tree verifies clean again', () => {
+  const { root } = initTmpLayout('evolve-layout-verify-');
+  try {
+    assert.deepEqual(verifyEvolveLayout(root), { ok: true, violations: [] });
+
+    // Mutation 1: one flipped byte in PURPOSE.md must be caught.
+    const paths = evolvePaths(root);
+    writeFileSync(paths.purposeFile, readFileSync(paths.purposeFile).toString('utf8') + 'X', 'utf8');
+    const mutated = verifyEvolveLayout(root);
+    assert.equal(mutated.ok, false);
+    assert.equal(mutated.violations.some((v) => v.path === 'PURPOSE.md'), true);
+
+    // Mutation 2: a foreign file at the workspace root must be caught.
+    writeFileSync(paths.purposeFile, 'x', 'utf8');
+    writeFileSync(join(paths.evolveDir, 'stray.txt'), 'foreign', 'utf8');
+    const foreign = verifyEvolveLayout(root);
+    assert.equal(foreign.ok, false);
+    // One violation names the mutated purpose bytes, one the stray file.
+    assert.equal(foreign.violations.some((v) => v.path === 'PURPOSE.md'), true);
+    assert.equal(foreign.violations.some((v) => v.path === 'stray.txt'), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('evolve verify: unexpected entries under wiki/ and non-run dirs under raw/ are detected', () => {
+  const { root } = initTmpLayout('evolve-layout-scan-');
+  const paths = evolvePaths(root);
+  try {
+    writeFileSync(join(paths.wikiDir, 'draft-notes.md'), 'not expected', 'utf8');
+    const wikiDrift = verifyEvolveLayout(root);
+    assert.equal(wikiDrift.ok, false);
+    assert.equal(wikiDrift.violations.some((v) => v.path === 'wiki/draft-notes.md'), true);
+
+    mkdirSync(join(paths.rawDir, 'Invalid_RunID!'), { recursive: true });
+    const rawDrift = verifyEvolveLayout(root);
+    assert.equal(rawDrift.ok, false);
+    assert.equal(
+      rawDrift.violations.some((v) => v.path === 'raw/Invalid_RunID!'),
+      true,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('evolve verify: valid run-id directories under raw/ are accepted', () => {
+  const { paths, root } = initTmpLayout('evolve-layout-runs-');
+  try {
+    mkdirSync(join(paths.rawDir, 'run-2026-10-10-alpha'), { recursive: true });
+    assert.deepEqual(verifyEvolveLayout(root), { ok: true, violations: [] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('write-once: first trace write succeeds with correct content and digest; any second write is refused', () => {
+  const { paths, root } = initTmpLayout('evolve-write-once-');
+  try {
+    const written = recordTrace(paths, 'run-2026-10-10-alpha', 'trace-turn-1.json', '{"turn":1}\n');
+    assert.equal(written.bytes, Buffer.byteLength('{"turn":1}\n'));
+    assert.equal(written.sha256, sha256(readFileSync(written.path)));
+    assert.ok(written.path.endsWith('evolve/raw/run-2026-10-10-alpha/trace-turn-1.json'));
+
+    // Red-leg mutation fixture: an overwrite with IDENTICAL bytes is still refused —
+    // write-once means first write wins, unconditionally.
+    assert.throws(() => recordTrace(paths, 'run-2026-10-10-alpha', 'trace-turn-1.json', '{"turn":1}\n'), (err: unknown) =>
+      err instanceof EvolveError && err.kind === 'write-once-violation',
+    );
+    // Overwrite with different bytes is refused as well.
+    assert.throws(() => recordTrace(paths, 'run-2026-10-10-alpha', 'trace-turn-1.json', '{"turn":2}\n'));
+
+    // The file on disk is untouched by the refused writes.
+    assert.equal(readFileSync(written.path, 'utf8'), '{"turn":1}\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('write-once: unsafe run ids and trace names are refused before any file lands', () => {
+  const { paths, root } = initTmpLayout('evolve-unsafe-');
+  const unsafeRunIds: string[] = ['Run-2026', 'run/2026', 'run..2026/../x', '', 'run with spaces', 'run\u0000id'];
+  const unsafeNames: string[] = ['../escape.json', 'sub/turn.json', '', '.hidden', '\u0000x'];
+  try {
+    for (const runId of unsafeRunIds) {
+      assert.throws(
+        () => recordTrace(paths, runId, 'trace.json', '{}'),
+        (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        `run id "${runId}" must be refused`,
+      );
+    }
+    for (const name of unsafeNames) {
+      assert.throws(
+        () => recordTrace(paths, 'run-2026-10-10-alpha', name, '{}'),
+        (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        `trace name "${name}" must be refused`,
+      );
+    }
+    // Nothing was written anywhere.
+    assert.deepEqual(collectFiles(paths.rawDir), []);
+    assert.deepEqual(collectDirs(paths.rawDir), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('append-only: prefix-extension transitions pass; truncation, rewrite and non-extension are refused', () => {
+  const before = 'line-1\nline-2\n';
+
+  assertAppendOnly(before, before); // no-op append (empty entry) is allowed
+  assertAppendOnly(before, before + 'line-3\n'); // pure extension is allowed
+  assertAppendOnly('', 'anything\n'); // extension from an empty wiki file is allowed
+  // Byte-level semantics: any tail — including multi-byte UTF-8 characters —
+  // is a pure extension and must be accepted.
+  assertAppendOnly(before, before + '✅ appended learning\n');
+
+  assert.throws(() => assertAppendOnly(before, 'line-1\n'), (err: unknown) =>
+    err instanceof EvolveError && err.kind === 'append-only-violation',
+  );
+  assert.throws(() => assertAppendOnly(before, 'line-1 edited\nline-2\n'), (err: unknown) =>
+    err instanceof EvolveError && err.kind === 'append-only-violation',
+  );
+  assert.throws(() => assertAppendOnly(before, 'line-2\n'), (err: unknown) =>
+    err instanceof EvolveError && err.kind === 'append-only-violation',
+  );
+  // Prepending rewrites bytes too.
+  assert.throws(() => assertAppendOnly(before, 'line-0\n' + before), (err: unknown) =>
+    err instanceof EvolveError && err.kind === 'append-only-violation',
+  );
+});
+
+void test('append-only machinery: wiki entries append byte-exactly and the workspace stays verifiable', () => {
+  const { paths, root } = initTmpLayout('evolve-append-');
+  try {
+    appendWikiFile(paths, 'logs.md', 'entry-one\n');
+    appendWikiFile(paths, 'skill-impact.md', 'impact: +2 skills touched\n');
+
+    assert.equal(readFileSync(paths.wikiLogsFile, 'utf8'), 'entry-one\n');
+    assert.equal(readFileSync(paths.wikiSkillImpactFile, 'utf8'), 'impact: +2 skills touched\n');
+
+    appendWikiFile(paths, 'logs.md', 'entry-two\n');
+    // log history is preserved in order (append, never rewrite)
+    assert.equal(readFileSync(paths.wikiLogsFile, 'utf8'), 'entry-one\nentry-two\n');
+    assert.deepEqual(verifyEvolveLayout(root), { ok: true, violations: [] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('append-only machinery refuses to append to a missing wiki file instead of creating it', () => {
+  const root = makeTmpRoot('evolve-append-missing-');
+  const paths = evolvePaths(root);
+  try {
+    mkdirSync(join(root, EVOLVE_DIR), { recursive: true });
+    assert.throws(() => appendWikiFile(paths, 'logs.md', 'x\n'), (err: unknown) =>
+      err instanceof EvolveError && err.kind === 'layout-violation',
+    );
+    assert.equal(existsSync(paths.wikiLogsFile), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

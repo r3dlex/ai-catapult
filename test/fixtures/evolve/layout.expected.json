@@ -1,0 +1,8 @@
+{
+  "schema": "evolve-layout-golden/1",
+  "root_dir": "evolve",
+  "files": ["PURPOSE.md", "wiki/logs.md", "wiki/skill-impact.md"],
+  "dirs": ["raw", "wiki", "proposals"],
+  "files_must_not_exist": ["raw/.keep", "proposals/.keep"],
+  "purpose_sha256": "PLACEHOLDER-FILLED-AT-GREEN-COMMIT"
+}

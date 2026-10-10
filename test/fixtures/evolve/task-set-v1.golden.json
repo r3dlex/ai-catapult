@@ -1,0 +1,8 @@
+{
+  "task_set_id": "ts-evolution-rollout-cycle-1",
+  "evalset_version": 1,
+  "skill_under_test": "evolution-rollout",
+  "d_train": ["case-train-1", "case-train-2"],
+  "d_val": ["case-val-1", "case-val-2", "case-val-3"],
+  "t_test": ["case-hold-1"]
+}
