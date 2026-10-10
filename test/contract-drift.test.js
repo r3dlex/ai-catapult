@@ -520,6 +520,109 @@ test('contract drift: stale-but-self-consistent bytes in a later array RECORD fa
   }
 });
 
+test('contract drift: sole-present loaded cache — stale-self-consistent bytes in a later registration KEY fail cross-registration parity', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-solekey-parity-'));
+  try {
+    // Sole-present premise: the loaded cache is the ONLY present surface (no
+    // vendor checkout, no dist root, no marketplace, no codex cache, no
+    // opencode skills). Only ~/.claude/plugins/installed_plugins.json exists,
+    // registering payloads that live OUTSIDE its plugin dirs.
+    const home = join(base, 'home');
+    const loadedCache = join(base, 'loaded-cache-payload');
+    const second = join(base, 'loaded-cache-payload-laterkey');
+    copyPayloadLayout(loadedCache);
+    copyPayloadLayout(second);
+    mutate(join(second, 'skills', 'autobahn', PROBE_FILE));
+    makeSelfConsistent(second);
+    const env = {
+      HOME: home,
+      CODEX_HOME: join(home, '.codex'),
+      XDG_CONFIG_HOME: join(home, '.config'),
+    };
+    const plugins = join(home, '.claude/plugins');
+    mkdirSync(plugins, { recursive: true });
+    writeFileSync(
+      join(plugins, 'installed_plugins.json'),
+      JSON.stringify({
+        version: 2,
+        plugins: {
+          'ai-catapult@ai-catapult': [
+            { scope: 'user', installPath: loadedCache, version: '0.4.3', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' },
+          ],
+          'ai-catapult@other-marketplace': [
+            { scope: 'user', installPath: second, version: '0.4.3', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' },
+          ],
+        },
+      }),
+    );
+    const result = sweepContractDrift({ env });
+    // Premise guard: every non-loaded-cache surface must be absent here.
+    assert.deepEqual(
+      result.surfaces.filter((s) => s.label !== 'loaded cache' && s.status !== 'absent'),
+      [],
+      `premise: loaded cache must be the only present surface; got ${JSON.stringify(result.surfaces)}`,
+    );
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift', `sole-present later-key stale-self-consistent bytes must fail parity; got ${JSON.stringify(loaded)}`);
+    const finding = loaded.findings.find((f) => f.kind === 'surface-pin-parity' && f.path.startsWith(second));
+    assert.ok(finding, `a surface-pin-parity finding naming the later key's payload must be present; got ${JSON.stringify(loaded.findings)}`);
+    assert.deepEqual(loaded.refreshHints.sort(), ['claude plugin marketplace update', 'claude plugin update']);
+    assert.equal(result.ok, false);
+    assert.notEqual(result.exitCode, 0);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('contract drift: sole-present loaded cache — stale-self-consistent bytes in a later array RECORD fail cross-registration parity', () => {
+  requireVendoredV2();
+  const base = mkdtempSync(join(tmpdir(), 'contract-drift-solerec-parity-'));
+  try {
+    const home = join(base, 'home');
+    const loadedCache = join(base, 'loaded-cache-payload');
+    const second = join(base, 'loaded-cache-payload-project2');
+    copyPayloadLayout(loadedCache);
+    copyPayloadLayout(second);
+    mutate(join(second, 'skills', 'autobahn', PROBE_FILE));
+    makeSelfConsistent(second);
+    const env = {
+      HOME: home,
+      CODEX_HOME: join(home, '.codex'),
+      XDG_CONFIG_HOME: join(home, '.config'),
+    };
+    const plugins = join(home, '.claude/plugins');
+    mkdirSync(plugins, { recursive: true });
+    writeFileSync(
+      join(plugins, 'installed_plugins.json'),
+      JSON.stringify({
+        version: 2,
+        plugins: {
+          'ai-catapult@ai-catapult': [
+            { scope: 'user', installPath: loadedCache, version: '0.4.3', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' },
+            { scope: 'project', installPath: second, version: '0.4.3', installedAt: '2026-01-01T00:00:00.000Z', lastUpdated: '2026-01-01T00:00:00.000Z' },
+          ],
+        },
+      }),
+    );
+    const result = sweepContractDrift({ env });
+    assert.deepEqual(
+      result.surfaces.filter((s) => s.label !== 'loaded cache' && s.status !== 'absent'),
+      [],
+      `premise: loaded cache must be the only present surface; got ${JSON.stringify(result.surfaces)}`,
+    );
+    const loaded = result.surfaces.find((s) => s.label === 'loaded cache');
+    assert.equal(loaded.status, 'drift', `sole-present later-record stale-self-consistent bytes must fail parity; got ${JSON.stringify(loaded)}`);
+    const finding = loaded.findings.find((f) => f.kind === 'surface-pin-parity' && f.path.startsWith(second));
+    assert.ok(finding, `a surface-pin-parity finding naming the later record's payload must be present; got ${JSON.stringify(loaded.findings)}`);
+    assert.deepEqual(loaded.refreshHints.sort(), ['claude plugin marketplace update', 'claude plugin update']);
+    assert.equal(result.ok, false);
+    assert.notEqual(result.exitCode, 0);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test('contract drift: unrelated OpenCode skills do not make the opencode surface a false-positive drift', () => {
   requireVendoredV2();
   const base = mkdtempSync(join(tmpdir(), 'contract-drift-opencode-owner-'));
