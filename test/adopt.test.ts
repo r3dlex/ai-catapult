@@ -1589,9 +1589,13 @@ const LOCAL_LINKS = [
   'Query [raw](guide.md?raw=1) and image ![fig](guide.md).',
   'Absolute [abs](/.agents/skills/researcher/guide.md) and [selfabs](/.agents/skills/researcher/REFERENCE.md#intro).',
   'Wrapped [wrap](<guide.md>) and titled [titled](guide.md "keep").',
+  'Label [guide.md](guide.md) and spaced [spaced](<guide file.md>) [spacedfrag](<guide file.md#intro>).',
+  'Paren title [paren](guide.md (keep)).',
   'Keep [web](https://example.com/guide.md) and [here](#intro).',
   '',
   '[asset]: guide.md',
+  '[guide.md]: guide.md',
+  '[spaced]: <guide file.md>',
   '[selfdef]: REFERENCE.md#intro',
   '',
 ].join('\n');
@@ -1599,6 +1603,7 @@ const LOCAL_LINKS = [
 function assertLocalLinksRebased(text: string, referenceTarget: string): void {
   const from = posix.dirname(referenceTarget);
   const guide = posix.relative(from, GUIDE);
+  const spaced = posix.relative(from, '.agents/skills/researcher/guide file.md');
   const notes = posix.relative(from, NOTES);
   const outside = posix.relative(from, '.agents/outside.md');
   const self = `${posix.relative(from, referenceTarget)}#intro`;
@@ -1612,6 +1617,13 @@ function assertLocalLinksRebased(text: string, referenceTarget: string): void {
   assert.ok(text.includes(`[asset]: ${guide}`), text);
   assert.ok(text.includes(`[wrap](<${guide}>)`), text);
   assert.ok(text.includes(`[titled](${guide} "keep")`), text);
+  assert.ok(text.includes(`[guide.md](${guide})`), text);
+  assert.ok(text.includes(`[paren](${guide} (keep))`), text);
+  assert.ok(text.includes(`[guide.md]: ${guide}`), text);
+  assert.ok(text.includes(`[spaced](<${spaced}>)`), text);
+  assert.ok(text.includes(`[spacedfrag](<${spaced}#intro>)`), text);
+  assert.ok(text.includes(`[spaced]: <${spaced}>`), text);
+  assert.equal(text.includes(`[${guide}](guide.md)`), false, text);
   assert.ok(text.includes(`[selfdef]: ${self}`), text);
   assert.ok(text.includes('[abs](/.agents/skills/researcher/guide.md)'), text);
   assert.ok(text.includes('[selfabs](/docs/learning/concept-maps/researcher.md#intro)'), text);

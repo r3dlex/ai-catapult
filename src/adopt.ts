@@ -885,17 +885,27 @@ function linkReplacement(
   return split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
 }
 
+/**
+ * Inline links and reference definitions. The `d` flag records the destination
+ * capture's own offset, so a label that repeats the destination is not rewritten.
+ * Angle-bracket destinations may contain spaces.
+ */
+const LINK_DESTINATIONS = [
+  /\[[^\]]*\]\((<[^>\r\n]+>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)\r\n]*\)))?\)/dg,
+  /^ {0,3}\[[^\]]+\]:\s*(<[^>\r\n]+>|\S+)/dgm,
+];
+
 /** Destination spans of inline links and reference definitions, rewritten by `replace`. */
 function destinationSpans(text: string, replace: (destination: string) => string | null): Span[] {
   const spans: Span[] = [];
-  for (const pattern of [/\[[^\]]*\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\)/g, /^ {0,3}\[[^\]]+\]:\s*(\S+)/gm]) {
+  for (const pattern of LINK_DESTINATIONS) {
     for (const match of text.matchAll(pattern)) {
       const destination = match[1];
-      if (destination === undefined) continue;
+      const bounds = match.indices?.[1];
+      if (destination === undefined || bounds === undefined) continue;
       const replacement = replace(destination);
       if (replacement === null) continue;
-      const start = (match.index ?? 0) + match[0].indexOf(destination);
-      spans.push({ start, end: start + destination.length, replacement });
+      spans.push({ start: bounds[0], end: bounds[1], replacement });
     }
   }
   return spans;
