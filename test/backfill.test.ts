@@ -489,6 +489,40 @@ void test('ACH-C-04 backfill: a policy/2 with different bytes refuses', () => {
   assert.equal(ledgerLines(root).at(-1)?.result, 'refused');
 });
 
+void test('ACH-C-04 backfill: a differing policy/2 planted during inventory is not overwritten', () => {
+  const root = fixtureRoot('backfill-inventory-policy-');
+  const repoId = root.split('/').at(-1) ?? '';
+  const planted = candidate(repoId).replace('"identity_model": "multi"', '"identity_model": "single"');
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => {
+      write(root, POLICY_REL, planted);
+      return ok([]);
+    },
+  });
+  assert.equal(run.code, 1);
+  assert.equal(refusalsOf(run)[0]?.code, 'policy_v2_differs');
+  assert.equal(readFileSync(join(root, POLICY_REL), 'utf8'), planted, 'a policy that appeared during inventory must not be overwritten');
+  assert.equal(reportOf(run).before_sha256, sha256(planted), 'the refusal must describe the policy that was actually there');
+  assert.equal(ledgerLines(root).at(-1)?.result, 'refused');
+});
+
+void test('ACH-C-04 backfill: the exact candidate planted during inventory is a no-op', () => {
+  const root = fixtureRoot('backfill-inventory-noop-');
+  const repoId = root.split('/').at(-1) ?? '';
+  const planted = candidate(repoId);
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => {
+      write(root, POLICY_REL, planted);
+      return ok([]);
+    },
+  });
+  assert.equal(run.code, 0, run.err);
+  assert.equal(reportOf(run).result, 'no-op');
+  assert.equal(readFileSync(join(root, POLICY_REL), 'utf8'), planted);
+});
+
 void test('ACH-C-04 backfill: a policy/2 with identical bytes is a no-op', () => {
   const root = fixtureRoot('backfill-v2-same-');
   const repoId = root.split('/').at(-1) ?? '';

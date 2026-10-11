@@ -16,14 +16,17 @@
  * consolidated report naming every active plan, writes no policy, and records
  * the refusal in the ledger.
  *
- * Fail-closed rules: a policy/2 with different bytes refuses; a symlinked root
- * or a symlinked/out-of-root write target refuses; a multiply linked target (a
- * hard link shared with a file outside the root) refuses, so no write can reach
- * through an alias; both write targets are validated before anything is
- * mutated, and a ledger that cannot be written fails the run rather than
- * claiming a success it never recorded; only the policy path and the ledger are
- * ever written, both inside `--root`; approvals, anchors and readiness contexts
- * are never written.
+ * Fail-closed rules: a policy/2 with different bytes refuses, including one that
+ * appears or changes during inventory (the bytes are re-read before the
+ * decision); a symlinked root or a symlinked/out-of-root write target refuses;
+ * a multiply linked target (a hard link shared with a file outside the root)
+ * refuses, so no write can reach through that alias; both write targets are
+ * validated before anything is mutated, and a ledger that cannot be written
+ * fails the run rather than claiming a success it never recorded; only the
+ * policy path and the ledger are written. Known-unsafe targets refuse. An
+ * ancestor-directory swap during the mutation is a deferred residual
+ * (ADR-0013): not solved, not waived, not an accepted assumption. Approvals,
+ * anchors and readiness contexts are never written.
  *
  * Readings of the ambiguous acceptance sentences, recorded for review:
  *   - "every run appends": every invocation that reaches the decision stage
@@ -90,9 +93,11 @@ contract-run.sh inventory-v1: an in-flight plan is active, completed plans are
 not, and unstarted or partly merged plans are listed as requiring migration of
 their unmerged goals. While any plan is active, or when the hosted API is
 unreachable, the command refuses with one consolidated report naming every
-active plan. A readiness-policy/2 with different bytes refuses. Nothing outside
---root is ever written, and approvals, anchors and readiness contexts are never
-touched.
+active plan. A readiness-policy/2 with different bytes refuses, including one
+that appears or changes during inventory. Known-unsafe targets refuse. An
+ancestor-directory swap during mutation is a deferred residual (ADR-0013):
+not solved, not waived, not an accepted assumption. Approvals, anchors and
+readiness contexts are never touched.
 
 Options:
   --policy-v2    Required. Write the baseline readiness-policy/2 candidate
@@ -787,12 +792,30 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
   return 0;
 }
 
+/** Re-read the policy after inventory so the decision uses the bytes that are there now. */
+function refreshPolicy(run: Run): Refusal | null {
+  const policy = readPolicy(run.realRoot);
+  if (policy.kind === 'refusal') return policy.refusal;
+  run.policy = policy;
+  if (policy.kind === 'present') {
+    run.state.repositoryId = policy.repoId ?? basename(run.realRoot);
+    run.state.before = sha256(policy.bytes);
+    return null;
+  }
+  run.state.repositoryId = basename(run.realRoot);
+  run.state.before = null;
+  return null;
+}
+
 /** Render the candidate and decide, after the inventory has cleared the write. */
 function produceDecision(run: Run): number {
   // Revalidate both write targets after the inventory ran: a target invalidated
-  // during that step refuses before any mutation.
+  // during that step refuses before any mutation. Re-read the policy too: a
+  // differing policy/2 that appears during inventory must not be overwritten.
   const recheck = containment(run.realRoot, LEDGER_REL) ?? containment(run.realRoot, POLICY_REL);
   if (recheck) return refusal(run.io, run.state, [recheck], run.parsed.dryRun);
+  const fresh = refreshPolicy(run);
+  if (fresh) return refusal(run.io, run.state, [fresh], run.parsed.dryRun);
   const candidate = renderCandidate(run.options.templatesDir, run.state.repositoryId, run.current.toISOString().slice(0, 10));
   if ('refusal' in candidate) return refusal(run.io, run.state, [candidate.refusal], run.parsed.dryRun);
   const decision = decidePolicy(run.policy, candidate.bytes);
