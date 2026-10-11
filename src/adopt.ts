@@ -946,16 +946,27 @@ function skipTitleSpace(text: string, at: number): number {
   return index;
 }
 
+function closingDelimiter(text: string, open: number, delimiter: string): number {
+  for (let index = open + 1; index < text.length; index += 1) {
+    if (text[index] === '\\' && index + 1 < text.length) {
+      index += 1;
+      continue;
+    }
+    if (text[index] === delimiter) return index;
+  }
+  return -1;
+}
+
 function skipTitle(text: string, at: number): number {
   const index = skipTitleSpace(text, at);
   if (index === at) return at;
   const quote = text[index];
   if (quote === '"' || quote === "'") {
-    const close = text.indexOf(quote, index + 1);
+    const close = closingDelimiter(text, index, quote);
     return close < 0 ? at : close + 1;
   }
   if (quote !== '(') return at;
-  const close = text.indexOf(')', index + 1);
+  const close = closingDelimiter(text, index, ')');
   return close < 0 ? at : close + 1;
 }
 

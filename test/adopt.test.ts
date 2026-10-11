@@ -2133,6 +2133,30 @@ void test('an external URL query is not rewritten when it contains a relocated p
   });
 });
 
+void test('an escaped quote in a title does not expose the destination to token replacement', () => {
+  ac7Guarded('escaped-title-quote', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      const url = 'https://example.test/?file=.agents/skills/researcher/REFERENCE.md';
+      const title = '"a \\"quoted\\" title"';
+      const body = `[external](${url} ${title})\n[local](guide.md ${title})\n`;
+      writeFileSync(join(tmp, REFERENCE), body);
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'escaped title quote');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-42', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-42', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      const copied = readFileSync(join(tmp, target), 'utf8');
+      assert.equal(copied, `[external](${url} ${title})\n[local](${guide} ${title})\n`, copied);
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), body, 'a copy source keeps its title');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
 void test('the target AC-7 guard does not treat a failed dirty listing as empty', () => {
   ac7Guarded('guard-dirty-listing', () => {
     const tmp = stageGitRepo('legacy-agents', 'single');
