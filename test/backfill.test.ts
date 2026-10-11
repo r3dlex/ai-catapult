@@ -41,6 +41,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -667,6 +668,80 @@ void test('ACH-C-04 backfill: the policy is replaced atomically, never truncated
   const leftovers = readdirSync(join(root, '.ai/policies'));
   assert.deepEqual(leftovers, ['readiness-policy.json'], 'no temp file may be left behind');
 });
+
+/**
+ * Deferred residual, bound to the later ADR-0013 review. Not solved, not waived,
+ * and not an accepted trusted-filesystem assumption. Node has no openat-style
+ * directory-fd mutation, so these ancestor swaps are not closed here.
+ *
+ * The assertions are the acceptance criterion (nothing outside --root; no success
+ * report on an outside write). They are node:test expected-failures (`todo`) so
+ * the suite can stay green without rewriting those assertions to expect the race.
+ * If one starts passing, the residual closed and the todo label must be removed.
+ */
+const DEFERRED_ANCESTOR_RACE =
+  'deferred-to-ADR-0013: ancestor-directory rename race; not solved, not waived, not an accepted spec change';
+
+void test(
+  'ACH-C-04 backfill: deferred-to-ADR-0013 ancestor policy-directory swap must not write outside --root',
+  { todo: DEFERRED_ANCESTOR_RACE },
+  () => {
+    const outside = fixtureRoot('backfill-deferred-policy-outside-');
+    const root = fixtureRoot('backfill-deferred-policy-');
+    let fired = false;
+    const run = runModule(['--policy-v2', '--root', root], {
+      root,
+      inventory: () => ok([]),
+      faults: {
+        beforePolicyWrite: () => {
+          fired = true;
+          renameSync(join(root, '.ai/policies'), join(outside, 'policies'));
+          symlinkSync(join(outside, 'policies'), join(root, '.ai/policies'));
+        },
+      },
+    });
+    assert.equal(fired, true, 'the write-boundary fault point must exist');
+    assert.equal(lstatSync(join(root, '.ai/policies')).isSymbolicLink(), true, 'the ancestor swap must actually be planted');
+    assert.equal(
+      existsSync(join(outside, 'policies', 'readiness-policy.json')),
+      false,
+      'nothing may be written outside --root',
+    );
+    assert.notEqual(run.code, 0, 'a write outside --root must not exit 0');
+    assert.notEqual(reportOf(run).result, 'written', 'a write outside --root must not report written');
+    assert.notEqual(run.err, '', 'a write outside --root must not be silent');
+  },
+);
+
+void test(
+  'ACH-C-04 backfill: deferred-to-ADR-0013 ancestor ledger-directory swap must not create a ledger outside --root',
+  { todo: DEFERRED_ANCESTOR_RACE },
+  () => {
+    const outside = fixtureRoot('backfill-deferred-ledger-outside-');
+    const root = fixtureRoot('backfill-deferred-ledger-');
+    let fired = false;
+    const run = runModule(['--policy-v2', '--root', root], {
+      root,
+      inventory: () => ok([]),
+      faults: {
+        beforeLedgerAppend: () => {
+          fired = true;
+          symlinkSync(outside, join(root, '.ai/drift-swap'));
+          rmSync(join(root, '.ai/drift'), { recursive: true });
+          renameSync(join(root, '.ai/drift-swap'), join(root, '.ai/drift'));
+        },
+      },
+    });
+    assert.equal(fired, true, 'the append-boundary fault point must exist');
+    assert.equal(lstatSync(join(root, '.ai/drift')).isSymbolicLink(), true, 'the ancestor swap must actually be planted');
+    assert.equal(
+      existsSync(join(outside, 'backfill-ledger.jsonl')),
+      false,
+      'O_CREAT must not create a ledger outside --root',
+    );
+    assert.equal(run.code, 1, 'an outside ledger create must not succeed');
+  },
+);
 
 // ---------------------------------------------------------------------------
 // AC-4: dry-run, usage surface

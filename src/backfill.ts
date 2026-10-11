@@ -130,6 +130,8 @@ export type BackfillOptions = {
    * last deterministic moment before the policy rename and before the ledger
    * open. The CLI never sets them (observer pattern: a test adapter exists only
    * in-process), and they are called with the final checks already done.
+   * Ancestor-directory swaps at these points are a known residual deferred to
+   * the ADR-0013 review: not solved, not waived, not an accepted assumption.
    */
   faults?: { beforePolicyWrite?: () => void; beforeLedgerAppend?: () => void } | undefined;
 };
@@ -460,7 +462,9 @@ function verifyOpened(fd: number, target: string, realRoot: string, rel: string)
  * Replace the target atomically: the bytes land in a same-directory temp file
  * created with O_CREAT|O_EXCL|O_NOFOLLOW, fsynced, then renamed over the target.
  * A symlink or hard-linked leaf swapped in at any point is replaced by the
- * rename, never followed or truncated.
+ * rename, never followed or truncated. An ancestor directory replaced with an
+ * outside symlink before this rename is a known residual deferred to the
+ * ADR-0013 review: not solved, not waived, not an accepted assumption.
  */
 function writeAtomic(realRoot: string, rel: string, bytes: string, beforeRename?: () => void): Refusal | null {
   const unsafe = containment(realRoot, rel);
@@ -500,7 +504,10 @@ function writeAtomic(realRoot: string, rel: string, bytes: string, beforeRename?
  * Append one ledger line to a leaf that cannot have been swapped or hard-linked:
  * O_NOFOLLOW refuses a symlinked leaf at open, and the descriptor identity check
  * refuses anything that is not the singly linked regular file inside the root.
- * Any failure is a structured refusal — never a silent exit.
+ * Any failure is a structured refusal — never a silent exit. An ancestor
+ * directory replaced with an outside symlink before this open can still let
+ * O_CREAT create an empty ledger outside; that residual is deferred to the
+ * ADR-0013 review: not solved, not waived, not an accepted assumption.
  */
 function appendLedger(
   realRoot: string,
