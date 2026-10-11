@@ -849,14 +849,24 @@ function writeBackup(root: string, entry: PlannedAction): void {
 /** One candidate rewrite: replace [start, end) with `replacement`. */
 type Span = { start: number; end: number; replacement: string };
 
+function unescapeMd(value: string): string {
+  return value.replace(/\\(.)/g, '$1');
+}
+
 function splitDestination(destination: string): { head: string; tail: string; wrapped: boolean } | null {
   const wrapped = destination.startsWith('<') && destination.endsWith('>');
   const inner = wrapped ? destination.slice(1, -1) : destination;
   const cut = inner.search(/[#?]/);
-  const head = cut < 0 ? inner : inner.slice(0, cut);
+  const head = unescapeMd(cut < 0 ? inner : inner.slice(0, cut));
   const tail = cut < 0 ? '' : inner.slice(cut);
   if (head === '' || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(head)) return null;
   return { head, tail, wrapped };
+}
+
+/** Wrap a rendered destination when a bare form would be re-parsed incorrectly. */
+function finishDestination(path: string, tail: string, wrapped: boolean): string {
+  const raw = `${path}${tail}`;
+  return wrapped || /[\s()]/.test(raw) ? `<${raw}>` : raw;
 }
 
 /**
@@ -882,31 +892,90 @@ function linkReplacement(
   );
   if (resolved !== source) return null;
   const path = absolute ? `/${target}` : posix.relative(posix.dirname(finalCiter), target);
-  return split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
+  return finishDestination(path, split.tail, split.wrapped);
 }
 
-/**
- * Inline links and reference definitions. The `d` flag records the destination
- * capture's own offset, so a label that repeats the destination is not rewritten.
- * Angle-bracket destinations may contain spaces.
- */
-const LINK_DESTINATIONS = [
-  /\[[^\]]*\]\((<[^>\r\n]+>|[^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)\r\n]*\)))?\)/dg,
-  /^ {0,3}\[[^\]]+\]:\s*(<[^>\r\n]+>|\S+)/dgm,
-];
+const REFERENCE_DESTINATION = /^ {0,3}\[[^\]]+\]:\s*(<[^>\r\n]+>|\S+)/dgm;
+
+function skipTitle(text: string, at: number): number {
+  let index = at;
+  while (text[index] === ' ' || text[index] === '\t') index += 1;
+  if (index === at) return at;
+  const quote = text[index];
+  if (quote === '"' || quote === "'") {
+    const close = text.indexOf(quote, index + 1);
+    return close < 0 ? at : close + 1;
+  }
+  if (quote !== '(') return at;
+  const close = text.indexOf(')', index + 1);
+  return close < 0 ? at : close + 1;
+}
+
+function destinationDepth(char: string | undefined, depth: number): number {
+  if (char === '(') return depth + 1;
+  if (char === ')' && depth === 0) return -1;
+  if (char === ')') return depth - 1;
+  return depth;
+}
+
+function readBareDestination(text: string, start: number): number {
+  let index = start;
+  let depth = 0;
+  while (index < text.length && text[index] !== ' ' && text[index] !== '\t' && text[index] !== '\n' && text[index] !== '\r') {
+    if (text[index] === '\\' && index + 1 < text.length) {
+      index += 2;
+      continue;
+    }
+    depth = destinationDepth(text[index], depth);
+    if (depth < 0) break;
+    index += 1;
+  }
+  return index;
+}
+
+function angledEnd(text: string, start: number): number | null {
+  const close = text.indexOf('>', start + 1);
+  if (close < 0 || text.slice(start, close).includes('\n')) return null;
+  return close + 1;
+}
+
+function readInlineDestination(text: string, openParen: number): { start: number; end: number; destination: string } | null {
+  if (text[openParen] !== '(') return null;
+  const start = openParen + 1;
+  const end = text[start] === '<' ? angledEnd(text, start) : readBareDestination(text, start);
+  if (end === null || end === start || text[skipTitle(text, end)] !== ')') return null;
+  return { start, end, destination: text.slice(start, end) };
+}
+
+function inlineDestinations(text: string): Array<{ start: number; end: number; destination: string }> {
+  const found: Array<{ start: number; end: number; destination: string }> = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== '[') continue;
+    const labelEnd = text.indexOf(']', index + 1);
+    if (labelEnd < 0 || text[labelEnd + 1] !== '(') continue;
+    const destination = readInlineDestination(text, labelEnd + 1);
+    if (destination === null) continue;
+    found.push(destination);
+    index = labelEnd;
+  }
+  return found;
+}
 
 /** Destination spans of inline links and reference definitions, rewritten by `replace`. */
 function destinationSpans(text: string, replace: (destination: string) => string | null): Span[] {
   const spans: Span[] = [];
-  for (const pattern of LINK_DESTINATIONS) {
-    for (const match of text.matchAll(pattern)) {
-      const destination = match[1];
-      const bounds = match.indices?.[1];
-      if (destination === undefined || bounds === undefined) continue;
-      const replacement = replace(destination);
-      if (replacement === null) continue;
-      spans.push({ start: bounds[0], end: bounds[1], replacement });
-    }
+  for (const found of inlineDestinations(text)) {
+    const replacement = replace(found.destination);
+    if (replacement === null) continue;
+    spans.push({ start: found.start, end: found.end, replacement });
+  }
+  for (const match of text.matchAll(REFERENCE_DESTINATION)) {
+    const destination = match[1];
+    const bounds = match.indices?.[1];
+    if (destination === undefined || bounds === undefined) continue;
+    const replacement = replace(destination);
+    if (replacement === null) continue;
+    spans.push({ start: bounds[0], end: bounds[1], replacement });
   }
   return spans;
 }
@@ -971,7 +1040,7 @@ function rebaseDestination(
   if (resolved === '' || (split.head.startsWith('/') && resolved.startsWith('..'))) return null;
   const landed = relocationTarget(resolved, relocations);
   const path = split.head.startsWith('/') ? `/${landed}` : relativeLink(posix.dirname(finalCiter), landed);
-  const rendered = split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
+  const rendered = finishDestination(path, split.tail, split.wrapped);
   return rendered === destination ? null : rendered;
 }
 
@@ -997,7 +1066,7 @@ function tokenSpans(text: string, source: string, target: string, covered: Span[
   for (let at = text.indexOf(source); at >= 0; at = text.indexOf(source, at + 1)) {
     const end = at + source.length;
     if (isPathChar(text[at - 1]) || isPathChar(text[end])) continue;
-    if (covered.some((span) => at >= span.start && at < span.end)) continue;
+    if (covered.some((span) => at < span.end && end > span.start)) continue;
     spans.push({ start: at, end, replacement: target });
   }
   return spans;
@@ -1017,6 +1086,21 @@ function applySpans(text: string, spans: Span[]): string {
  * relocated sources. Unmoved destinations keep their resolved path; self-links
  * land on this document's final path.
  */
+function pushLabel(spans: Span[], match: RegExpMatchArray): void {
+  const label = match[1];
+  if (label === undefined || label.length === 0 || match.index === undefined) return;
+  const start = match.index + match[0].indexOf('[') + 1;
+  spans.push({ start, end: start + label.length, replacement: label });
+}
+
+/** Labels and reference identifiers are not bare path tokens. */
+function markdownLabelSpans(text: string): Span[] {
+  const spans: Span[] = [];
+  for (const match of text.matchAll(/!?\[([^\]]*)\](?=\()/g)) pushLabel(spans, match);
+  for (const match of text.matchAll(/^ {0,3}\[([^\]]+)\](?=\s*:)/gm)) pushLabel(spans, match);
+  return spans;
+}
+
 function rebaseBytes(
   content: Buffer,
   originalCiter: string,
@@ -1027,8 +1111,9 @@ function rebaseBytes(
   const text = content.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(content)) return null;
   const spans = rebaseLinkSpans(text, originalCiter, finalCiter, relocations);
+  const covered = [...spans, ...markdownLabelSpans(text)];
   for (const entry of relocations) {
-    spans.push(...tokenSpans(text, entry.source, entry.target, spans));
+    spans.push(...tokenSpans(text, entry.source, entry.target, covered));
   }
   if (spans.length === 0) return null;
   const updated = Buffer.from(applySpans(text, spans), 'utf8');
@@ -1068,7 +1153,8 @@ function repairedBytes(
   const text = content.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(content)) return null;
   const links = linkSpans(text, originalCiter, finalCiter, source, target);
-  const spans = [...links, ...tokenSpans(text, source, target, links)];
+  const covered = [...links, ...markdownLabelSpans(text)];
+  const spans = [...links, ...tokenSpans(text, source, target, covered)];
   if (spans.length === 0) return null;
   const updated = Buffer.from(applySpans(text, spans), 'utf8');
   return updated.equals(content) ? null : updated;
@@ -1631,6 +1717,7 @@ function assertReplayBound(events: Record<string, unknown>[], items: Relocation[
 function assertReplayReady(root: string, recorded: MigrationMap): Record<string, unknown>[] {
   assertValid(recorded);
   assertLedgerTail(root, MIGRATION_LEDGER);
+  assertConfirmationLedger(root);
   assertEventLedger(root);
   const runEvents = readLedger(root, MIGRATION_LEDGER).values.filter((event) => event.run_id === recorded.run_id);
   if (runEvents.some((event) => event.result === 'failed' || event.result === 'rolled-back')) {

@@ -1751,6 +1751,84 @@ void test('the target AC-7 guard snapshots private and managed paths', () => {
   });
 });
 
+void test('a markdown label that names a relocated path is not rewritten', () => {
+  ac7Guarded('label-not-token', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      const body = '[.agents/skills/researcher/REFERENCE.md](REFERENCE.md)\n';
+      writeFileSync(join(tmp, REFERENCE), body);
+      commitAll(tmp, 'label');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-26', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-26', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const copied = readFileSync(join(tmp, target), 'utf8');
+      assert.equal(copied, '[.agents/skills/researcher/REFERENCE.md](researcher.md)\n', copied);
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), body, 'a copy source keeps its label');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a destination with balanced or escaped parentheses is rebased whole', () => {
+  ac7Guarded('paren-destination', () => {
+    const tmp = stageGitRepo('legacy-ai-sdlc', 'single');
+    try {
+      mkdirSync(join(tmp, 'docs/adr'), { recursive: true });
+      writeFileSync(join(tmp, 'docs/adr/decision(v1).md'), '# decision\n');
+      writeFileSync(
+        join(tmp, 'docs/adr/overview.md'),
+        'See [decision](decision(v1).md) and [esc](decision\\(v1\\).md).\n',
+      );
+      commitAll(tmp, 'paren adr');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-27', tmp]);
+      const map = parseMap(dry.stdout);
+      const overview = itemBySource(map, 'docs/adr/overview.md');
+      const decision = itemBySource(map, 'docs/adr/decision(v1).md');
+      assert.equal(overview.action, 'migrate');
+      assert.equal(decision.action, 'migrate');
+      const file = migrateConfirmation(tmp, map, 'run-27');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-27', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const moved = readFileSync(join(tmp, overview.target as string), 'utf8');
+      assert.equal(moved.includes('../'), false, moved);
+      assert.equal(moved.includes('docs/adr'), false, moved);
+      assert.match(moved, /\[decision\]\(<?decision\(v1\)\.md>?\)/);
+      assert.match(moved, /\[esc\]\(<?decision\(v1\)\.md>?\)/);
+      assert.equal(existsSync(join(tmp, 'docs/adr/decision(v1).md')), false, 'the parenthesized source moved');
+      assert.equal(existsSync(join(tmp, decision.target as string)), true);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('replay refuses a corrupt confirmation ledger before returning', () => {
+  ac7Guarded('replay-confirmation', () => {
+    const tmp = stageAllNoop('run-28');
+    try {
+      const ledger = join(tmp, LEDGER_REL);
+      const before = readFileSync(ledger, 'utf8');
+      mkdirSync(dirname(join(tmp, CONFIRMATIONS_REL)), { recursive: true });
+      writeFileSync(join(tmp, CONFIRMATIONS_REL), '{}\n');
+      const empty = spawnAdopt(['--apply', '--run-id', 'run-28', tmp]);
+      assert.equal(empty.status, 1);
+      assert.equal(errorOf(empty.stdout), 'invalid_ledger');
+      assert.equal(readFileSync(ledger, 'utf8'), before, 'a refused replay appends nothing');
+      writeFileSync(join(tmp, CONFIRMATIONS_REL), '{"schema":"knowledge-migration-confirmation-event/1"');
+      const tailed = spawnAdopt(['--apply', '--run-id', 'run-28', tmp]);
+      assert.equal(tailed.status, 1);
+      assert.equal(errorOf(tailed.stdout), 'invalid_ledger');
+      assert.equal(readFileSync(ledger, 'utf8'), before, 'an interrupted confirmation tail appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
 void test('the target AC-7 guard does not treat a failed dirty listing as empty', () => {
   ac7Guarded('guard-dirty-listing', () => {
     const tmp = stageGitRepo('legacy-agents', 'single');
