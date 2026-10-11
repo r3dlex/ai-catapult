@@ -388,18 +388,28 @@ function classifiedItem(root: string, relative: string, policy: Policy, info: Cl
   return blankItem(relative, 'workspace-convention', 'skip', 'out of knowledge scope');
 }
 
-function hasSecret(path: string, policy: Policy): boolean {
+type SecretScan = 'clean' | 'present' | 'unscannable';
+
+/**
+ * Scan one candidate file for policy secret patterns. The whole file is read
+ * (no size cap), and any scan that cannot run — stat/read failure, NUL bytes —
+ * reports `unscannable`, which the caller classifies `unsupported/skip`. An
+ * omitted scan is never treated as secret-free.
+ */
+function scanSecret(path: string, policy: Policy): SecretScan {
   let bytes: Buffer;
   try {
     const stat = lstatSync(path);
-    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 1_000_000) return false;
+    if (!stat.isFile() || stat.isSymbolicLink()) return 'unscannable';
     bytes = readFileSync(path);
   } catch {
-    return false;
+    return 'unscannable';
   }
-  if (bytes.includes(0)) return false;
+  if (bytes.includes(0)) return 'unscannable';
   const text = bytes.toString('utf8');
-  return policy.deny.secret_patterns.some((pattern) => compileSecretPattern(pattern).test(text));
+  return policy.deny.secret_patterns.some((pattern) => compileSecretPattern(pattern).test(text))
+    ? 'present'
+    : 'clean';
 }
 
 function classifiedOrUnsafe(root: string, relative: string, policy: Policy): ClassInfo | Item {
@@ -427,8 +437,12 @@ function fileItem(root: string, relative: string, policy: Policy, destructive: b
   if (isItem(info)) return info;
   if (info.classification === 'private') return blankItem(relative, 'private', 'skip', 'private path: content is never opened');
   if (info.classification === 'unsupported') return blankItem(relative, 'unsupported', 'skip', 'unsupported format');
-  if (hasSecret(join(root, relative), policy)) {
+  const scan = scanSecret(join(root, relative), policy);
+  if (scan === 'present') {
     return blankItem(relative, 'private', 'skip', 'secret pattern match: content is not recorded');
+  }
+  if (scan === 'unscannable') {
+    return blankItem(relative, 'unsupported', 'skip', 'content could not be scanned; never treated as secret-free');
   }
   return immutableOverride(root, classifiedItem(root, relative, policy, info, destructive), policy);
 }

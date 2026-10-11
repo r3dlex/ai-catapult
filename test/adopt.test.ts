@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
+  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -358,6 +359,68 @@ for (const layout of LAYOUTS) {
     });
   }
 }
+
+void test('a >1MB file is scanned completely: a policy secret classifies it private', () => {
+  ac7Guarded('large-secret', () => {
+    const tmp = stage('brownfield', 'single');
+    try {
+      const filler = 'public notes line\n'.repeat(60_000);
+      writeFileSync(join(tmp, 'docs/large-notes.md'), `${filler}sk-${'a'.repeat(24)}\n`);
+      const result = spawnAdopt(['--dry-run', '--run-id', 'inv', tmp]);
+      assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+      const map = parseMap(result.stdout);
+      const item = itemBySource(map, 'docs/large-notes.md');
+      assert.equal(item.classification, 'private', item.reason);
+      assert.equal(item.action, 'skip');
+      assert.equal(item.sha256, null);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a NUL-bearing file is never adopted secret-free', () => {
+  ac7Guarded('nul-bytes', () => {
+    const tmp = stage('brownfield', 'single');
+    try {
+      writeFileSync(join(tmp, 'docs/nul-notes.md'), Buffer.concat([
+        Buffer.from('notes\n'),
+        Buffer.from([0x00, 0x00]),
+        Buffer.from(`sk-${'b'.repeat(24)}\n`),
+      ]));
+      const result = spawnAdopt(['--dry-run', '--run-id', 'inv', tmp]);
+      assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+      const map = parseMap(result.stdout);
+      const item = itemBySource(map, 'docs/nul-notes.md');
+      assert.equal(item.classification, 'unsupported', item.reason);
+      assert.equal(item.action, 'skip');
+      assert.equal(item.sha256, null);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('an unreadable file is never adopted secret-free', () => {
+  ac7Guarded('unreadable-secret', () => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
+    const tmp = stage('brownfield', 'single');
+    try {
+      const path = join(tmp, 'docs/unreadable-notes.md');
+      writeFileSync(path, `sk-${'c'.repeat(24)}\n`);
+      chmodSync(path, 0o000);
+      const result = spawnAdopt(['--dry-run', '--run-id', 'inv', tmp]);
+      assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+      const map = parseMap(result.stdout);
+      const item = itemBySource(map, 'docs/unreadable-notes.md');
+      assert.equal(item.classification, 'unsupported', item.reason);
+      assert.equal(item.action, 'skip');
+      assert.equal(item.sha256, null);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
 
 void test('migrate actions are refused without the per-run confirmation token', () => {
   ac7Guarded('refuse', () => {
