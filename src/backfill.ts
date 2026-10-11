@@ -17,9 +17,13 @@
  * the refusal in the ledger.
  *
  * Fail-closed rules: a policy/2 with different bytes refuses; a symlinked root
- * or a symlinked/out-of-root write target refuses; only the policy path and the
- * ledger are ever written, both inside `--root`; approvals, anchors and
- * readiness contexts are never written.
+ * or a symlinked/out-of-root write target refuses; a multiply linked target (a
+ * hard link shared with a file outside the root) refuses, so no write can reach
+ * through an alias; both write targets are validated before anything is
+ * mutated, and a ledger that cannot be written fails the run rather than
+ * claiming a success it never recorded; only the policy path and the ledger are
+ * ever written, both inside `--root`; approvals, anchors and readiness contexts
+ * are never written.
  *
  * Readings of the ambiguous acceptance sentences, recorded for review:
  *   - "every run appends": every invocation that reaches the decision stage
@@ -37,7 +41,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync, type Stats } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { resolveVendorSkill } from './skill-resolver.ts';
 
@@ -191,8 +195,17 @@ function inspectRoot(rootPath: string): { realRoot: string } | { refusal: Refusa
 /**
  * A write target must not pass through any symlinked component below the root,
  * so nothing can land outside it. Existing non-final components must be
- * directories and the final component, when present, a regular file.
+ * directories, the final component a regular file, and a multiply linked target
+ * (a hard link shared with a file outside the root) is refused: writing through
+ * the link would mutate the outside alias.
  */
+/** An existing final component must be a regular, singly linked file. */
+function leafRefusal(stat: Stats, rel: string): Refusal | null {
+  if (!stat.isFile()) return { code: 'path_not_regular_file', detail: rel };
+  if (stat.nlink > 1) return { code: 'path_multiply_linked', detail: rel };
+  return null;
+}
+
 function containment(realRoot: string, rel: string): Refusal | null {
   const parts = rel.split('/');
   let current = realRoot;
@@ -205,9 +218,8 @@ function containment(realRoot: string, rel: string): Refusal | null {
       return null; // nothing exists at or below this component yet
     }
     if (stat.isSymbolicLink()) return { code: 'path_symlinked', detail: rel };
-    const leaf = i === parts.length - 1;
-    if (!leaf && !stat.isDirectory()) return { code: 'path_not_directory', detail: rel };
-    if (leaf && !stat.isFile()) return { code: 'path_not_regular_file', detail: rel };
+    if (i === parts.length - 1) return leafRefusal(stat, rel);
+    if (!stat.isDirectory()) return { code: 'path_not_directory', detail: rel };
   }
   return null;
 }
@@ -399,10 +411,17 @@ function writeContained(realRoot: string, rel: string, bytes: string): Refusal |
   return null;
 }
 
-function appendLedger(realRoot: string, entry: Record<string, unknown>): void {
-  if (containment(realRoot, LEDGER_REL) !== null) return; // an unsafe ledger path is not written
+/**
+ * Append one ledger line. The target was validated before any mutation, so a
+ * refusal here is a race; an I/O failure throws and fails the run closed rather
+ * than claiming a success the ledger never recorded.
+ */
+function appendLedger(realRoot: string, entry: Record<string, unknown>): Refusal | null {
+  const unsafe = containment(realRoot, LEDGER_REL);
+  if (unsafe) return unsafe;
   mkdirSync(dirname(join(realRoot, LEDGER_REL)), { recursive: true });
   appendFileSync(join(realRoot, LEDGER_REL), `${JSON.stringify(entry)}\n`);
+  return null;
 }
 
 function printReport(io: Io, fields: {
@@ -575,6 +594,8 @@ function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean):
   });
   io.err(`backfill: refused (${refusals.map((item) => item.code).join(', ')})\n`);
   if (!dryRun && state.realRoot !== null) {
+    // The ledger target was validated before any mutation; a refusal here is a
+    // race, and a refusal that cannot be ledgered still exits 1.
     appendLedger(state.realRoot, {
       schema: LEDGER_SCHEMA,
       command: COMMAND,
@@ -601,7 +622,7 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
     if (decision === 'write') io.out(unifiedDiff(POLICY_REL, run.policy.kind === 'present' ? run.policy.bytes : '', candidateBytes));
     return 0;
   }
-  appendLedger(run.realRoot, {
+  const ledger = appendLedger(run.realRoot, {
     schema: LEDGER_SCHEMA,
     command: COMMAND,
     repository_id: state.repositoryId,
@@ -610,6 +631,10 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
     at: state.at,
     result,
   });
+  if (ledger !== null) {
+    io.err(`backfill: failed: the ledger target became unsafe before the append (${ledger.code})\n`);
+    return 1;
+  }
   printReport(io, {
     root: state.root,
     repositoryId: state.repositoryId,
@@ -657,6 +682,11 @@ function executeBackfill(parsed: { root: string; dryRun: boolean }, options: Bac
   };
   if ('refusal' in inspected) return refusal(io, state, [inspected.refusal], parsed.dryRun);
   state.realRoot = inspected.realRoot;
+
+  // Both write targets are validated before anything is mutated: an unsafe
+  // ledger path refuses the run before the policy write, never a silent skip.
+  const ledgerTarget = containment(state.realRoot, LEDGER_REL);
+  if (ledgerTarget) return refusal(io, state, [ledgerTarget], parsed.dryRun);
 
   const policy = readPolicy(state.realRoot);
   if (policy.kind === 'refusal') return refusal(io, state, [policy.refusal], parsed.dryRun);

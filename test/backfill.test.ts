@@ -34,6 +34,7 @@ import { createHash } from 'node:crypto';
 import {
   existsSync,
   chmodSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -538,6 +539,47 @@ void test('ACH-C-04 backfill: refuses a symlinked policy file', () => {
   assert.equal(run.code, 1);
   assert.equal(refusalsOf(run)[0]?.code, 'path_symlinked');
   assert.equal(readFileSync(target, 'utf8'), '{"schema": "readiness-policy/2"}\n');
+});
+
+void test('ACH-C-04 backfill: refuses a symlinked ledger path before writing the policy', () => {
+  const outside = fixtureRoot('backfill-ledger-outside-');
+  const root = fixtureRoot('backfill-ledger-link-');
+  mkdirSync(join(root, '.ai'), { recursive: true });
+  symlinkSync(outside, join(root, '.ai/drift'));
+  const run = runModule(['--policy-v2', '--root', root], { root, inventory: () => ok([]) });
+  assert.equal(run.code, 1);
+  assert.equal(refusalsOf(run)[0]?.code, 'path_symlinked');
+  assert.match(String(refusalsOf(run)[0]?.detail), /backfill-ledger\.jsonl/);
+  assert.equal(existsSync(join(root, POLICY_REL)), false, 'no policy write before the ledger target is validated');
+  assert.deepEqual(readdirSync(outside), [], 'nothing may be written outside --root');
+});
+
+void test('ACH-C-04 backfill: refuses a hard-linked policy file and leaves the outside alias byte-unchanged', () => {
+  const outside = fixtureRoot('backfill-hardlink-outside-');
+  const alias = join(outside, 'readiness-policy.json');
+  const v1 = '{\n  "schema": "readiness-policy/1"\n}\n';
+  writeFileSync(alias, v1);
+  const root = fixtureRoot('backfill-hardlink-policy-');
+  mkdirSync(join(root, '.ai/policies'), { recursive: true });
+  linkSync(alias, join(root, POLICY_REL));
+  const run = runModule(['--policy-v2', '--root', root], { root, inventory: () => ok([]) });
+  assert.equal(run.code, 1);
+  assert.equal(refusalsOf(run)[0]?.code, 'path_multiply_linked');
+  assert.equal(readFileSync(alias, 'utf8'), v1, 'a hard-linked target must not write through the alias');
+});
+
+void test('ACH-C-04 backfill: refuses a hard-linked ledger and leaves the outside alias byte-unchanged', () => {
+  const outside = fixtureRoot('backfill-hardlink-ledger-outside-');
+  const alias = join(outside, 'backfill-ledger.jsonl');
+  writeFileSync(alias, '{"schema":"existing"}\n');
+  const root = fixtureRoot('backfill-hardlink-ledger-');
+  mkdirSync(join(root, '.ai/drift'), { recursive: true });
+  linkSync(alias, join(root, LEDGER_REL));
+  const run = runModule(['--policy-v2', '--root', root], { root, inventory: () => ok([]) });
+  assert.equal(run.code, 1);
+  assert.equal(refusalsOf(run)[0]?.code, 'path_multiply_linked');
+  assert.equal(readFileSync(alias, 'utf8'), '{"schema":"existing"}\n');
+  assert.equal(existsSync(join(root, POLICY_REL)), false);
 });
 
 // ---------------------------------------------------------------------------
