@@ -37,7 +37,7 @@
  * (ai-catapult-init modules/migration.md).
  */
 
-import { mkdirSync, readdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, existsSync, lstatSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { canonical, ENTRIES_DIR, REGISTRY_FILE, SCHEMA } from './knowledge.ts';
 
@@ -177,6 +177,20 @@ function emptyRegistryBytes(repoId: string): string {
  * skipped with and without --force (modules/migration.md), which keeps the
  * publisher-managed entry lifecycle and tombstones intact.
  */
+function knowledgeBlocked(targetDir: string): string | null {
+  for (const relative of [REGISTRY_FILE, ENTRIES_GITKEEP]) {
+    const parts = relative.split('/');
+    let cursor = '';
+    for (const part of parts.slice(0, -1)) {
+      cursor = cursor === '' ? part : `${cursor}/${part}`;
+      const abs = join(targetDir, cursor);
+      if (!existsSync(abs)) break;
+      if (!lstatSync(abs).isDirectory()) return cursor;
+    }
+  }
+  return null;
+}
+
 function emitKnowledgeSkeleton(targetDir: string, repoId: string): string[] {
   const emitted: string[] = [];
   const registryDest = join(targetDir, REGISTRY_FILE);
@@ -323,6 +337,11 @@ export function scaffold({ targetDir, templatesDir, skillsDir, repoId, date, ups
       collisions.map((p) => `  ${p}`).join('\n') +
       '\nPass --force to overwrite.\n',
     );
+    process.exit(1);
+  }
+  const blocked = knowledgeBlocked(targetDir);
+  if (blocked !== null) {
+    process.stderr.write(`error: init cannot create knowledge files; ${blocked} is not a directory\n`);
     process.exit(1);
   }
 

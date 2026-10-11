@@ -913,8 +913,6 @@ function linkReplacement(
   return finishDestination(path, split.tail, split.wrapped);
 }
 
-const REFERENCE_DESTINATION = /^ {0,3}\[[^\]]+\]:\s*(<[^>\r\n]+>|\S+)/dgm;
-
 function skipTitle(text: string, at: number): number {
   let index = at;
   while (text[index] === ' ' || text[index] === '\t') index += 1;
@@ -957,12 +955,52 @@ function angledEnd(text: string, start: number): number | null {
   return close + 1;
 }
 
+function skipSpace(text: string, at: number): number {
+  let index = at;
+  while (text[index] === ' ' || text[index] === '\t') index += 1;
+  return index;
+}
+
 function readInlineDestination(text: string, openParen: number): { start: number; end: number; destination: string } | null {
   if (text[openParen] !== '(') return null;
-  const start = openParen + 1;
+  const start = skipSpace(text, openParen + 1);
   const end = text[start] === '<' ? angledEnd(text, start) : readBareDestination(text, start);
-  if (end === null || end === start || text[skipTitle(text, end)] !== ')') return null;
+  if (end === null || end === start || text[skipSpace(text, skipTitle(text, end))] !== ')') return null;
   return { start, end, destination: text.slice(start, end) };
+}
+
+function readReferenceDestination(text: string, at: number): { start: number; end: number; destination: string } | null {
+  const start = skipSpace(text, at);
+  if (text[start] === '<') {
+    const end = angledEnd(text, start);
+    return end === null ? null : { start, end, destination: text.slice(start, end) };
+  }
+  const end = readBareDestination(text, start);
+  if (end === start) return null;
+  return { start, end, destination: text.slice(start, end) };
+}
+
+function definitionDestination(text: string, lineStart: number, limit: number): { start: number; end: number; destination: string } | null {
+  const open = text.indexOf('[', lineStart);
+  if (open < 0 || open >= limit || !/^ {0,3}\[/.test(text.slice(lineStart, open + 1))) return null;
+  const close = labelClose(text, open);
+  if (close <= open || text[close + 1] !== ':') return null;
+  const destination = readReferenceDestination(text, close + 2);
+  if (destination === null || destination.end > limit) return null;
+  return destination;
+}
+
+function referenceDestinations(text: string): Array<{ start: number; end: number; destination: string }> {
+  const found: Array<{ start: number; end: number; destination: string }> = [];
+  let index = 0;
+  while (index < text.length) {
+    const lineEnd = text.indexOf('\n', index);
+    const limit = lineEnd < 0 ? text.length : lineEnd;
+    const destination = definitionDestination(text, index, limit);
+    if (destination !== null) found.push(destination);
+    index = lineEnd < 0 ? text.length : lineEnd + 1;
+  }
+  return found;
 }
 
 function labelClose(text: string, open: number): number {
@@ -998,18 +1036,10 @@ function inlineDestinations(text: string): Array<{ start: number; end: number; d
 /** Destination spans of inline links and reference definitions, rewritten by `replace`. */
 function destinationSpans(text: string, replace: (destination: string) => string | null): Span[] {
   const spans: Span[] = [];
-  for (const found of inlineDestinations(text)) {
+  for (const found of [...inlineDestinations(text), ...referenceDestinations(text)]) {
     const replacement = replace(found.destination);
     if (replacement === null) continue;
     spans.push({ start: found.start, end: found.end, replacement });
-  }
-  for (const match of text.matchAll(REFERENCE_DESTINATION)) {
-    const destination = match[1];
-    const bounds = match.indices?.[1];
-    if (destination === undefined || bounds === undefined) continue;
-    const replacement = replace(destination);
-    if (replacement === null) continue;
-    spans.push({ start: bounds[0], end: bounds[1], replacement });
   }
   return spans;
 }

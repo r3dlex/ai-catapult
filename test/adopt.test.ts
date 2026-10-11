@@ -1820,6 +1820,27 @@ void test('replay refuses a corrupt confirmation ledger before returning', () =>
   });
 });
 
+void test('escaped reference labels and spaced destinations are rebased', () => {
+  ac7Guarded('escaped-label-space', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), '[a\\]b]: guide.md\n[space]( guide.md )\n');
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'escaped and spaced');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-33', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-33', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      const copied = readFileSync(join(tmp, target), 'utf8');
+      assert.ok(copied.includes(`[a\\]b]: ${guide}`), copied);
+      assert.ok(copied.includes(`[space]( ${guide} )`), copied);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
 void test('reference-link identifiers are not rewritten', () => {
   ac7Guarded('reference-identifiers', () => {
     const tmp = stageGitRepo('legacy-agents', 'single');

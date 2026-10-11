@@ -626,6 +626,21 @@ guardedTest('ACH-C-03 init --force restores the seeded policy bytes', () => {
 // XSKP-P4-05: the knowledge surface init owns
 // ---------------------------------------------------------------------------
 
+guardedTest('XSKP-P4-05 init refuses a file occupying the entries directory before writing', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-blocked-entries-');
+  try {
+    mkdirSync(join(tmpDir, '.ai/knowledge'), { recursive: true });
+    writeFileSync(join(tmpDir, '.ai/knowledge/entries'), 'blocked\n');
+    const result = runFixedInit(tmpDir);
+    assert.notEqual(result.status, 0, 'a blocked entries path must refuse');
+    assert.equal(existsSync(join(tmpDir, '.ai/knowledge/registry.json')), false);
+    assert.equal(existsSync(join(tmpDir, '.ai/matrix.json')), false);
+    assert.equal(readFileSync(join(tmpDir, '.ai/knowledge/entries'), 'utf8'), 'blocked\n');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
 guardedTest('XSKP-P4-05 init writes the contract empty registry and the entries placeholder', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-registry-');
   try {
