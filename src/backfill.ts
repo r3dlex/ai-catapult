@@ -41,8 +41,24 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync, type Stats } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import {
+  closeSync,
+  constants,
+  existsSync,
+  fstatSync,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+  type Stats,
+} from 'node:fs';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 import { resolveVendorSkill } from './skill-resolver.ts';
 
 const POLICY_REL = '.ai/policies/readiness-policy.json';
@@ -109,6 +125,13 @@ export type BackfillOptions = {
   inventory?: InventoryRunner | undefined;
   now?: (() => Date) | undefined;
   io?: { out: (text: string) => void; err: (text: string) => void } | undefined;
+  /**
+   * Test-only fault-injection points for the check/write races: they run at the
+   * last deterministic moment before the policy rename and before the ledger
+   * open. The CLI never sets them (observer pattern: a test adapter exists only
+   * in-process), and they are called with the final checks already done.
+   */
+  faults?: { beforePolicyWrite?: () => void; beforeLedgerAppend?: () => void } | undefined;
 };
 
 type Io = { out: (text: string) => void; err: (text: string) => void };
@@ -403,25 +426,110 @@ function decidePolicy(policy: ReadablePolicy, candidateBytes: string): 'write' |
   return { code: 'policy_unsupported', detail: policy.schema ?? 'unparseable policy JSON' };
 }
 
-function writeContained(realRoot: string, rel: string, bytes: string): Refusal | null {
-  const unsafe = containment(realRoot, rel);
-  if (unsafe) return unsafe;
-  mkdirSync(dirname(join(realRoot, rel)), { recursive: true });
-  writeFileSync(join(realRoot, rel), bytes);
+const LEDGER_FLAGS = constants.O_APPEND | constants.O_CREAT | constants.O_WRONLY | constants.O_NOFOLLOW;
+const TEMP_FLAGS = constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW;
+
+function insideRoot(realRoot: string, resolved: string): boolean {
+  return resolved === realRoot || resolved.startsWith(realRoot + sep);
+}
+
+/** Any ledger I/O failure names its cause instead of exiting silently. */
+function ledgerFailure(error: unknown): Refusal {
+  const code = (error as NodeJS.ErrnoException).code;
+  if (code === 'ELOOP') return { code: 'path_symlinked', detail: LEDGER_REL };
+  if (code === 'ENOTDIR') return { code: 'path_not_directory', detail: LEDGER_REL };
+  return { code: 'ledger_append_failed', detail: `${code ?? 'error'}: ${(error as Error).message}` };
+}
+
+/**
+ * The opened descriptor must be a regular, singly linked file whose path still
+ * resolves inside the root to the same inode: a leaf swapped for a symlink
+ * (ELOOP at open) or a hard link shared outside the root fails here.
+ */
+function verifyOpened(fd: number, target: string, realRoot: string, rel: string): Refusal | null {
+  const stat = fstatSync(fd);
+  if (!stat.isFile()) return { code: 'path_not_regular_file', detail: rel };
+  if (stat.nlink > 1) return { code: 'path_multiply_linked', detail: rel };
+  if (!insideRoot(realRoot, realpathSync(target))) return { code: 'path_symlinked', detail: rel };
+  const pathStat = statSync(target);
+  if (pathStat.dev !== stat.dev || pathStat.ino !== stat.ino) return { code: 'path_changed', detail: rel };
   return null;
 }
 
 /**
- * Append one ledger line. The target was validated before any mutation, so a
- * refusal here is a race; an I/O failure throws and fails the run closed rather
- * than claiming a success the ledger never recorded.
+ * Replace the target atomically: the bytes land in a same-directory temp file
+ * created with O_CREAT|O_EXCL|O_NOFOLLOW, fsynced, then renamed over the target.
+ * A symlink or hard-linked leaf swapped in at any point is replaced by the
+ * rename, never followed or truncated.
  */
-function appendLedger(realRoot: string, entry: Record<string, unknown>): Refusal | null {
+function writeAtomic(realRoot: string, rel: string, bytes: string, beforeRename?: () => void): Refusal | null {
+  const unsafe = containment(realRoot, rel);
+  if (unsafe) return unsafe;
+  const target = join(realRoot, rel);
+  mkdirSync(dirname(target), { recursive: true });
+  const afterMkdir = containment(realRoot, rel);
+  if (afterMkdir) return afterMkdir;
+  const temp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    const fd = openSync(temp, TEMP_FLAGS, 0o644);
+    try {
+      writeSync(fd, bytes);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    const stat = lstatSync(temp);
+    if (!stat.isFile() || stat.nlink > 1) {
+      unlinkSync(temp);
+      return { code: 'path_multiply_linked', detail: rel };
+    }
+    beforeRename?.();
+    renameSync(temp, target);
+    return null;
+  } catch (error) {
+    try {
+      unlinkSync(temp);
+    } catch {
+      // nothing left to clean up (for example after a successful rename)
+    }
+    throw error;
+  }
+}
+
+/**
+ * Append one ledger line to a leaf that cannot have been swapped or hard-linked:
+ * O_NOFOLLOW refuses a symlinked leaf at open, and the descriptor identity check
+ * refuses anything that is not the singly linked regular file inside the root.
+ * Any failure is a structured refusal — never a silent exit.
+ */
+function appendLedger(
+  realRoot: string,
+  entry: Record<string, unknown>,
+  beforeAppend?: () => void,
+): Refusal | null {
   const unsafe = containment(realRoot, LEDGER_REL);
   if (unsafe) return unsafe;
-  mkdirSync(dirname(join(realRoot, LEDGER_REL)), { recursive: true });
-  appendFileSync(join(realRoot, LEDGER_REL), `${JSON.stringify(entry)}\n`);
-  return null;
+  const target = join(realRoot, LEDGER_REL);
+  let fd: number;
+  try {
+    mkdirSync(dirname(target), { recursive: true });
+    const afterMkdir = containment(realRoot, LEDGER_REL);
+    if (afterMkdir) return afterMkdir;
+    beforeAppend?.();
+    fd = openSync(target, LEDGER_FLAGS, 0o644);
+  } catch (error) {
+    return ledgerFailure(error);
+  }
+  try {
+    const refusal = verifyOpened(fd, target, realRoot, LEDGER_REL);
+    if (refusal) return refusal;
+    writeSync(fd, `${JSON.stringify(entry)}\n`);
+    return null;
+  } catch (error) {
+    return ledgerFailure(error);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function printReport(io: Io, fields: {
@@ -579,6 +687,7 @@ type Run = {
   state: RunState;
   policy: ReadablePolicy;
   realRoot: string;
+  faults: BackfillOptions['faults'];
 };
 
 function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean): number {
@@ -595,8 +704,8 @@ function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean):
   io.err(`backfill: refused (${refusals.map((item) => item.code).join(', ')})\n`);
   if (!dryRun && state.realRoot !== null) {
     // The ledger target was validated before any mutation; a refusal here is a
-    // race, and a refusal that cannot be ledgered still exits 1.
-    appendLedger(state.realRoot, {
+    // race, and a refusal whose audit line cannot be written says so.
+    const ledger = appendLedger(state.realRoot, {
       schema: LEDGER_SCHEMA,
       command: COMMAND,
       repository_id: state.repositoryId,
@@ -605,23 +714,49 @@ function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean):
       at: state.at,
       result: 'refused',
     });
+    if (ledger !== null) io.err(`backfill: the refusal could not be ledgered (${ledger.code})\n`);
   }
   return 1;
+}
+
+/** A mutation that cannot be audited is reported as failed, never silently. */
+function ledgerFailed(run: Run, after: string | null, ledger: Refusal): number {
+  printReport(run.io, {
+    root: run.state.root,
+    repositoryId: run.state.repositoryId,
+    at: run.state.at,
+    before: run.state.before,
+    after,
+    result: 'failed',
+    migrations: run.state.migrations,
+    refusals: [ledger],
+  });
+  run.io.err(`backfill: failed (${ledger.code})\n`);
+  return 1;
+}
+
+/** The dry-run observation: print the diff for a would-be write, change nothing. */
+function dryRun(run: Run, decision: 'write' | 'no-op', candidateBytes: string): number {
+  if (decision === 'write') {
+    const before = run.policy.kind === 'present' ? run.policy.bytes : '';
+    run.io.out(unifiedDiff(POLICY_REL, before, candidateBytes));
+  }
+  return 0;
+}
+
+/** The policy write step: nothing on a no-op or dry-run, atomic replace on a write. */
+function writeStep(run: Run, candidateBytes: string, decision: 'write' | 'no-op'): Refusal | null {
+  if (decision !== 'write' || run.parsed.dryRun) return null;
+  return writeAtomic(run.realRoot, POLICY_REL, candidateBytes, run.faults?.beforePolicyWrite);
 }
 
 /** Apply the decision: write, ledger, report, or print the dry-run diff. */
 function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no-op'): number {
   const { io, parsed, state } = run;
-  if (decision === 'write' && !parsed.dryRun) {
-    const unsafe = writeContained(run.realRoot, POLICY_REL, candidateBytes);
-    if (unsafe) return refusal(io, state, [unsafe], parsed.dryRun);
-  }
+  const unsafe = writeStep(run, candidateBytes, decision);
+  if (unsafe) return refusal(io, state, [unsafe], parsed.dryRun);
   const after = decision === 'no-op' ? state.before : sha256(candidateBytes);
-  const result = decision === 'write' ? 'written' : 'no-op';
-  if (parsed.dryRun) {
-    if (decision === 'write') io.out(unifiedDiff(POLICY_REL, run.policy.kind === 'present' ? run.policy.bytes : '', candidateBytes));
-    return 0;
-  }
+  if (parsed.dryRun) return dryRun(run, decision, candidateBytes);
   const ledger = appendLedger(run.realRoot, {
     schema: LEDGER_SCHEMA,
     command: COMMAND,
@@ -629,19 +764,16 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
     before_sha256: state.before,
     after_sha256: after,
     at: state.at,
-    result,
-  });
-  if (ledger !== null) {
-    io.err(`backfill: failed: the ledger target became unsafe before the append (${ledger.code})\n`);
-    return 1;
-  }
+    result: decision === 'write' ? 'written' : 'no-op',
+  }, run.faults?.beforeLedgerAppend);
+  if (ledger !== null) return ledgerFailed(run, after, ledger);
   printReport(io, {
     root: state.root,
     repositoryId: state.repositoryId,
     at: state.at,
     before: state.before,
     after,
-    result,
+    result: decision === 'write' ? 'written' : 'no-op',
     migrations: state.migrations,
     refusals: [],
   });
@@ -650,6 +782,10 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
 
 /** Render the candidate and decide, after the inventory has cleared the write. */
 function produceDecision(run: Run): number {
+  // Revalidate both write targets after the inventory ran: a target invalidated
+  // during that step refuses before any mutation.
+  const recheck = containment(run.realRoot, LEDGER_REL) ?? containment(run.realRoot, POLICY_REL);
+  if (recheck) return refusal(run.io, run.state, [recheck], run.parsed.dryRun);
   const candidate = renderCandidate(run.options.templatesDir, run.state.repositoryId, run.current.toISOString().slice(0, 10));
   if ('refusal' in candidate) return refusal(run.io, run.state, [candidate.refusal], run.parsed.dryRun);
   const decision = decidePolicy(run.policy, candidate.bytes);
@@ -694,7 +830,7 @@ function executeBackfill(parsed: { root: string; dryRun: boolean }, options: Bac
     state.repositoryId = policy.repoId ?? basename(state.realRoot);
     state.before = sha256(policy.bytes);
   }
-  return consultInventory({ parsed, options, io, current, state, policy, realRoot: state.realRoot });
+  return consultInventory({ parsed, options, io, current, state, policy, realRoot: state.realRoot, faults: options.faults });
 }
 
 /**

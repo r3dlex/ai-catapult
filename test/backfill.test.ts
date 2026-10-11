@@ -35,12 +35,14 @@ import {
   existsSync,
   chmodSync,
   linkSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -118,9 +120,11 @@ function busy(entries: Array<Obj>): InventoryOutcome {
 
 type ModuleRun = { code: number; out: string; err: string };
 
+type Faults = { beforePolicyWrite?: () => void; beforeLedgerAppend?: () => void };
+
 function runModule(
   argv: string[],
-  options: { root: string; inventory?: InventoryRunner | undefined; templatesDir?: string; vendorSkillsDir?: string | undefined; at?: Date },
+  options: { root: string; inventory?: InventoryRunner | undefined; templatesDir?: string; vendorSkillsDir?: string | undefined; at?: Date; faults?: Faults },
 ): ModuleRun {
   const out: string[] = [];
   const err: string[] = [];
@@ -129,6 +133,7 @@ function runModule(
     vendorSkillsDir: options.vendorSkillsDir,
     inventory: options.inventory,
     now: () => options.at ?? STAMP,
+    faults: options.faults,
     io: { out: (text) => out.push(text), err: (text) => err.push(text) },
   });
   return { code, out: out.join(''), err: err.join('') };
@@ -580,6 +585,87 @@ void test('ACH-C-04 backfill: refuses a hard-linked ledger and leaves the outsid
   assert.equal(refusalsOf(run)[0]?.code, 'path_multiply_linked');
   assert.equal(readFileSync(alias, 'utf8'), '{"schema":"existing"}\n');
   assert.equal(existsSync(join(root, POLICY_REL)), false);
+});
+
+void test('ACH-C-04 backfill: a ledger invalidated during inventory refuses before the policy write with a structured report', () => {
+  const outside = fixtureRoot('backfill-race-inventory-outside-');
+  const root = fixtureRoot('backfill-race-inventory-');
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => {
+      mkdirSync(join(root, '.ai'), { recursive: true });
+      symlinkSync(outside, join(root, '.ai/drift'));
+      return ok([]);
+    },
+  });
+  assert.equal(run.code, 1);
+  assert.equal(refusalsOf(run)[0]?.code, 'path_symlinked');
+  assert.match(String(refusalsOf(run)[0]?.detail), /backfill-ledger\.jsonl/);
+  assert.equal(existsSync(join(root, POLICY_REL)), false, 'no policy write after the ledger was invalidated');
+  assert.deepEqual(readdirSync(outside), [], 'nothing may be written outside --root');
+  assert.equal(ledgerLines(root).length, 0);
+});
+
+void test('ACH-C-04 backfill: a policy leaf swapped at the write boundary cannot write through the alias', () => {
+  const outside = fixtureRoot('backfill-race-policy-outside-');
+  const alias = join(outside, 'readiness-policy.json');
+  writeFileSync(alias, 'outside-untouched\n');
+  const root = fixtureRoot('backfill-race-policy-');
+  const repoId = root.split('/').at(-1) ?? '';
+  let fired = false;
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforePolicyWrite: () => {
+        fired = true;
+        symlinkSync(alias, join(root, POLICY_REL));
+      },
+    },
+  });
+  assert.equal(fired, true, 'the write-boundary fault point must exist');
+  assert.equal(run.code, 0, run.err);
+  assert.equal(readFileSync(alias, 'utf8'), 'outside-untouched\n', 'the outside alias must never be written');
+  assert.equal(lstatSync(join(root, POLICY_REL)).isSymbolicLink(), false, 'the swapped symlink is replaced, never followed');
+  assert.equal(readFileSync(join(root, POLICY_REL), 'utf8'), candidate(repoId));
+});
+
+void test('ACH-C-04 backfill: a ledger leaf swapped at the append boundary refuses without appending through the alias', () => {
+  const outside = fixtureRoot('backfill-race-ledger-outside-');
+  const alias = join(outside, 'backfill-ledger.jsonl');
+  writeFileSync(alias, '{"schema":"outside"}\n');
+  const root = fixtureRoot('backfill-race-ledger-');
+  let fired = false;
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        fired = true;
+        mkdirSync(join(root, '.ai/drift'), { recursive: true });
+        symlinkSync(alias, join(root, LEDGER_REL));
+      },
+    },
+  });
+  assert.equal(fired, true, 'the append-boundary fault point must exist');
+  assert.equal(run.code, 1);
+  assert.equal(readFileSync(alias, 'utf8'), '{"schema":"outside"}\n', 'the outside alias must never be appended');
+  const report = reportOf(run);
+  assert.equal(report.result, 'failed', 'a post-write ledger failure must be reported, never silent');
+  assert.equal((report.refusals as Array<Obj>)[0]?.code, 'path_symlinked');
+  assert.equal(existsSync(join(root, POLICY_REL)), true, 'the policy write had already landed when the append failed');
+});
+
+void test('ACH-C-04 backfill: the policy is replaced atomically, never truncated in place', () => {
+  const root = fixtureRoot('backfill-atomic-policy-');
+  const v1 = '{\n  "schema": "readiness-policy/1"\n}\n';
+  write(root, POLICY_REL, v1);
+  const inodeBefore = statSync(join(root, POLICY_REL)).ino;
+  const run = runModule(['--policy-v2', '--root', root], { root, inventory: () => ok([]) });
+  assert.equal(run.code, 0, run.err);
+  assert.notEqual(statSync(join(root, POLICY_REL)).ino, inodeBefore, 'a renamed replacement has a new inode');
+  const leftovers = readdirSync(join(root, '.ai/policies'));
+  assert.deepEqual(leftovers, ['readiness-policy.json'], 'no temp file may be left behind');
 });
 
 // ---------------------------------------------------------------------------
