@@ -8,6 +8,7 @@ import { resolveVendorSkill } from '../src/skill-resolver.ts';
 import { runMatrixRuntime } from '../src/matrix-runtime.ts';
 import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.ts';
 import { runKnowledge } from '../src/knowledge.ts';
+import { runAdopt } from '../src/adopt.ts';
 import type { ReadmeContract } from '../src/readme-contract.ts';
 import {
   assertReadmeWriteAllowed,
@@ -60,6 +61,7 @@ Commands:
   install                      Install Claude Code and Codex plugins into detected harnesses
   graph-hooks install <target> Wire graph-automation git hooks and wrapper into a target git repo
   knowledge <verb>             Read the .ai/knowledge registry (list|find|show|verify|rebuild|serialize)
+  adopt [target]               Dry-run knowledge inventory and migration map
 
 Options:
   -v, --version  Print version
@@ -283,6 +285,7 @@ function dispatchVerb(verb: string, rest: string[]): void {
   if (verb === 'matrix') process.exit(runMatrixRuntime(rest));
   if (verb === 'ci-adapters') process.exit(runCiAdaptersRuntime(rest));
   if (verb === 'knowledge') process.exit(runKnowledge(rest));
+  if (verb === 'adopt') process.exit(runAdopt(rest));
   process.stderr.write(`Unknown argument: ${verb}. Run ai-catapult --help for usage.\n`);
   process.exit(1);
 }
