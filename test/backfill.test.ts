@@ -691,6 +691,33 @@ void test('ACH-C-04 backfill: a ledger leaf swapped at the append boundary refus
   assert.equal(existsSync(join(root, POLICY_REL)), true, 'the policy write had already landed when the append failed');
 });
 
+void test('ACH-C-04 backfill: a ledger hard link swapped in at the append boundary refuses without writing through the alias', () => {
+  const outside = fixtureRoot('backfill-race-ledger-hardlink-outside-');
+  const alias = join(outside, 'backfill-ledger.jsonl');
+  const original = '{"schema":"outside"}\n';
+  writeFileSync(alias, original);
+  const root = fixtureRoot('backfill-race-ledger-hardlink-');
+  let fired = false;
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        fired = true;
+        mkdirSync(join(root, '.ai/drift'), { recursive: true });
+        linkSync(alias, join(root, LEDGER_REL));
+      },
+    },
+  });
+  assert.equal(fired, true, 'the append-boundary fault point must exist');
+  assert.equal(run.code, 1);
+  assert.equal(readFileSync(alias, 'utf8'), original, 'the outside alias must never be appended');
+  const report = reportOf(run);
+  assert.equal(report.result, 'failed', 'a descriptor-rejected append must be reported, never silent');
+  assert.equal((report.refusals as Array<Obj>)[0]?.code, 'path_multiply_linked');
+  assert.equal(existsSync(join(root, POLICY_REL)), true, 'the policy write had already landed when the append failed');
+});
+
 void test('ACH-C-04 backfill: the policy is replaced atomically, never truncated in place', () => {
   const root = fixtureRoot('backfill-atomic-policy-');
   const v1 = '{\n  "schema": "readiness-policy/1"\n}\n';
