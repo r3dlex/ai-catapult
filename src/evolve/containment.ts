@@ -39,13 +39,13 @@
  *     relative to the bound inode. A relocation first detected only after a
  *     kernel mutation is compensated only for bytes this call can still
  *     identify as its own: a created file is unlinked by inode identity; an
- *     appended suffix is removed only while it is still the file's tail
- *     (byte-equal to the suffix this call wrote); a replaced file is restored
- *     from its captured original bytes only while the file still equals the
- *     bytes this call wrote. Otherwise the call refuses and does not truncate
- *     or rewrite. A competing write of different bytes is left in place. An
- *     identical competing suffix at the tail cannot be distinguished from ours
- *     and may be removed with it. This is not a claim that net external change
+ *     appended suffix is removed only while it is still the file's tail and
+ *     the bytes immediately before that tail are not the same suffix. If they
+ *     are, the tail may be a competing writer's copy and the append is not
+ *     truncated. A replaced file is restored from its captured original bytes
+ *     only while the file still equals the bytes this call wrote. Otherwise
+ *     the call refuses and does not truncate or rewrite. Ambiguous ownership
+ *     leaves the bytes untouched. This is not a claim that net external change
  *     is zero.
  *   - Missing-root creation: the caller path is walked before any create.
  *     Missing components are created one level at a time only after the parent
@@ -528,16 +528,25 @@ export function appendFileHere(name: string, contents: string): Buffer {
   }
 }
 
-/** Remove our suffix only while it is still the tail. Never truncate to a pre-write size. */
+/**
+ * Remove our suffix only while it is the tail and the preceding window is not
+ * the same suffix. An identical copy immediately before the tail means the
+ * tail may belong to a competing writer; leave the file untouched. Never
+ * truncate to a size captured before the write.
+ */
 function rollbackOwnSuffix(fd: number, contents: string): void {
   const ours = Buffer.from(contents, 'utf8');
   if (ours.length === 0) return;
   const size = fstatSync(fd).size;
-  if (size < ours.length) return;
-  const tail = Buffer.alloc(ours.length);
-  const read = readSync(fd, tail, 0, ours.length, size - ours.length);
-  if (read !== ours.length || !tail.equals(ours)) return;
+  if (size < ours.length || !regionEquals(fd, size - ours.length, ours)) return;
+  if (size >= ours.length * 2 && regionEquals(fd, size - ours.length * 2, ours)) return;
   ftruncateSync(fd, size - ours.length);
+}
+
+function regionEquals(fd: number, position: number, expected: Buffer): boolean {
+  const buf = Buffer.alloc(expected.length);
+  const read = readSync(fd, buf, 0, expected.length, position);
+  return read === expected.length && buf.equals(expected);
 }
 
 /**

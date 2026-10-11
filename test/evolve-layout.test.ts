@@ -841,6 +841,44 @@ void test('append rollback does not truncate when a competing writer landed afte
   }
 });
 
+void test('append rollback does not remove an identical suffix a competing writer appended after ours', () => {
+  const { paths, root } = initTmpLayout('evolve-append-rollback-identical-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-wiki');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    writeFileSync(paths.wikiLogsFile, 'ORIGINAL\n');
+    withPatchedFs(
+      {
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            const written = originalWriteSync(...args);
+            appendFileSync(paths.wikiLogsFile, 'OURS\n');
+            renameSync(paths.wikiDir, moved);
+            symlinkSync(moved, paths.wikiDir);
+            return written;
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => appendWikiFile(paths, 'logs.md', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'logs.md'), 'utf8'), 'ORIGINAL\nOURS\nOURS\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test('final-root substitution that returns ENOTDIR is an unsafe-path refusal', () => {
   const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-enotdir-')));
   const root = join(base, 'workspace');
