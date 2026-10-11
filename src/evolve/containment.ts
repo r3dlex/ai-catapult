@@ -36,20 +36,31 @@
  *     re-resolved with lstat and compared with its recorded identity; a
  *     missing, symlinked, replaced or moved level refuses with a distinct
  *     error naming the level — before any byte is written. File opens stay
- *     relative to the bound inode, and a relocation first detected only after
- *     a kernel mutation (the check-to-write window) is reverted for our own
- *     bytes: a created file is unlinked by inode identity, an appended file
- *     is truncated back to its prior size, and a replaced overlay is rewritten
- *     from its captured original bytes. Net external byte change is then zero
- *     or the call fails closed.
+ *     relative to the bound inode. A relocation first detected only after a
+ *     kernel mutation is compensated only for bytes this call can still
+ *     identify as its own: a created file is unlinked by inode identity; an
+ *     appended suffix is removed only while it is still the file's tail
+ *     (byte-equal to the suffix this call wrote); a replaced file is restored
+ *     from its captured original bytes only while the file still equals the
+ *     bytes this call wrote. Otherwise the call refuses and does not truncate
+ *     or rewrite. A competing write of different bytes is left in place. An
+ *     identical competing suffix at the tail cannot be distinguished from ours
+ *     and may be removed with it. This is not a claim that net external change
+ *     is zero.
+ *   - Missing-root creation: the caller path is walked before any create.
+ *     Missing components are created one level at a time only after the parent
+ *     is a real directory, and a create observed to have followed a substituted
+ *     ancestor is removed by device+inode (empty directory only) before the
+ *     refusal is returned.
+ *   - Hard-linked leaves: a regular file with nlink > 1 is refused before any
+ *     write, so an outside hard link is not mutated.
  *   - Known residual, declared: darwin has no openat2/RESOLVE_BENEATH and Node
  *     exposes no openat/fchdir. A concurrent hostile relocator that interposes
  *     between the very last identity re-verification and the kernel write can
- *     still have that single write land in the relocated inode; the
- *     re-verification immediately precedes both the open and the write, and
- *     the post-mutation revert above is the compensating control. Relocation
- *     is refused whenever observed; the unobservable window is explicitly
- *     outside this boundary.
+ *     still have that single write land in the relocated inode. That interval
+ *     is outside this boundary. Relocation is refused whenever observed;
+ *     compensation above does not close the interval and does not undo a write
+ *     that cannot be identified as ours.
  *
  * Creation is atomic: directories via mkdir with an EEXIST re-check, new files
  * via O_CREAT|O_EXCL, wiki appends via O_APPEND. The cwd and the recorded
@@ -110,15 +121,120 @@ function bindRoot(root: string): RootBinding {
   // canonicalize before binding).
   const anchor = resolve(root);
   const chain = callerPathChain(anchor);
-  if (chain === null) {
-    mkdirSync(anchor, { recursive: true });
-    const created = callerPathChain(anchor);
-    if (created === null) {
+  if (chain !== null) return bindVerifiedRoot(anchor, chain);
+  return bindVerifiedRoot(anchor, createMissingRoot(anchor));
+}
+
+interface CreatedDir {
+  readonly path: string;
+  readonly dev: number;
+  readonly ino: number;
+}
+
+/**
+ * Create only the missing suffix, after the existing prefix is a real
+ * directory chain. A mkdir that followed a substituted ancestor is removed
+ * by identity before the refusal propagates.
+ */
+function createMissingRoot(anchor: string): BoundLevel[] {
+  const created: CreatedDir[] = [];
+  try {
+    for (const path of missingCallerSuffix(anchor)) {
+      verifyParentBeforeCreate(path);
+      createOneDirectory(path, created);
+    }
+    const chain = callerPathChain(anchor);
+    if (chain === null) {
       throw new EvolveError('unsafe-path', `${anchor} could not be created as a real directory`);
     }
-    return bindVerifiedRoot(anchor, created);
+    return chain;
+  } catch (error) {
+    revertCreatedDirectories(created);
+    throw error;
   }
-  return bindVerifiedRoot(anchor, chain);
+}
+
+function missingCallerSuffix(anchor: string): string[] {
+  const missing: string[] = [];
+  let prefix = '';
+  let gap = false;
+  for (const part of anchor.split('/').filter((segment) => segment !== '')) {
+    prefix = `${prefix}/${part}`;
+    if (gap) {
+      missing.push(prefix);
+      continue;
+    }
+    const stat = lstatOrMissing(prefix);
+    if (stat === null) {
+      gap = true;
+      missing.push(prefix);
+      continue;
+    }
+    if (stat.isSymbolicLink()) throw symlinkedRootRefusal(prefix);
+    if (!stat.isDirectory()) throw nonDirectoryRootRefusal(prefix);
+  }
+  return missing;
+}
+
+function lstatOrMissing(path: string): Stats | null {
+  try {
+    return lstatSync(path);
+  } catch (error) {
+    if (nodeErrorCode(error) === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+function verifyParentBeforeCreate(path: string): void {
+  const parent = path.slice(0, path.lastIndexOf('/'));
+  if (parent === '') return;
+  const stat = lstatOrMissing(parent);
+  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw movedRefusal(parent);
+}
+
+function createOneDirectory(path: string, created: CreatedDir[]): void {
+  const made = mkdirOne(path);
+  const stat = lstatOrMissing(path);
+  rememberCreated(path, made, stat, created);
+  // Re-walk after the create: a substituted ancestor is a symlink on this
+  // path even when mkdir followed it and the leaf landed outside.
+  if (!createdDirectoryIsInside(path, stat)) {
+    throw new EvolveError('unsafe-path', `${path} could not be created as a real directory`);
+  }
+}
+
+function mkdirOne(path: string): boolean {
+  try {
+    mkdirSync(path);
+    return true;
+  } catch (error) {
+    if (nodeErrorCode(error) !== 'EEXIST') throw error;
+    return false;
+  }
+}
+
+function rememberCreated(path: string, made: boolean, stat: Stats | null, created: CreatedDir[]): void {
+  if (stat === null || !made || !stat.isDirectory() || stat.isSymbolicLink()) return;
+  created.push({ path, dev: stat.dev, ino: stat.ino });
+}
+
+function createdDirectoryIsInside(path: string, stat: Stats | null): boolean {
+  if (stat === null || !stat.isDirectory() || stat.isSymbolicLink()) return false;
+  return callerPathChain(path) !== null;
+}
+
+function revertCreatedDirectories(created: readonly CreatedDir[]): void {
+  for (const dir of [...created].reverse()) {
+    try {
+      const stat = lstatSync(dir.path);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) continue;
+      if (stat.dev !== dir.dev || stat.ino !== dir.ino) continue;
+      rmdirSync(dir.path);
+    } catch {
+      // Empty-directory revert only. A non-empty directory holds another
+      // writer's bytes and is left in place.
+    }
+  }
 }
 
 function bindVerifiedRoot(anchor: string, chain: readonly BoundLevel[]): RootBinding {
@@ -143,7 +259,10 @@ function openRootDirectory(root: string): number {
   try {
     return openSync(root, constants.O_RDONLY | DIRECTORY | NOFOLLOW);
   } catch (error) {
-    if (nodeErrorCode(error) === 'ELOOP') throw symlinkedRootRefusal(root);
+    const code = nodeErrorCode(error);
+    // Darwin returns ENOTDIR, not ELOOP, for O_DIRECTORY|O_NOFOLLOW on a symlink.
+    if (code === 'ELOOP') throw symlinkedRootRefusal(root);
+    if (code === 'ENOTDIR') throw openRootRefusal(root);
     throw error;
   }
 }
@@ -162,15 +281,17 @@ function callerPathChain(anchor: string): BoundLevel[] | null {
       throw error;
     }
     if (stat.isSymbolicLink()) throw symlinkedRootRefusal(prefix);
-    if (!stat.isDirectory()) {
-      throw new EvolveError(
-        'unsafe-path',
-        `${prefix} must be a real directory; the workspace root path cannot traverse a non-directory`,
-      );
-    }
+    if (!stat.isDirectory()) throw nonDirectoryRootRefusal(prefix);
     levels.push({ path: prefix, dev: stat.dev, ino: stat.ino });
   }
   return levels;
+}
+
+function nonDirectoryRootRefusal(path: string): EvolveError {
+  return new EvolveError(
+    'unsafe-path',
+    `${path} must be a real directory; the workspace root path cannot traverse a non-directory`,
+  );
 }
 
 function symlinkedRootRefusal(path: string): EvolveError {
@@ -343,6 +464,7 @@ export function createFileHere(name: string, contents: string): void {
   try {
     try {
       verifyBoundChain();
+      refuseMultiplyLinked(fd, name);
     } catch (error) {
       removeFileHere(fd, name);
       throw error;
@@ -364,6 +486,7 @@ export function replaceFileHere(name: string, contents: string): void {
   verifyBoundChain();
   const { fd, created } = openReplacement(name);
   try {
+    refuseMultiplyLinked(fd, name);
     const original = created ? Buffer.alloc(0) : readAll(fd);
     try {
       verifyBoundChain();
@@ -377,10 +500,7 @@ export function replaceFileHere(name: string, contents: string): void {
       verifyBoundChain();
     } catch (error) {
       if (created) removeFileHere(fd, name);
-      else {
-        ftruncateSync(fd, 0);
-        writeAll(fd, original);
-      }
+      else restoreReplacement(fd, original, contents);
       throw error;
     }
   } finally {
@@ -393,18 +513,54 @@ export function appendFileHere(name: string, contents: string): Buffer {
   verifyBoundChain();
   const fd = openHere(name, constants.O_RDWR | constants.O_APPEND);
   try {
-    const sizeBefore = fstatSync(fd).size;
+    refuseMultiplyLinked(fd, name);
     verifyBoundChain();
     writeAll(fd, contents);
     try {
       verifyBoundChain();
     } catch (error) {
-      if (fstatSync(fd).size > sizeBefore) ftruncateSync(fd, sizeBefore);
+      rollbackOwnSuffix(fd, contents);
       throw error;
     }
     return readAll(fd);
   } finally {
     closeSync(fd);
+  }
+}
+
+/** Remove our suffix only while it is still the tail. Never truncate to a pre-write size. */
+function rollbackOwnSuffix(fd: number, contents: string): void {
+  const ours = Buffer.from(contents, 'utf8');
+  if (ours.length === 0) return;
+  const size = fstatSync(fd).size;
+  if (size < ours.length) return;
+  const tail = Buffer.alloc(ours.length);
+  const read = readSync(fd, tail, 0, ours.length, size - ours.length);
+  if (read !== ours.length || !tail.equals(ours)) return;
+  ftruncateSync(fd, size - ours.length);
+}
+
+/**
+ * Restore the captured original only while the file is still exactly the bytes
+ * this call wrote. A competing write after ours is left untouched.
+ */
+function restoreReplacement(fd: number, original: Buffer, contents: string): void {
+  if (!readAll(fd).equals(Buffer.from(contents, 'utf8'))) return;
+  ftruncateSync(fd, 0);
+  writeAt(fd, original, 0);
+}
+
+function writeAt(fd: number, bytes: Buffer, position: number): void {
+  let offset = 0;
+  while (offset < bytes.length) {
+    offset += writeSync(fd, bytes, offset, bytes.length - offset, position + offset);
+  }
+}
+
+function refuseMultiplyLinked(fd: number, name: string): void {
+  const stat = fstatSync(fd);
+  if (stat.isFile() && stat.nlink > 1) {
+    throw new EvolveError('unsafe-path', `${name} is multiply linked; evolve writes refuse a hard-linked leaf`);
   }
 }
 

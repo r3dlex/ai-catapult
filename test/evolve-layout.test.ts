@@ -33,6 +33,7 @@ import fs, {
   renameSync,
   rmSync,
   statSync,
+  linkSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -127,7 +128,7 @@ type PatchedFsFunction = (...args: unknown[]) => unknown;
  * review used to reproduce the check-to-open swap). Test-only helper.
  */
 function withPatchedFs<T>(
-  patches: Partial<Record<'lstatSync' | 'realpathSync' | 'openSync' | 'writeSync' | 'writeFileSync', PatchedFsFunction>>,
+  patches: Partial<Record<'lstatSync' | 'realpathSync' | 'openSync' | 'writeSync' | 'writeFileSync' | 'mkdirSync', PatchedFsFunction>>,
   run: () => T,
 ): T {
   const originals: Array<[string, unknown]> = [];
@@ -690,6 +691,259 @@ void test('ancestor-of-root substitution is refused at bind time and after bind 
     }
   } finally {
     rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('a descended directory create refuses a substituted ancestor without an external residue', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-ensure-dir-')));
+  const parent = join(base, 'parent');
+  const outside = join(base, 'outside');
+  const root = join(parent, 'workspace');
+  const originalMkdir = Reflect.get(fs, 'mkdirSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(root, { recursive: true });
+    mkdirSync(outside);
+    withPatchedFs(
+      {
+        mkdirSync: (...args: unknown[]) => {
+          if (!fired && args[0] === EVOLVE_DIR) {
+            fired = true;
+            renameSync(parent, `${parent}-saved`);
+            symlinkSync(outside, parent);
+          }
+          return originalMkdir(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => initEvolveLayout(root),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(existsSync(join(outside, 'workspace')), false);
+    assert.deepEqual(readdirSync(outside), []);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('missing-root bind refuses a substituted ancestor without leaving an external directory', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-missing-root-')));
+  const parent = join(base, 'parent');
+  const outside = join(base, 'outside');
+  const root = join(parent, 'new-root');
+  const originalMkdir = Reflect.get(fs, 'mkdirSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(parent);
+    mkdirSync(outside);
+    withPatchedFs(
+      {
+        // Architect r3 shape: substitute the parent immediately before the
+        // missing-root mkdir, then let the real mkdir run.
+        mkdirSync: (...args: unknown[]) => {
+          if (!fired && args[0] === root) {
+            fired = true;
+            renameSync(parent, `${parent}-saved`);
+            symlinkSync(outside, parent);
+          }
+          return originalMkdir(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => initEvolveLayout(root),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(existsSync(join(outside, 'new-root')), false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('append rollback keeps a competing writer that landed before our suffix', () => {
+  const { paths, root } = initTmpLayout('evolve-append-rollback-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-wiki');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    writeFileSync(paths.wikiLogsFile, 'ORIGINAL\n');
+    withPatchedFs(
+      {
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            appendFileSync(paths.wikiLogsFile, 'RACER\n');
+            renameSync(paths.wikiDir, moved);
+            symlinkSync(moved, paths.wikiDir);
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => appendWikiFile(paths, 'logs.md', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'logs.md'), 'utf8'), 'ORIGINAL\nRACER\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('append rollback does not truncate when a competing writer landed after our suffix', () => {
+  const { paths, root } = initTmpLayout('evolve-append-rollback-after-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-wiki');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    writeFileSync(paths.wikiLogsFile, 'ORIGINAL\n');
+    withPatchedFs(
+      {
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            const written = originalWriteSync(...args);
+            appendFileSync(paths.wikiLogsFile, 'RACER\n');
+            renameSync(paths.wikiDir, moved);
+            symlinkSync(moved, paths.wikiDir);
+            return written;
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => appendWikiFile(paths, 'logs.md', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'logs.md'), 'utf8'), 'ORIGINAL\nOURS\nRACER\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('final-root substitution that returns ENOTDIR is an unsafe-path refusal', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-enotdir-')));
+  const root = join(base, 'workspace');
+  const outside = join(base, 'outside');
+  const originalOpen = Reflect.get(fs, 'openSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    initEvolveLayout(root);
+    initEvolveLayout(outside);
+    const sentinel = join(outside, 'evolve', 'wiki', 'logs.md');
+    writeFileSync(sentinel, 'SENTINEL');
+    withPatchedFs(
+      {
+        openSync: (...args: unknown[]) => {
+          if (!fired && args[0] === root) {
+            fired = true;
+            renameSync(root, `${root}-saved`);
+            symlinkSync(outside, root);
+          }
+          return originalOpen(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => appendWikiFile(evolvePaths(root), 'logs.md', 'ATTACK\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(sentinel, 'utf8'), 'SENTINEL');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('a hard-linked wiki leaf is refused and the outside alias is not mutated', () => {
+  const { paths, root } = initTmpLayout('evolve-hardlink-wiki-');
+  const alias = join(root, 'outside-logs.md');
+  try {
+    writeFileSync(paths.wikiLogsFile, 'KEEP\n');
+    linkSync(paths.wikiLogsFile, alias);
+    assert.throws(
+      () => appendWikiFile(paths, 'logs.md', 'ATTACK\n'),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+    assert.equal(readFileSync(alias, 'utf8'), 'KEEP\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('a hard-linked overlay leaf is refused and the outside alias is not mutated', () => {
+  const { paths, root } = initTmpLayout('evolve-hardlink-overlay-');
+  const alias = join(root, 'outside-overlay');
+  try {
+    const staged = stageOverlay(paths, 'skill', 'KEEP\n');
+    linkSync(staged.path, alias);
+    assert.throws(
+      () => stageOverlay(paths, 'skill', 'ATTACK\n'),
+      (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+    );
+    assert.equal(readFileSync(alias, 'utf8'), 'KEEP\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('overlay rollback does not restore over a competing writer that landed after our bytes', () => {
+  const { paths, root } = initTmpLayout('evolve-overlay-rollback-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-proposals');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    stageOverlay(paths, 'skill', 'ORIGINAL\n');
+    withPatchedFs(
+      {
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            const written = originalWriteSync(...args);
+            appendFileSync(join(paths.proposalsDir, 'skill.overlay'), 'RACER\n');
+            renameSync(paths.proposalsDir, moved);
+            symlinkSync(moved, paths.proposalsDir);
+            return written;
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => stageOverlay(paths, 'skill', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'skill.overlay'), 'utf8'), 'OURS\nRACER\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 
