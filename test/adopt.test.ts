@@ -1820,6 +1820,53 @@ void test('replay refuses a corrupt confirmation ledger before returning', () =>
   });
 });
 
+void test('a preserved target is not rewritten when it cites a migrated source', () => {
+  ac7Guarded('preserved-target-citer', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    const kept = '.ai/system-prompts/researcher.md';
+    const citation = 'See .agents/skills/researcher/REFERENCE.md in the preserved target.\n';
+    try {
+      mkdirSync(dirname(join(tmp, kept)), { recursive: true });
+      writeFileSync(join(tmp, kept), citation);
+      commitAll(tmp, 'preserved target');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-34', tmp]);
+      const map = parseMap(dry.stdout);
+      assert.equal(itemBySource(map, SKILL).target, kept);
+      assert.equal(itemBySource(map, REFERENCE).action, 'migrate');
+      const file = migrateConfirmation(tmp, map, 'run-34');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-34', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assert.equal(readFileSync(join(tmp, kept), 'utf8'), citation, 'a preserved target is not repaired');
+      assert.equal(existsSync(join(tmp, REFERENCE)), false, 'the confirmed migration still applies');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a newline around an inline destination is preserved and rebased', () => {
+  ac7Guarded('newline-destination', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), '[skill](\nSKILL.md\n)\n');
+      commitAll(tmp, 'newline destination');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-35', tmp]);
+      const map = parseMap(dry.stdout);
+      const referenceTarget = itemBySource(map, REFERENCE).target as string;
+      const skillTarget = itemBySource(map, SKILL).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-35', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const skill = posix.relative(posix.dirname(referenceTarget), skillTarget);
+      const copied = readFileSync(join(tmp, referenceTarget), 'utf8');
+      assert.equal(copied, `[skill](\n${skill}\n)\n`, copied);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
 void test('escaped reference labels and spaced destinations are rebased', () => {
   ac7Guarded('escaped-label-space', () => {
     const tmp = stageGitRepo('legacy-agents', 'single');

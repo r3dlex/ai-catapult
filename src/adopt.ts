@@ -961,11 +961,17 @@ function skipSpace(text: string, at: number): number {
   return index;
 }
 
+function skipInlineSpace(text: string, at: number): number {
+  let index = at;
+  while (text[index] === ' ' || text[index] === '\t' || text[index] === '\n' || text[index] === '\r') index += 1;
+  return index;
+}
+
 function readInlineDestination(text: string, openParen: number): { start: number; end: number; destination: string } | null {
   if (text[openParen] !== '(') return null;
-  const start = skipSpace(text, openParen + 1);
+  const start = skipInlineSpace(text, openParen + 1);
   const end = text[start] === '<' ? angledEnd(text, start) : readBareDestination(text, start);
-  if (end === null || end === start || text[skipSpace(text, skipTitle(text, end))] !== ')') return null;
+  if (end === null || end === start || text[skipInlineSpace(text, skipTitle(text, end))] !== ')') return null;
   return { start, end, destination: text.slice(start, end) };
 }
 
@@ -1330,14 +1336,14 @@ function repairReferences(
   relocations: AppliedMove[],
   dirty: Set<string>,
   managed: string[],
+  preserved: Set<string>,
 ): RefRepair[] {
   const relocatedTargets = new Set(relocations.map((entry) => entry.target));
   const repairs: RefRepair[] = [];
   for (const citer of citers) {
     // A relocated document is rebased once, with every local link, before this
-    // per-source pass. Rewriting it again would resolve already-rebased links
-    // from the original directory.
-    if (relocatedTargets.has(citer)) continue;
+    // per-source pass. A preserved target is present-not-overwritten.
+    if (relocatedTargets.has(citer) || preserved.has(citer)) continue;
     if (!repairAllowed(root, citer, policy, source, target, dirty, managed)) continue;
     const updated = rewriteCiter(root, citer, originalCiter(citer, relocations), source, target);
     if (updated === null) continue;
@@ -1529,6 +1535,7 @@ function repairsFor(
   relocations: AppliedMove[],
   dirty: Set<string>,
   managed: string[],
+  preserved: Set<string>,
 ): RefRepair[] {
   if (item.result !== 'applied') return [];
   const action = item.entry.item.action;
@@ -1542,6 +1549,7 @@ function repairsFor(
     relocations,
     dirty,
     managed,
+    preserved,
   );
 }
 
@@ -1574,7 +1582,8 @@ function executePlan(
     }
     const repairs = new Map<PlannedAction, RefRepair[]>();
     for (const item of moved) {
-      const citation = repairsFor(root, policy, item, citers, relocations, dirty, managed);
+      const preserved = new Set(plan.filter((entry) => entry.targetSha !== null).map((entry) => entry.target));
+      const citation = repairsFor(root, policy, item, citers, relocations, dirty, managed, preserved);
       const own = rebased.get(item.entry.target);
       repairs.set(item.entry, own === undefined ? citation : [own, ...citation]);
     }
@@ -1696,8 +1705,9 @@ function assertRepairPermissions(root: string, plan: PlannedAction[], dirty: Set
     source: entry.item.source,
     target: entry.target,
   }));
+  const preserved = new Set(plan.filter((entry) => entry.targetSha !== null).map((entry) => entry.target));
   for (const citer of citersFor(root, plan)) {
-    if (relocations.some((entry) => entry.target === citer)) continue;
+    if (relocations.some((entry) => entry.target === citer) || preserved.has(citer)) continue;
     if (wouldRepair(root, citer, relocations, policy, dirty, managed)) {
       assertEffectivelyWritable(safePath(root, citer), citer);
     }
