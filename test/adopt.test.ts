@@ -804,6 +804,14 @@ void test('apply repairs tracked citations of a migrated source and records them
       const last = allRepairs[allRepairs.length - 1] as RefRepair;
       assert.equal(last.after_sha256, sha256File(join(tmp, refs)));
       for (const repair of allRepairs) assert.notEqual(repair.before_sha256, repair.after_sha256);
+      // Every recorded repair after-hash is the run's final bytes, so any
+      // recorded hash verifies against the current file.
+      for (const repair of events.flatMap((entry) => entry.refs_repaired)) {
+        assert.equal(
+          repair.after_sha256, sha256File(join(tmp, repair.file)),
+          `${repair.file} must record its final bytes`,
+        );
+      }
       assert.equal(
         events.some((entry) => entry.refs_repaired.some((repair) => repair.file === secret)),
         false,
@@ -910,13 +918,41 @@ void test('apply refuses a conflicting backup before writing anything', () => {
   });
 });
 
-void test('an interrupted run records a failed event and is recovered only under a fresh run id', () => {
-  ac7Guarded('failed-run', () => {
+void test('apply refuses a regular file occupying a destination parent path before writing anything', () => {
+  ac7Guarded('blocked-parent', () => {
     const tmp = stage('legacy-agents', 'single');
     try {
       // A regular file where the first target's parent directory belongs: the
-      // move fails after the map is recorded, nothing has moved yet.
+      // preflight refuses before the map, the ledger or any move.
       writeFileSync(join(tmp, 'docs/learning'), 'not a directory\n');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-10', tmp]);
+      const map = parseMap(dry.stdout);
+      const first = map.items.find((item) => item.source === '.agents/skills/researcher/REFERENCE.md');
+      assert.ok(first, 'the fixture carries the REFERENCE copy');
+      const before = treeDigest(tmp);
+      const refused = spawnAdopt(['--apply', '--run-id', 'run-10', tmp]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'target_conflict');
+      assert.equal(treeDigest(tmp), before, 'a blocked destination parent refuses before any write');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-10/map.json')), false);
+      assert.equal(existsSync(join(tmp, LEDGER_REL)), false, 'no ledger is created');
+      assert.ok(existsSync(join(tmp, first.source)), 'the source is kept');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('an interrupted run records a failed event and is recovered only under a fresh run id', () => {
+  ac7Guarded('failed-run', () => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
+    const tmp = stage('legacy-agents', 'single');
+    const parent = join(tmp, 'docs/learning/concept-maps');
+    try {
+      // The destination directory exists but forbids writes: the move fails at
+      // execution time, after the map is recorded and before any source moves.
+      mkdirSync(parent, { recursive: true });
+      chmodSync(parent, 0o555);
       const dry = spawnAdopt(['--dry-run', '--run-id', 'run-10', tmp]);
       const map = parseMap(dry.stdout);
       const first = map.items.find((item) => item.source === '.agents/skills/researcher/REFERENCE.md');
@@ -935,12 +971,17 @@ void test('an interrupted run records a failed event and is recovered only under
       assert.equal(rerun.status, 1);
       assert.equal(errorOf(rerun.stdout), 'replay_mismatch', 'a failed run is never replayed as a success');
 
-      rmSync(join(tmp, 'docs/learning'));
+      chmodSync(parent, 0o755);
       const recovered = spawnAdopt(['--apply', '--run-id', 'run-10b', tmp]);
       assert.equal(recovered.status, 0, `${recovered.stdout}\n${recovered.stderr}`);
       const after = readLedger(tmp);
       assert.equal(after.filter((event) => event.result === 'applied').length, 2, 'a fresh run id completes the run');
     } finally {
+      try {
+        chmodSync(parent, 0o755);
+      } catch {
+        // The directory may not exist if the fixture itself failed to stage.
+      }
       discard(tmp);
     }
   });
@@ -968,6 +1009,38 @@ void test('a native promotion item does not abort the apply of legacy relocation
       );
       assert.equal(readFileSync(join(tmp, '.omx/plans/sample.md'), 'utf8'), '# plan\n');
       assert.ok(existsSync(join(tmp, '.ai/system-prompts/researcher.md')), 'the legacy relocation still applies');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a replay refuses a drifted preserved target when every relocation was a noop', () => {
+  ac7Guarded('all-noop-drift', () => {
+    const tmp = stage('legacy-agents', 'single');
+    try {
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-14', tmp]);
+      const map = parseMap(dry.stdout);
+      const copies = map.items.filter((item) => item.action === 'copy');
+      assert.equal(copies.length, 2);
+      for (const item of copies) {
+        const target = item.target as string;
+        mkdirSync(dirname(join(tmp, target)), { recursive: true });
+        writeFileSync(join(tmp, target), `user content for ${item.source}\n`);
+      }
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-14', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const events = readLedger(tmp);
+      assert.equal(events.length, 2);
+      assert.deepEqual(events.map((event) => event.result), ['noop', 'noop']);
+
+      const changed = copies[0] as MapItem;
+      writeFileSync(join(tmp, changed.target as string), 'the preserved target changed\n');
+      const ledgerBefore = readLedger(tmp);
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-14', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'replay_mismatch');
+      assert.equal(readLedger(tmp).length, ledgerBefore.length, 'a refused replay appends nothing');
     } finally {
       discard(tmp);
     }

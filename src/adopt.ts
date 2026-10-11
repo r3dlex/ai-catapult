@@ -717,9 +717,23 @@ function assertMigrateTargets(map: MigrationMap): void {
   }
 }
 
+/**
+ * Every existing ancestor of a write destination must be a directory: a
+ * regular file on the path blocks the write and refuses the run before it
+ * touches anything.
+ */
+function assertWritableTarget(root: string, path: string, relative: string): void {
+  for (let parent = dirname(path); parent !== root && parent !== dirname(parent); parent = dirname(parent)) {
+    if (existsSync(parent) && !lstatSync(parent).isDirectory()) {
+      throw new KnowledgeError('target_conflict', `${relative}: an ancestor is not a directory`);
+    }
+  }
+}
+
 /** A pre-existing backup must hold the same bytes; anything else refuses the run. */
 function assertBackupFree(root: string, backup: string, beforeSha: string): void {
   const path = safePath(root, backup);
+  assertWritableTarget(root, path, backup);
   if (!existsSync(path) || fileDigest(path) === beforeSha) return;
   throw new KnowledgeError('backup_conflict', `${backup}: an existing backup holds different bytes`);
 }
@@ -736,6 +750,7 @@ function planOne(root: string, item: Relocation, runId: string): PlannedAction {
   if (exists && !lstatSync(targetPath).isFile()) {
     throw new KnowledgeError('target_conflict', `${item.target}: the v3 target is not a regular file`);
   }
+  assertWritableTarget(root, targetPath, item.target);
   const beforeSha = sha256Bytes(sourceBytes);
   const backup = item.action === 'migrate' ? `${BACKUPS_DIR}/${runId}/${item.source}` : null;
   if (backup !== null) assertBackupFree(root, backup, beforeSha);
@@ -908,6 +923,7 @@ function repairReferences(root: string, policy: Policy, source: string, target: 
 }
 
 function eventFor(
+  root: string,
   map: MigrationMap,
   entry: PlannedAction,
   result: 'applied' | 'noop',
@@ -927,7 +943,9 @@ function eventFor(
     refs_repaired: repairs.map((repair) => ({
       file: repair.file,
       before_sha256: sha256Bytes(repair.before),
-      after_sha256: sha256Bytes(repair.after),
+      // Every recorded after-hash is the run's final bytes: a citer repaired by
+      // two passes verifies against the file as it stands after the last one.
+      after_sha256: fileDigest(safePath(root, repair.file)) ?? sha256Bytes(repair.after),
     })),
     result,
   };
@@ -950,10 +968,14 @@ function assertValidEvents(events: MigrationEvent[]): void {
 }
 
 /** Catch a schema drift in the event shape before the first write. */
-function validateEventShape(plan: PlannedAction[], map: MigrationMap): void {
+function validateEventShape(root: string, plan: PlannedAction[], map: MigrationMap): void {
   const first = plan[0];
   if (first === undefined) return;
-  const probe = { ...eventFor(map, first, 'applied', first.beforeSha, []), seq: 1, at: new Date().toISOString() };
+  const probe = {
+    ...eventFor(root, map, first, 'applied', first.beforeSha, []),
+    seq: 1,
+    at: new Date().toISOString(),
+  };
   assertValidEvents([probe]);
 }
 
@@ -1084,7 +1106,7 @@ function executePlan(root: string, plan: PlannedAction[], map: MigrationMap, pol
       }
     }
     return moved.map((item) => (
-      eventFor(map, item.entry, item.result, finalAfterSha(root, item), repairs.get(item.entry) ?? [])
+      eventFor(root, map, item.entry, item.result, finalAfterSha(root, item), repairs.get(item.entry) ?? [])
     ));
   } catch (error) {
     recordFailed(root, map, plan[moved.length] ?? plan[plan.length - 1]);
@@ -1125,19 +1147,29 @@ function consumeToken(root: string, map: MigrationMap, options: Options): void {
   });
 }
 
+/** The run's own outputs — the map and both contract ledgers — must be writable. */
+function assertRunOutputs(root: string, map: MigrationMap, hasMigrate: boolean): void {
+  assertWritableTarget(root, recordedMapPath(root, map.run_id), `${MIGRATION_DIR}/${map.run_id}/map.json`);
+  assertWritableTarget(root, readLedger(root, MIGRATION_LEDGER).path, MIGRATION_LEDGER);
+  if (hasMigrate) assertWritableTarget(root, readLedger(root, CONFIRMATIONS).path, CONFIRMATIONS);
+}
+
 /**
  * Every predictable refusal of a run, before its first write: confirmation
- * binding, map shape, source/target/backup state, overlap, event shape and
- * both contract ledgers (committed lines and an unterminated tail).
+ * binding, map shape, source/target/backup state (including the type of every
+ * existing ancestor), overlap, event shape and both contract ledgers
+ * (committed lines and an unterminated tail).
  */
 function preflightApply(root: string, map: MigrationMap, options: Options): PlannedAction[] {
   requireConfirmation(root, map, options);
   assertMigrateTargets(map);
   const plan = planItems(root, map);
-  validateEventShape(plan, map);
+  const hasMigrate = plan.some((entry) => entry.item.action === 'migrate');
+  validateEventShape(root, plan, map);
   assertLedgerTail(root, MIGRATION_LEDGER);
-  if (plan.some((entry) => entry.item.action === 'migrate')) assertLedgerTail(root, CONFIRMATIONS);
+  if (hasMigrate) assertLedgerTail(root, CONFIRMATIONS);
   assertEventLedger(root);
+  assertRunOutputs(root, map, hasMigrate);
   return plan;
 }
 
@@ -1224,9 +1256,11 @@ function replayRun(root: string, recorded: MigrationMap): MigrationMap {
     throw new KnowledgeError('replay_mismatch', 'the recorded run is marked failed; recover under a fresh run id');
   }
   for (const item of relocations(recorded)) requireRunEvent(runEvents, item);
+  // Every recorded after-state is verified before a run may be replayed, also
+  // when every relocation was initially a noop.
+  verifyAfterStates(root, runEvents);
   const applied = runEvents.filter((event) => event.result === 'applied');
   if (applied.length === 0) return recorded;
-  verifyAfterStates(root, runEvents);
   appendEvents(root, applied.map((event) => ({ ...event, result: 'noop' })));
   return recorded;
 }
