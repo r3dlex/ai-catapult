@@ -39,6 +39,8 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
+  accessSync,
+  constants,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -776,12 +778,27 @@ function assertMigrateTargets(map: MigrationMap): void {
  * regular file on the path blocks the write and refuses the run before it
  * touches anything.
  */
+function assertEffectivelyWritable(path: string, relative: string): void {
+  let cursor = path;
+  while (!existsSync(cursor)) {
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  try {
+    accessSync(cursor, constants.W_OK);
+  } catch {
+    throw new KnowledgeError('target_conflict', `${relative}: not writable`);
+  }
+}
+
 function assertWritableTarget(root: string, path: string, relative: string): void {
   for (let parent = dirname(path); parent !== root && parent !== dirname(parent); parent = dirname(parent)) {
     if (existsSync(parent) && !lstatSync(parent).isDirectory()) {
       throw new KnowledgeError('target_conflict', `${relative}: an ancestor is not a directory`);
     }
   }
+  assertEffectivelyWritable(path, relative);
 }
 
 /** A pre-existing backup must hold the same bytes; anything else refuses the run. */
@@ -805,6 +822,7 @@ function planOne(root: string, item: Relocation, runId: string): PlannedAction {
     throw new KnowledgeError('target_conflict', `${item.target}: the v3 target is not a regular file`);
   }
   assertWritableTarget(root, targetPath, item.target);
+  if (item.action === 'migrate') assertEffectivelyWritable(dirname(sourcePath), item.source);
   const beforeSha = sha256Bytes(sourceBytes);
   const backup = item.action === 'migrate' ? `${BACKUPS_DIR}/${runId}/${item.source}` : null;
   if (backup !== null) assertBackupFree(root, backup, beforeSha);
@@ -947,11 +965,27 @@ function readInlineDestination(text: string, openParen: number): { start: number
   return { start, end, destination: text.slice(start, end) };
 }
 
+function labelClose(text: string, open: number): number {
+  let depth = 0;
+  for (let index = open; index < text.length; index += 1) {
+    if (text[index] === '\\' && index + 1 < text.length) {
+      index += 1;
+      continue;
+    }
+    if (text[index] === '[') depth += 1;
+    else if (text[index] === ']') {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return -1;
+}
+
 function inlineDestinations(text: string): Array<{ start: number; end: number; destination: string }> {
   const found: Array<{ start: number; end: number; destination: string }> = [];
   for (let index = 0; index < text.length; index += 1) {
     if (text[index] !== '[') continue;
-    const labelEnd = text.indexOf(']', index + 1);
+    const labelEnd = labelClose(text, index);
     if (labelEnd < 0 || text[labelEnd + 1] !== '(') continue;
     const destination = readInlineDestination(text, labelEnd + 1);
     if (destination === null) continue;
@@ -1086,18 +1120,15 @@ function applySpans(text: string, spans: Span[]): string {
  * relocated sources. Unmoved destinations keep their resolved path; self-links
  * land on this document's final path.
  */
-function pushLabel(spans: Span[], match: RegExpMatchArray): void {
-  const label = match[1];
-  if (label === undefined || label.length === 0 || match.index === undefined) return;
-  const start = match.index + match[0].indexOf('[') + 1;
-  spans.push({ start, end: start + label.length, replacement: label });
-}
-
-/** Labels and reference identifiers are not bare path tokens. */
+/** Every bracket interior is a label or reference identifier, not a bare path token. */
 function markdownLabelSpans(text: string): Span[] {
   const spans: Span[] = [];
-  for (const match of text.matchAll(/!?\[([^\]]*)\](?=\()/g)) pushLabel(spans, match);
-  for (const match of text.matchAll(/^ {0,3}\[([^\]]+)\](?=\s*:)/gm)) pushLabel(spans, match);
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== '[') continue;
+    const close = labelClose(text, index);
+    if (close > index + 1) spans.push({ start: index + 1, end: close, replacement: '' });
+    if (close >= index) index = close;
+  }
   return spans;
 }
 
@@ -1501,6 +1532,9 @@ function executePlan(
   const citers = citersFor(root, plan);
   const moved: Moved[] = [];
   try {
+    if (process.env.AI_CATAPULT_ADOPT_FAULT === 'execute') {
+      throw new KnowledgeError('apply_failed', 'injected execution failure');
+    }
     for (const entry of plan) moved.push(moveOne(root, entry));
     const relocations = appliedMoves(moved);
     const rebased = new Map<string, RefRepair>();
@@ -1615,6 +1649,31 @@ function managedRoots(root: string): string[] {
  * both contract ledgers (committed lines and an unterminated tail), and a
  * listable dirty set.
  */
+function wouldRepair(root: string, citer: string, relocations: AppliedMove[], policy: Policy, dirty: Set<string>, managed: string[]): boolean {
+  const path = safePath(root, citer);
+  if (!existsSync(path)) return false;
+  const content = readFileSync(path);
+  return relocations.some((entry) => (
+    repairAllowed(root, citer, policy, entry.source, entry.target, dirty, managed)
+    && repairedBytes(content, originalCiter(citer, relocations), citer, entry.source, entry.target) !== null
+  ));
+}
+
+function assertRepairPermissions(root: string, plan: PlannedAction[], dirty: Set<string>, managed: string[]): void {
+  const policy = loadPolicy();
+  const relocations = plan.filter((entry) => entry.targetSha === null).map((entry) => ({
+    action: entry.item.action,
+    source: entry.item.source,
+    target: entry.target,
+  }));
+  for (const citer of citersFor(root, plan)) {
+    if (relocations.some((entry) => entry.target === citer)) continue;
+    if (wouldRepair(root, citer, relocations, policy, dirty, managed)) {
+      assertEffectivelyWritable(safePath(root, citer), citer);
+    }
+  }
+}
+
 function preflightApply(root: string, map: MigrationMap, options: Options): { dirty: Set<string>; plan: PlannedAction[] } {
   requireConfirmation(root, map, options);
   assertMigrateTargets(map);
@@ -1625,7 +1684,9 @@ function preflightApply(root: string, map: MigrationMap, options: Options): { di
   if (hasMigrate) assertLedgerTail(root, CONFIRMATIONS);
   assertEventLedger(root);
   assertRunOutputs(root, map, hasMigrate);
-  return { dirty: preExistingDirty(root), plan };
+  const dirty = preExistingDirty(root);
+  assertRepairPermissions(root, plan, dirty, managedRoots(root));
+  return { dirty, plan };
 }
 
 function freshApply(root: string, map: MigrationMap, options: Options): MigrationMap {

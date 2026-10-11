@@ -307,10 +307,10 @@ function assertTargetPreserved(tmp: string, before: Preserved[]): void {
   assert.deepEqual(frozenFiles(tmp), frozenBefore, 'AC-7: a native or immutable path was added');
 }
 
-function spawnAdopt(args: string[]) {
+function spawnAdopt(args: string[], env?: NodeJS.ProcessEnv) {
   const target = adoptTarget(args);
   const before = target === null ? [] : preservationSnapshot(target);
-  const result = spawnSync(process.execPath, [bin, 'adopt', ...args], { encoding: 'utf8', timeout: 30_000 });
+  const result = spawnSync(process.execPath, [bin, 'adopt', ...args], { encoding: 'utf8', timeout: 30_000, env });
   if (target !== null) assertTargetPreserved(target, before);
   return result;
 }
@@ -1164,20 +1164,17 @@ void test('apply refuses a regular file occupying a destination parent path befo
 
 void test('an interrupted run records a failed event and is recovered only under a fresh run id', () => {
   ac7Guarded('failed-run', () => {
-    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
     const tmp = stage('legacy-agents', 'single');
-    const parent = join(tmp, 'docs/learning/concept-maps');
     try {
-      // The destination directory exists but forbids writes: the move fails at
-      // execution time, after the map is recorded and before any source moves.
-      mkdirSync(parent, { recursive: true });
-      chmodSync(parent, 0o555);
+      // The fault is injected after preflight succeeds, so the map is recorded
+      // and the failure is an execution-time event rather than a permission refusal.
       const dry = spawnAdopt(['--dry-run', '--run-id', 'run-10', tmp]);
       const map = parseMap(dry.stdout);
       const first = map.items.find((item) => item.source === '.agents/skills/researcher/REFERENCE.md');
       assert.ok(first, 'the fixture carries the REFERENCE copy');
+      const fault = { ...process.env, AI_CATAPULT_ADOPT_FAULT: 'execute' };
 
-      const failedRun = spawnAdopt(['--apply', '--run-id', 'run-10', tmp]);
+      const failedRun = spawnAdopt(['--apply', '--run-id', 'run-10', tmp], fault);
       assert.equal(failedRun.status, 1);
       const events = readLedger(tmp);
       assert.equal(events.length, 1, 'the interrupted run records exactly its failure');
@@ -1190,17 +1187,11 @@ void test('an interrupted run records a failed event and is recovered only under
       assert.equal(rerun.status, 1);
       assert.equal(errorOf(rerun.stdout), 'replay_mismatch', 'a failed run is never replayed as a success');
 
-      chmodSync(parent, 0o755);
       const recovered = spawnAdopt(['--apply', '--run-id', 'run-10b', tmp]);
       assert.equal(recovered.status, 0, `${recovered.stdout}\n${recovered.stderr}`);
       const after = readLedger(tmp);
       assert.equal(after.filter((event) => event.result === 'applied').length, 2, 'a fresh run id completes the run');
     } finally {
-      try {
-        chmodSync(parent, 0o755);
-      } catch {
-        // The directory may not exist if the fixture itself failed to stage.
-      }
       discard(tmp);
     }
   });
@@ -1824,6 +1815,111 @@ void test('replay refuses a corrupt confirmation ledger before returning', () =>
       assert.equal(errorOf(tailed.stdout), 'invalid_ledger');
       assert.equal(readFileSync(ledger, 'utf8'), before, 'an interrupted confirmation tail appends nothing');
     } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('reference-link identifiers are not rewritten', () => {
+  ac7Guarded('reference-identifiers', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      const body = [
+        '[see][.agents/skills/researcher/REFERENCE.md]',
+        '[.agents/skills/researcher/REFERENCE.md][]',
+        '[.agents/skills/researcher/REFERENCE.md]',
+        '',
+        '[.agents/skills/researcher/REFERENCE.md]: guide.md',
+        '',
+      ].join('\n');
+      writeFileSync(join(tmp, REFERENCE), body);
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'reference identifiers');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-29', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-29', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const copied = readFileSync(join(tmp, target), 'utf8');
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      assert.ok(copied.includes('[see][.agents/skills/researcher/REFERENCE.md]'), copied);
+      assert.ok(copied.includes('[.agents/skills/researcher/REFERENCE.md][]'), copied);
+      assert.ok(copied.includes('[.agents/skills/researcher/REFERENCE.md]\n'), copied);
+      assert.ok(copied.includes(`[.agents/skills/researcher/REFERENCE.md]: ${guide}`), copied);
+      assert.equal(copied.includes('docs/learning'), false, copied);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a nested link label still rebases its destination', () => {
+  ac7Guarded('nested-label', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), 'See [nested [label]](guide.md) and [esc \\[x\\]](guide.md).\n');
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'nested label');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-30', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-30', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      const copied = readFileSync(join(tmp, target), 'utf8');
+      assert.ok(copied.includes(`[nested [label]](${guide})`), copied);
+      assert.ok(copied.includes(`[esc \\[x\\]](${guide})`), copied);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a read-only citer that would be repaired refuses before any write', () => {
+  ac7Guarded('readonly-citer', () => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    const citer = 'notes/cite.md';
+    try {
+      mkdirSync(dirname(join(tmp, citer)), { recursive: true });
+      writeFileSync(join(tmp, citer), 'See .agents/skills/researcher/REFERENCE.md before the move.\n');
+      commitAll(tmp, 'citer');
+      chmodSync(join(tmp, citer), 0o444);
+      const refused = spawnAdopt(['--apply', '--run-id', 'run-32', tmp]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'target_conflict');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-32/map.json')), false);
+      assert.equal(readFileSync(join(tmp, citer), 'utf8').includes('REFERENCE.md'), true);
+    } finally {
+      try {
+        chmodSync(join(tmp, citer), 0o644);
+      } catch {
+        // The citer may not exist if staging failed.
+      }
+      discard(tmp);
+    }
+  });
+});
+
+void test('a read-only destination directory refuses before any write', () => {
+  ac7Guarded('readonly-parent', () => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
+    const tmp = stage('legacy-agents', 'single');
+    const parent = join(tmp, 'docs/learning/concept-maps');
+    try {
+      mkdirSync(parent, { recursive: true });
+      chmodSync(parent, 0o555);
+      const before = treeDigest(tmp);
+      const refused = spawnAdopt(['--apply', '--run-id', 'run-31', tmp]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'target_conflict');
+      assert.equal(treeDigest(tmp), before, 'a read-only destination refuses before any write');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-31/map.json')), false);
+      assert.equal(existsSync(join(tmp, LEDGER_REL)), false);
+    } finally {
+      try {
+        chmodSync(parent, 0o755);
+      } catch {
+        // The directory may not exist if staging failed.
+      }
       discard(tmp);
     }
   });
