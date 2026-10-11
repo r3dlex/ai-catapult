@@ -1635,7 +1635,27 @@ function ledgerLine(value: unknown): string {
  * uncommitted bytes are truncated away when nothing else was appended since,
  * and the error propagates before any caller acts on it.
  */
-function appendEvent(path: string, event: Record<string, unknown>): void {
+/**
+ * The prefix an append prepends for an interrupted tail: the archive ledgers'
+ * termination record, or a refusal. A contract ledger (the migration ledger)
+ * commits only whole contract documents, so its tail is refused for
+ * inspection, never terminated with a second schema.
+ */
+function fragmentPrefix(fragment: Buffer, tail: 'repair' | 'refuse', path: string): string {
+  if (fragment.length === 0) return '';
+  if (tail === 'refuse') {
+    throw new KnowledgeError('invalid_ledger', `${path}: interrupted tail must be inspected before appending`);
+  }
+  return `${ledgerLine({
+    schema: LEDGER_REPAIR,
+    at: now(),
+    action: 'terminate_interrupted_record',
+    fragment_bytes: fragment.length,
+    fragment_sha256: sha256(fragment),
+  })}\n`;
+}
+
+function appendEvent(path: string, event: Record<string, unknown>, tail: 'repair' | 'refuse' = 'repair'): void {
   mkdirSync(dirname(path), { recursive: true });
   const fd = openSync(path, 'a+');
   try {
@@ -1644,16 +1664,7 @@ function appendEvent(path: string, event: Record<string, unknown>): void {
     if (size > 0) {
       const existing = Buffer.alloc(size);
       readSync(fd, existing, 0, size, 0);
-      const fragment = existing.subarray(existing.lastIndexOf(0x0a) + 1);
-      if (fragment.length) {
-        text += `${ledgerLine({
-          schema: LEDGER_REPAIR,
-          at: now(),
-          action: 'terminate_interrupted_record',
-          fragment_bytes: fragment.length,
-          fragment_sha256: sha256(fragment),
-        })}\n`;
-      }
+      text += fragmentPrefix(existing.subarray(existing.lastIndexOf(0x0a) + 1), tail, path);
     }
     const bytes = Buffer.from(`${text}${ledgerLine(event)}\n`, 'utf8');
     let written = 0;
@@ -1686,9 +1697,15 @@ export function readLedger(root: string, relative: string): { path: string; valu
   return ledgerLines(root, relative);
 }
 
-/** Append one ledger record under the same durability rules as the archive ledgers. */
+/**
+ * Append one record to a contract JSONL ledger (the migration ledger and its
+ * confirmations), under the archive ledgers' write rules with one difference:
+ * every committed line here is a contract document, so an interrupted tail is
+ * refused for inspection instead of being terminated with the archive repair
+ * record. The append fails closed before anything else lands.
+ */
 export function appendLedger(root: string, relative: string, event: Record<string, unknown>): void {
-  appendEvent(ledgerPath(root, relative), event);
+  appendEvent(ledgerPath(root, relative), event, 'refuse');
 }
 
 // ---------------------------------------------------------------------------

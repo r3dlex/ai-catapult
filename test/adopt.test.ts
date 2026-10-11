@@ -409,7 +409,7 @@ function assertEventShape(event: LedgerEvent): void {
   assert.equal(typeof event.at, 'string');
   assert.ok(Number.isInteger(event.seq) && event.seq >= 1, `seq ${event.seq}`);
   assert.match(event.before_sha256 ?? '', /^[0-9a-f]{64}$/);
-  assert.match(event.after_sha256 ?? '', /^[0-9a-f]{64}$/);
+  if (event.after_sha256 !== null) assert.match(event.after_sha256, /^[0-9a-f]{64}$/);
   assert.ok(Array.isArray(event.refs_repaired));
   for (const repair of event.refs_repaired) {
     assert.equal(typeof repair.file, 'string');
@@ -739,6 +739,9 @@ void test('apply repairs tracked citations of a migrated source and records them
     const tmp = stageGitRepo('legacy-ai-sdlc', 'single');
     try {
       writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      // A citation inside a document that is itself migrated: its body must be
+      // repaired at the new location (the source path is gone after the move).
+      writeFileSync(join(tmp, 'docs/adr/0001-init.md'), '# legacy adr\n\nThe rules lived at `.rules.ts`.\n');
       const refs = 'notes/refs.md';
       mkdirSync(dirname(join(tmp, refs)), { recursive: true });
       writeFileSync(join(tmp, refs), [
@@ -749,10 +752,17 @@ void test('apply repairs tracked citations of a migrated source and records them
         'See [the ADR](../docs/adr/0001-init.md) for the decision.',
         '',
       ].join('\n'));
+      // A link that resolves to the source without naming its full path.
+      writeFileSync(join(tmp, 'docs/index.md'), '# Index\n\nSee [the ADR](adr/0001-init.md).\n');
+      // A citer whose content classifies private: never rewritten, never hashed
+      // into the ledger.
+      const secret = 'notes/secret-notes.md';
+      writeFileSync(join(tmp, secret), `token sk-${'d'.repeat(24)}\n\nSee .rules.ts\n`);
       commitAll(tmp, 'add refs');
       const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-5', tmp]);
       const map = parseMap(dry.stdout);
       assert.match(map.source_commit, /^[0-9a-f]{40}$/, 'a committed fixture reads a real HEAD');
+      assert.equal(itemBySource(map, secret).classification, 'private');
       const file = migrateConfirmation(tmp, map, 'run-5');
       const applied = spawnAdopt([
         '--apply', '--destructive', '--run-id', 'run-5', '--confirm', TOKEN, '--confirm-file', file, tmp,
@@ -764,6 +774,21 @@ void test('apply repairs tracked citations of a migrated source and records them
       assert.ok(repaired.includes('[the ADR](../docs/architecture/adr/0001-init.md)'), repaired);
       assert.ok(!repaired.includes('`.rules.ts`'), repaired);
       assert.ok(!repaired.includes('docs/adr/0001-init.md'), repaired);
+      assert.equal(
+        readFileSync(join(tmp, 'docs/index.md'), 'utf8'),
+        '# Index\n\nSee [the ADR](architecture/adr/0001-init.md).\n',
+        'a link that resolves to the source is repaired without naming its full path',
+      );
+      assert.equal(
+        readFileSync(join(tmp, 'docs/architecture/adr/0001-init.md'), 'utf8'),
+        '# legacy adr\n\nThe rules lived at `.ai/rules/technical-bounds.md`.\n',
+        'a migrated document carries its repaired citations to the new location',
+      );
+      assert.equal(
+        readFileSync(join(tmp, secret), 'utf8'),
+        `token sk-${'d'.repeat(24)}\n\nSee .rules.ts\n`,
+        'a private citer is never rewritten',
+      );
 
       const events = readLedger(tmp);
       const event = events.find((entry) => entry.source === '.rules.ts');
@@ -779,6 +804,11 @@ void test('apply repairs tracked citations of a migrated source and records them
       const last = allRepairs[allRepairs.length - 1] as RefRepair;
       assert.equal(last.after_sha256, sha256File(join(tmp, refs)));
       for (const repair of allRepairs) assert.notEqual(repair.before_sha256, repair.after_sha256);
+      assert.equal(
+        events.some((entry) => entry.refs_repaired.some((repair) => repair.file === secret)),
+        false,
+        'a private citer never enters the ledger',
+      );
 
       // A rerun on the same commit replays: only noop events, nothing rewritten.
       const ledgerBefore = readLedger(tmp);
@@ -799,6 +829,174 @@ void test('apply repairs tracked citations of a migrated source and records them
       ]);
       assert.equal(stale.status, 1);
       assert.equal(errorOfSafe(stale.stdout), 'source_commit_mismatch');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('apply refuses an interrupted migration-ledger tail before writing anything', () => {
+  ac7Guarded('interrupted-tail', () => {
+    const tmp = stage('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-8', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-8');
+      mkdirSync(dirname(join(tmp, LEDGER_REL)), { recursive: true });
+      writeFileSync(join(tmp, LEDGER_REL), '{"schema": "knowledge-migration-event/1", "truncated', 'utf8');
+      const before = treeDigest(tmp);
+      const refused = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-8', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'invalid_ledger');
+      assert.equal(treeDigest(tmp), before, 'an interrupted ledger refuses before any write');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-8/map.json')), false);
+      assert.equal(existsSync(join(tmp, '.ai/drift/backups/run-8')), false);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('apply refuses a malformed committed ledger line before writing anything', () => {
+  ac7Guarded('malformed-ledger', () => {
+    const tmp = stage('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-12', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-12');
+      mkdirSync(dirname(join(tmp, LEDGER_REL)), { recursive: true });
+      writeFileSync(join(tmp, LEDGER_REL), '{"not": "a migration event"}\n', 'utf8');
+      const before = treeDigest(tmp);
+      const refused = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-12', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'invalid_ledger');
+      assert.equal(treeDigest(tmp), before, 'a malformed ledger refuses before any write');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-12/map.json')), false);
+      assert.equal(existsSync(join(tmp, '.rules.ts')), true, 'the source is never removed');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('apply refuses a conflicting backup before writing anything', () => {
+  ac7Guarded('backup-conflict', () => {
+    const tmp = stage('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-9', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-9');
+      const backup = join(tmp, '.ai/drift/backups/run-9/.rules.ts');
+      mkdirSync(dirname(backup), { recursive: true });
+      writeFileSync(backup, 'different bytes\n');
+      const before = treeDigest(tmp);
+      const refused = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-9', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'backup_conflict');
+      assert.equal(treeDigest(tmp), before, 'a conflicting backup refuses before any write');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-9/map.json')), false);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('an interrupted run records a failed event and is recovered only under a fresh run id', () => {
+  ac7Guarded('failed-run', () => {
+    const tmp = stage('legacy-agents', 'single');
+    try {
+      // A regular file where the first target's parent directory belongs: the
+      // move fails after the map is recorded, nothing has moved yet.
+      writeFileSync(join(tmp, 'docs/learning'), 'not a directory\n');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-10', tmp]);
+      const map = parseMap(dry.stdout);
+      const first = map.items.find((item) => item.source === '.agents/skills/researcher/REFERENCE.md');
+      assert.ok(first, 'the fixture carries the REFERENCE copy');
+
+      const failedRun = spawnAdopt(['--apply', '--run-id', 'run-10', tmp]);
+      assert.equal(failedRun.status, 1);
+      const events = readLedger(tmp);
+      assert.equal(events.length, 1, 'the interrupted run records exactly its failure');
+      assertEventShape(events[0] as LedgerEvent);
+      assert.equal(events[0]?.result, 'failed');
+      assert.equal(events[0]?.source, first.source);
+      assert.ok(existsSync(join(tmp, first.source)), 'the failed run kept every source');
+
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-10', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'replay_mismatch', 'a failed run is never replayed as a success');
+
+      rmSync(join(tmp, 'docs/learning'));
+      const recovered = spawnAdopt(['--apply', '--run-id', 'run-10b', tmp]);
+      assert.equal(recovered.status, 0, `${recovered.stdout}\n${recovered.stderr}`);
+      const after = readLedger(tmp);
+      assert.equal(after.filter((event) => event.result === 'applied').length, 2, 'a fresh run id completes the run');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a native promotion item does not abort the apply of legacy relocations', () => {
+  ac7Guarded('native-disposition', () => {
+    const tmp = stage('legacy-agents', 'single');
+    try {
+      mkdirSync(join(tmp, '.omx/plans'), { recursive: true });
+      writeFileSync(join(tmp, '.omx/plans/sample.md'), '# plan\n');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-11', tmp]);
+      const map = parseMap(dry.stdout);
+      const native = map.items.find((item) => item.source === '.omx/plans/sample.md');
+      assert.ok(native, 'the native plan is inventoried');
+      assert.equal(native.action, 'copy');
+      assert.equal(native.target, null, 'a native promotion has no relocation target');
+
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-11', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assert.equal(
+        readLedger(tmp).some((event) => event.source === '.omx/plans/sample.md'),
+        false,
+        'a promotion is a publish decision, not a relocation',
+      );
+      assert.equal(readFileSync(join(tmp, '.omx/plans/sample.md'), 'utf8'), '# plan\n');
+      assert.ok(existsSync(join(tmp, '.ai/system-prompts/researcher.md')), 'the legacy relocation still applies');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a replay verifies a preserved target after-state too', () => {
+  ac7Guarded('noop-drift', () => {
+    const tmp = stage('legacy-agents', 'single');
+    try {
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-13', tmp]);
+      const map = parseMap(dry.stdout);
+      const item = map.items.find((entry) => entry.action === 'copy');
+      assert.ok(item, 'the fixture carries a copy item');
+      const target = item.target as string;
+      mkdirSync(dirname(join(tmp, target)), { recursive: true });
+      writeFileSync(join(tmp, target), 'user content that is not the template\n');
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-13', tmp]);
+      assert.equal(applied.status, 0, applied.stdout);
+      const noop = readLedger(tmp).find((event) => event.source === item.source);
+      assert.ok(noop);
+      assert.equal(noop.result, 'noop');
+
+      writeFileSync(join(tmp, target), 'the preserved target changed\n');
+      const ledgerBefore = readLedger(tmp);
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-13', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'replay_mismatch');
+      assert.equal(readLedger(tmp).length, ledgerBefore.length, 'a refused replay appends nothing');
     } finally {
       discard(tmp);
     }

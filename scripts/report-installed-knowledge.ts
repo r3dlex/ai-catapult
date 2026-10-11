@@ -30,6 +30,7 @@ import {
   readFileSync,
   readlinkSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
@@ -102,9 +103,30 @@ function runInstalledVerify(packageDir: string, cli: string): VerifyRun {
   }
 }
 
-function versionDirs(cache: string): string[] {
+const VERSION_ENTRY = /^\d+\.\d+(\.\d+)?([.-][A-Za-z0-9.]+)?$/;
+
+/**
+ * Version entries beneath the cache's plugin directory: the cache nests
+ * versions one level below the plugin name (directories and alias symlinks),
+ * e.g. <cache>/ai-catapult/0.4.3.
+ */
+function cacheVersions(cache: string): string[] {
   if (!existsSync(cache)) return [];
-  return readdirSync(cache, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort();
+  const versions = new Set<string>();
+  for (const plugin of readdirSync(cache)) {
+    const directory = join(cache, plugin);
+    let stat;
+    try {
+      stat = statSync(directory);
+    } catch {
+      continue;
+    }
+    if (!stat.isDirectory()) continue;
+    for (const name of readdirSync(directory)) {
+      if (VERSION_ENTRY.test(name)) versions.add(name);
+    }
+  }
+  return [...versions].sort();
 }
 
 type InstalledReport = {
@@ -144,7 +166,7 @@ function collectReport(prefix: string): InstalledReport {
     plugin_cache: {
       path: cache,
       present: cacheBefore !== null,
-      versions: versionDirs(cache),
+      versions: cacheVersions(cache),
       hash_before: cacheBefore,
       hash_after: cacheAfter,
       state: cacheState,
