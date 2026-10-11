@@ -1,0 +1,11 @@
+{
+  "goal_id": "XSKP-P4-05",
+  "green": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/adopt.test.ts test/init.test.ts test/packed-init.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/adopt.test.ts test/init.test.ts test/packed-init.test.ts",
+    "exit_code": 1
+  }
+}

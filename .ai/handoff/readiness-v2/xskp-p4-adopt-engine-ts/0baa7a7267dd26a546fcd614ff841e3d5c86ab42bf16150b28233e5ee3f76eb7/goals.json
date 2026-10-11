@@ -1,0 +1,74 @@
+{
+  "attachments": {
+    "consensus_plan": "aitool-root .omc/plans/ralplan-cross-surface-knowledge-publication.md (local, gitignored, non-authoritative; its goal objects are restated verbatim here)",
+    "contract_pack_lock": "docs/specifications/ACTIVE/cross-surface-knowledge-publication.contract/contract.lock.json sha256 9f5d7edfc17554c383b06aa4726dfffe564ecc8d657b16baa89ce72098d5e102",
+    "independence": "No goal depends on a goal in another plan; the six xskp-* plans are callable by separate autobahn runs in any order.",
+    "plan_amendments": [
+      "2026-10-10 successor amendment (xskp-p4-adopt-engine-ts, add-only): the five attachments carried above (consensus_plan, contract_pack_lock, independence, requirements_closure, umbrella_spec) are verbatim historical record from predecessor generation 2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8; this string records the successor delta. The A2 wave (PR #61, merge ab539496ddd39908879d74a017a7a8720a984018) is the delivered rename and this generation is published at the then-current main f3578cc9fb4d4f3a50f3f03283854f3b170c7dab (the actually reviewed post-rename base); literal paths are re-derived exactly as recorded in predecessor_generation, and no other content changes. The carried umbrella_spec pin sha256 d50488d9b480fdfdea6c2fa2b7265a507d98fdae97758c3b1d2f501951415586 was re-verified at this registration against the root workspace file (equal). This generation was published through the vendored northstar/handoff-write.sh (publish-v2 --admit-planning) against base f3578cc9fb4d4f3a50f3f03283854f3b170c7dab with planning_complete true and zero blocking gaps."
+    ],
+    "predecessor_generation": "plan xskp-p4-adopt-engine generation 2ce8dbb7e7e8e2760f4efdd0afe3ee66e2a7ed919a3d291de3fa1459679051c8 (readiness-contract/2, mode live; migrated by PR r3dlex/ai-catapult#54, merge 587c4ed933289913c724d47fe43abf1a14790f8b, from v1 generation 92ecdb62b5807ba4cac0e274a9fe5a566292823d1f30214258d3aacd839524af at the source-lane O8 skills merge f5e338b92bb754c2bfffdf542b498530258fdbc0) is retained byte-unchanged; this successor is an add, never a replacement, so its registry entry, generation files, approval tag approval/xskp-p4-adopt-engine/2ce8dbb7e7e8 and traceability nodes remain. Delivered goals stay bound to the predecessor: XSKP-P4-01 (peer PR #55, merge 2b63eb4ca3eef6ef9ecb5b47cbfbb616ea9a9ca1), XSKP-P4-02 (peer PR #56, merge 5de9a31176b9b310dbb6cc5aa7a2e7c8137e992f), XSKP-P4-03 (peer PR #59, merge 364d2565f3d60fc58210eef222ec6a9bed6cc3dc) - peer-lane deliveries recorded as provenance, never re-attributed here. The A2 rename wave (peer PR #61, merge ab539496ddd39908879d74a017a7a8720a984018) converted the repository to strict TypeScript; the predecessor's remaining goals still name pre-rename paths, and a same-plan registry-entry replacement is refused by the pinned publish-v2 replay rule while merged goal PRs exist (v2_scope_outside_goal: xskp-p4-adopt-engine has merged goal PRs 55, 56, 59), so the remaining chain moves here. Migrated (only A2-invalidated path/mechanism facts; nothing widened or narrowed): XSKP-P4-04 src/adopt.js->src/adopt.ts, bin/ai-catapult.js->bin/ai-catapult.ts, test/adopt.test.js->test/adopt.test.ts; XSKP-P4-05 src/adopt.js->src/adopt.ts, src/knowledge.js->src/knowledge.ts, src/scaffold.js->src/scaffold.ts, test/adopt.test.js->test/adopt.test.ts, test/init.test.js->test/init.test.ts, test/packed-init.test.js->test/packed-init.test.ts; and the never-yet-existing scripts/report-installed-knowledge.sh->scripts/report-installed-knowledge.ts (the A2 wave retired the shell-script execution mechanism - every first-party script is strict TypeScript now - and this path has no deleted-path row because it never existed); its acceptance criterion's shell \"$(npm prefix -g)\" substitution migrates to runtime resolution from \"npm prefix -g\" in the TypeScript port; nothing else. Dependency edges: XSKP-P4-05 keeps in-bundle XSKP-P4-04; XSKP-P4-04's dependency XSKP-P4-03 is dropped from the carried array (cross-plan edges are not expressible in a bundle; delivered ancestor of this base), recorded here. Acceptance-criteria substance is otherwise verbatim. The successor's plan approval is its own future tag approval/xskp-p4-adopt-engine-ts/<generation prefix>; no approval is created by this publication. Planning publication grants no authority.",
+    "requirements_closure": "aitool-root .omc/specs/deep-interview-cross-surface-knowledge-publication.md (local, gitignored, non-authoritative)",
+    "spec_binding": "r3dlex/ai-catapult docs/specifications/ACTIVE/cross-surface-knowledge-publication-xskp-p4-adopt-engine.md sha256 8bd078a7ac9dd4cc615db896e2e572645f3736b2dc5b899cccd1b9df6f20b579 - the successor binds the same plan-scoped specification copy as predecessor generation 2ce8dbb7; this planning PR does not touch the specification (still bound by the retained predecessor generation), so the registry spec pin is the base bytes re-verified at publication. Observation, not a rewrite: the spec copy's inline sentence \"registered in .ai/workflows/northstar-readiness-v1.json\" predates the v1->v2 migration (#54) and is not an A2-invalidated fact; it is carried unchanged.",
+    "umbrella_spec": "r3dlex/ai-tool-workspace docs/specifications/ACTIVE/cross-surface-knowledge-publication.md sha256 d50488d9b480fdfdea6c2fa2b7265a507d98fdae97758c3b1d2f501951415586"
+  },
+  "goals": [
+    {
+      "acceptance_criteria": [
+        "'ai-catapult adopt' dry-run inventory produces a migration.schema.json-valid map for every layout (greenfield, brownfield, partial-v3, legacy-agents, legacy-ai-sdlc) times topology (single, monorepo, umbrella) fixture, including an AiTool-shaped umbrella.",
+        "migrate actions are refused without the per-run confirmation token defined by ai-catapult-init modules/migration.md.",
+        "Private, immutable and unsupported items are classified per publication-policy.json.",
+        "test/adopt.test.ts is auto-discovered by node --test under npm test.",
+        "AC-7 executable guard wraps every inventory test."
+      ],
+      "dependencies": [],
+      "id": "XSKP-P4-04",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        "src/adopt.ts",
+        "bin/ai-catapult.ts",
+        "test/adopt.test.ts",
+        "test/fixtures/knowledge-adopt"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    },
+    {
+      "acceptance_criteria": [
+        "adopt apply writes backups under .ai/drift/backups/<run_id>/, knowledge-migration-event/1 ledger lines and reference repairs; a rerun on the same commit yields only noop events.",
+        "init creates .ai/knowledge/entries/.gitkeep and .ai/knowledge/registry.json whose bytes are exactly the contract serialization of {entries: [], generated_from: '.ai/knowledge/entries', repo_id: <repo_id>, schema: 'knowledge-registry/1'}; it never overwrites an existing registry and does not depend on vendored templates.",
+        "Packaged lane: test/packed-init.test.ts builds the tarball with 'npm pack --ignore-scripts', extracts it, and runs init from the extracted package, asserting the registry bytes and the presence of the contract; vendor/skills and skills.lock.json are byte-unchanged afterwards.",
+        "Installed lane (report-only, not gated): scripts/report-installed-knowledge.ts resolves the global install at run time from \"npm prefix -g\" (its lib/node_modules/ai-catapult package directory and its bin/ai-catapult CLI entry; observed /opt/homebrew at planning; never hardcoded), runs 'ai-catapult knowledge verify' against a temp repo, and hashes the global install directory before and after.",
+        "Installed lane, continued: the script also reports the Claude plugin cache ~/.claude/plugins/cache/ai-catapult/ (versions present plus a directory hash before and after) without executing it, because the plugin cache cannot run the CLI. It prints MATCH or MISMATCH for both hashes, mutates neither location, and the output is attached to the PR.",
+        "AC-7 executable guard wraps every apply and init test.",
+        "Tests are auto-discovered by node --test under npm test."
+      ],
+      "dependencies": [
+        "XSKP-P4-04"
+      ],
+      "id": "XSKP-P4-05",
+      "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+      "scope": [
+        "src/adopt.ts",
+        "src/knowledge.ts",
+        "src/scaffold.ts",
+        "scripts/report-installed-knowledge.ts",
+        "test/adopt.test.ts",
+        "test/init.test.ts",
+        "test/packed-init.test.ts"
+      ],
+      "verification": [
+        "npm test"
+      ]
+    }
+  ],
+  "id": "xskp-p4-adopt-engine-ts",
+  "issue_ref": "issue:ai-catapult:xskp-p4-adopt-engine",
+  "repository": {
+    "id": "ai-catapult"
+  },
+  "schema": "handoff-goals/2",
+  "spec": {
+    "path": "docs/specifications/ACTIVE/cross-surface-knowledge-publication-xskp-p4-adopt-engine.md"
+  }
+}

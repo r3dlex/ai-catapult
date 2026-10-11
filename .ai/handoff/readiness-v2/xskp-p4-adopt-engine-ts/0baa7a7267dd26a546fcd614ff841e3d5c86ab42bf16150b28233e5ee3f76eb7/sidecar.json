@@ -1,0 +1,26 @@
+{
+  "goals": {
+    "XSKP-P4-04": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. Existing seam: bin/ai-catapult.ts dispatch gains the adopt command. Characterize current dispatch; sprout the engine into the new src/adopt.ts. Successor note (2026-10-10): the A2 wave landed (PR #61) and this generation binds the actually reviewed post-rename base f3578cc9; the literal paths are re-derived (src/adopt.ts, bin/ai-catapult.ts, test/adopt.test.ts) and no other content changed.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    },
+    "XSKP-P4-05": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (an informal planning-time run at 7573da8 showed 91% lines and 54% branches overall; no goal-scoped measurement exists). Legacy-safe is chosen for blast radius, not low coverage. Highest blast radius in P4: src/scaffold.ts (uncovered lines 41-48, 111-113, 141-146, 175-187) drives init in every scaffolded repo, and init/packed-init tests guard the shipped tarball. Characterize current init and tarball output before adding the empty registry. Successor note (2026-10-10): the A2 wave landed (PR #61) and this generation binds the actually reviewed post-rename base f3578cc9; the literal paths are re-derived (src/adopt.ts, src/knowledge.ts, src/scaffold.ts, scripts/report-installed-knowledge.ts, test/adopt.test.ts, test/init.test.ts, test/packed-init.test.ts) and the report script's shell mechanism migrates to its TypeScript equivalent; no other content changed.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "xskp-p4-adopt-engine-ts",
+  "schema": "readiness-sidecar/1"
+}

@@ -11,11 +11,27 @@
  *   --upstream-ref  main
  *
  * The test also asserts that judgment-laden paths are NOT written as files.
+ *
+ * XSKP-P4-05: init owns the empty `.ai/knowledge/registry.json` and the
+ * `entries/.gitkeep` directly (never from a vendored template) and never
+ * overwrites an existing registry. AC-7 wraps every init test.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { rmSync, readFileSync, writeFileSync, existsSync, readdirSync, mkdtempSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  symlinkSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -81,7 +97,76 @@ function makeTmpDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-void test('ai-catapult init emits mechanical scaffold matching committed fixture', () => {
+// ---------------------------------------------------------------------------
+// AC-7 executable guard: every init test snapshots the native and immutable
+// paths of this checkout before and after, and fails if any byte moved.
+// ---------------------------------------------------------------------------
+
+const GUARDED = ['.omc', '.omx', '.omo', '.sisyphus', '.ai/evidence', '.ai/handoff/readiness-v1', '.ai/workflows/northstar-readiness-v1.json'];
+
+function guardedDigests(): string[] {
+  const lines: string[] = [];
+  const visit = (rel: string): void => {
+    const abs = join(root, rel);
+    if (!existsSync(abs)) return;
+    const info = lstatSync(abs);
+    if (info.isSymbolicLink()) {
+      lines.push(`${rel} -> ${readlinkSync(abs)}`);
+      return;
+    }
+    if (info.isDirectory()) {
+      for (const name of readdirSync(abs)) visit(`${rel}/${name}`);
+      return;
+    }
+    lines.push(`${rel} ${createHash('sha256').update(readFileSync(abs)).digest('hex')}`);
+  };
+  for (const prefix of GUARDED) visit(prefix);
+  return lines.sort();
+}
+
+function checkoutSnapshot(): { status: string; digests: string[] } {
+  const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=all', '--', ...GUARDED], {
+    cwd: root, encoding: 'utf8', timeout: 60_000,
+  });
+  assert.equal(status.status, 0, status.stderr);
+  return { status: status.stdout, digests: guardedDigests() };
+}
+
+function toError(failure: unknown): Error {
+  return failure instanceof Error ? failure : new Error(String(failure));
+}
+
+async function ac7Guarded(name: string, body: () => void | Promise<void>): Promise<void> {
+  const before = checkoutSnapshot();
+  let failure: unknown = null;
+  try {
+    await body();
+  } catch (error) {
+    failure = error;
+  }
+  const after = checkoutSnapshot();
+  if (failure) {
+    const error = toError(failure);
+    if (JSON.stringify(after) !== JSON.stringify(before)) error.message += `\nAC-7: ${name} also changed the checkout`;
+    throw error;
+  }
+  assert.deepEqual(after, before, `AC-7: ${name} changed the checkout`);
+}
+
+/** One init test under the AC-7 checkout guard. */
+function guardedTest(name: string, body: () => void | Promise<void>): void {
+  void test(name, () => ac7Guarded(name, body));
+}
+
+// The exact bytes the contract serialization fixes for the canonical inputs.
+const REGISTRY_REL = '.ai/knowledge/registry.json';
+const ENTRIES_GITKEEP_REL = '.ai/knowledge/entries/.gitkeep';
+
+function registryBytes(repoId: string): string {
+  return `{\n  "entries": [],\n  "generated_from": ".ai/knowledge/entries",\n  "repo_id": ${JSON.stringify(repoId)},\n  "schema": "knowledge-registry/1"\n}\n`;
+}
+
+guardedTest('ai-catapult init emits mechanical scaffold matching committed fixture', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-parity-');
 
   try {
@@ -128,7 +213,7 @@ void test('ai-catapult init emits mechanical scaffold matching committed fixture
   }
 });
 
-void test('ai-catapult init does NOT write judgment-laden paths as files', () => {
+guardedTest('ai-catapult init does NOT write judgment-laden paths as files', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-jl-');
 
   try {
@@ -153,7 +238,7 @@ void test('ai-catapult init does NOT write judgment-laden paths as files', () =>
   }
 });
 
-void test('ai-catapult init accepts --help and exits 0', () => {
+guardedTest('ai-catapult init accepts --help and exits 0', () => {
   const result = spawnSync(process.execPath, [bin, 'init', '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0, `expected exit 0 for init --help; got ${result.status}\nstderr: ${result.stderr}`);
   assert.match(result.stdout, /init/, 'help output should mention init');
@@ -163,7 +248,7 @@ void test('ai-catapult init accepts --help and exits 0', () => {
 // Fix #5: Independent rendering assertion (non-tautological)
 // ---------------------------------------------------------------------------
 
-void test('ai-catapult init: .ai/matrix.json matches inline token substitution (non-fixture path)', () => {
+guardedTest('ai-catapult init: .ai/matrix.json matches inline token substitution (non-fixture path)', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-matrix-');
 
   try {
@@ -191,7 +276,7 @@ void test('ai-catapult init: .ai/matrix.json matches inline token substitution (
   }
 });
 
-void test('ai-catapult init: no {{TOKEN}} placeholders remain in emitted tree', () => {
+guardedTest('ai-catapult init: no {{TOKEN}} placeholders remain in emitted tree', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-tokens-');
 
   try {
@@ -223,7 +308,7 @@ void test('ai-catapult init: no {{TOKEN}} placeholders remain in emitted tree', 
 // Fix #2: Regression test — verb re-slice bug with flag value matching subcommand
 // ---------------------------------------------------------------------------
 
-void test('ai-catapult --date init init <target> dispatches correctly (fix #2 regression)', () => {
+guardedTest('ai-catapult --date init init <target> dispatches correctly (fix #2 regression)', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-dispatch-');
 
   try {
@@ -264,7 +349,7 @@ void test('ai-catapult --date init init <target> dispatches correctly (fix #2 re
 // Fix #3: Collision detection — refuse without --force, succeed with --force
 // ---------------------------------------------------------------------------
 
-void test('ai-catapult init refuses to overwrite existing files without --force', () => {
+guardedTest('ai-catapult init refuses to overwrite existing files without --force', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-clobber-');
 
   try {
@@ -281,7 +366,7 @@ void test('ai-catapult init refuses to overwrite existing files without --force'
   }
 });
 
-void test('ai-catapult init --force succeeds when files already exist', () => {
+guardedTest('ai-catapult init --force succeeds when files already exist', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-force-');
 
   try {
@@ -313,7 +398,7 @@ void test('ai-catapult init --force succeeds when files already exist', () => {
 // Fix #4: Path traversal — hostile manifest entry is rejected
 // ---------------------------------------------------------------------------
 
-void test('scaffold rejects path traversal in manifest template path', async () => {
+guardedTest('scaffold rejects path traversal in manifest template path', async () => {
   const { scaffold } = await import('../src/scaffold.ts');
   const tmpDir = makeTmpDir('ai-catapult-init-traversal-');
 
@@ -352,6 +437,309 @@ void test('scaffold rejects path traversal in manifest template path', async () 
     );
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
+    rmSync(fakeTemplatesDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ACH-C-03: seeded readiness-policy/2 (N3) — semantics, validator gaps, collision
+// ---------------------------------------------------------------------------
+
+const POLICY_REL = '.ai/policies/readiness-policy.json';
+const N3_ACCEPT = ['agent-self', 'ssh-tag', 'in-session'];
+
+type SeededPolicy = {
+  schema: string;
+  identity_model: string;
+  required_checks: unknown[];
+  repository: { id: string };
+  approval: { accept: string[]; default_mode: string; anchor_sha256: string | null };
+};
+
+type AdmissionStage = { admitted: boolean; policy_codes: string[] };
+
+type ValidatorReport = {
+  accept: string[];
+  default_mode: string;
+  policy_gaps: string[];
+  stages: Record<string, AdmissionStage>;
+};
+
+// Disposable pure-validator seam. Not a live admission and not authority.
+const VALIDATOR_SCRIPT = `
+import json, sys
+from datetime import datetime, timezone
+from pathlib import Path
+autobahn, policy_path = map(Path, sys.argv[1:3])
+assert sys.flags.isolated and sys.dont_write_bytecode, "python3 -I -B required"
+sys.path.insert(0, str(autobahn / "lib"))
+import readiness_contract_v2 as v2
+data = policy_path.read_bytes()
+policy = json.loads(data)
+v2.validate_policy(policy)
+bundle = {
+    "schema": "handoff-goals/2", "id": "seed-check", "repository": policy["repository"],
+    "spec": {"path": "spec.md"},
+    "goals": [{"id": "G1", "scope": ["src/probe.txt"],
+               "acceptance_criteria": ["Seeded policy admission gaps"],
+               "dependencies": [], "verification": ["bash tests/check.sh"]}],
+}
+sidecar = {
+    "schema": "readiness-sidecar/1", "plan_id": "seed-check",
+    "goals": {"G1": {
+        "readiness": {"preparation": "unknown", "implementation": "unknown", "merge": "unknown"},
+        "coverage_status": "unknown", "legacy_safe_tdd": True,
+        "legacy_risk_reason": "Disposable seeded-policy admission check; coverage unknown",
+    }},
+}
+digests = {
+    "bundle_sha256": v2.bundle_sha256(bundle), "spec_sha256": "0" * 64,
+    "policy_sha256": v2.sha256(data), "anchor_sha256": policy["approval"]["anchor_sha256"],
+}
+generation = v2.generation_v2(**digests)
+stages = {}
+for stage in ("planning", "preparation", "implementation", "merge"):
+    context = v2.admission({
+        "stage": stage, "goals": ["G1"], "now": datetime(2026, 10, 10, tzinfo=timezone.utc),
+        "registered": {"id": "disposable", "generation": generation},
+        "policy": policy, "policy_mode": "live", "bundle": bundle, "sidecar": sidecar,
+        "digests": digests, "carrier": None,
+        "observation": {"schema": "observation/1", "adapter": "none", "facts": {}},
+        "errors": [],
+    })
+    stages[stage] = {
+        "admitted": context["admitted"],
+        "policy_codes": [gap["code"] for gap in context["gaps"] if gap.get("source") == "policy"],
+    }
+json.dump({
+    "accept": policy["approval"]["accept"], "default_mode": policy["approval"]["default_mode"],
+    "policy_gaps": v2.policy_gaps(policy), "stages": stages,
+}, sys.stdout)
+`;
+
+function renderedPolicyTemplate(): string {
+  const raw = readFileSync(join(vendorTemplatesDir, 'dot-ai/policies/readiness-policy.json'), 'utf8');
+  return raw
+    .replaceAll('{{REPO_ID}}', FIXED_TOKENS.REPO_ID)
+    .replaceAll('{{DATE}}', FIXED_TOKENS.DATE)
+    .replaceAll('{{UPSTREAM_URL}}', FIXED_TOKENS.UPSTREAM_URL)
+    .replaceAll('{{UPSTREAM_REF}}', FIXED_TOKENS.UPSTREAM_REF);
+}
+
+function assertN3(policy: SeededPolicy): void {
+  assert.equal(policy.schema, 'readiness-policy/2');
+  assert.equal(policy.identity_model, 'multi');
+  assert.equal(policy.repository.id, FIXED_TOKENS.REPO_ID);
+  assert.equal(policy.approval.anchor_sha256, null);
+  assert.deepEqual(policy.required_checks, []);
+  assert.deepEqual(policy.approval.accept, N3_ACCEPT);
+  assert.equal(policy.approval.default_mode, 'agent');
+}
+
+function runFixedInit(target: string, extra: string[] = []) {
+  return spawnSync(process.execPath, [bin, 'init', target, ...FIXED_ARGS, ...extra], { encoding: 'utf8' });
+}
+
+function writeSentinelPolicy(target: string): string {
+  const full = join(target, POLICY_REL);
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, '{"sentinel":true}\n', 'utf8');
+  return full;
+}
+
+function validateEmittedPolicy(policyPath: string): void {
+  const autobahn = join(root, 'vendor/skills/04-validate-handoff/autobahn');
+  const result = spawnSync('python3', ['-I', '-B', '-c', VALIDATOR_SCRIPT, autobahn, policyPath], {
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, `validator failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  const report = JSON.parse(result.stdout) as ValidatorReport;
+  assert.deepEqual(report.policy_gaps, ['anchor_unset', 'required_checks_unset']);
+  assert.deepEqual(report.accept, N3_ACCEPT);
+  assert.equal(report.default_mode, 'agent');
+  for (const stage of ['planning', 'preparation', 'implementation', 'merge']) {
+    const named = report.stages[stage];
+    assert.ok(named, `admission missing stage ${stage}`);
+    assert.equal(named.admitted, false, `${stage} must stay unadmitted while placeholders are unset`);
+    assert.ok(named.policy_codes.includes('anchor_unset'), `${stage} admission must name anchor_unset`);
+    assert.ok(named.policy_codes.includes('required_checks_unset'), `${stage} admission must name required_checks_unset`);
+  }
+}
+
+guardedTest('ACH-C-03 init emits the seeded readiness-policy from the vendored template', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-');
+  try {
+    const result = runFixedInit(tmpDir);
+    assert.equal(result.status, 0, `init failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+    const emitted = readFileSync(join(tmpDir, POLICY_REL), 'utf8');
+    const rendered = renderedPolicyTemplate();
+    const fixture = readFileSync(join(fixtureDir, POLICY_REL), 'utf8');
+    assert.equal(emitted, rendered, 'emitted policy must be the vendored template with fixed tokens');
+    assert.equal(emitted, fixture, 'emitted policy must match the C-02 fixture; do not regenerate it here');
+    assertN3(JSON.parse(emitted) as SeededPolicy);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+guardedTest('ACH-C-03 init seeded policy admission names anchor_unset and required_checks_unset', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-gaps-');
+  try {
+    const result = runFixedInit(tmpDir);
+    assert.equal(result.status, 0, `init failed\nstderr: ${result.stderr}`);
+    validateEmittedPolicy(join(tmpDir, POLICY_REL));
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+guardedTest('ACH-C-03 init refuses a policy-only collision without --force and writes nothing', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-collision-');
+  try {
+    const policyPath = writeSentinelPolicy(tmpDir);
+    const before = readFileSync(policyPath, 'utf8');
+    const result = runFixedInit(tmpDir);
+    assert.notEqual(result.status, 0, 'policy-only collision must refuse');
+    assert.match(result.stderr, /--force/, 'refusal must name --force');
+    assert.match(result.stderr, /\.ai\/policies\/readiness-policy\.json/, 'refusal must name the policy path');
+    assert.deepEqual(collectFiles(tmpDir), [POLICY_REL], 'collision must not emit any other file');
+    assert.equal(readFileSync(policyPath, 'utf8'), before, 'existing policy bytes must be unchanged');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+guardedTest('ACH-C-03 init --force restores the seeded policy bytes', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-policy-force-');
+  try {
+    writeSentinelPolicy(tmpDir);
+    const result = runFixedInit(tmpDir, ['--force']);
+    assert.equal(result.status, 0, `init --force failed\nstderr: ${result.stderr}`);
+    const emitted = readFileSync(join(tmpDir, POLICY_REL), 'utf8');
+    assert.equal(emitted, renderedPolicyTemplate(), '--force must restore the vendored template render');
+    assert.ok(!emitted.includes('sentinel'), 'sentinel policy must be overwritten');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// XSKP-P4-05: the knowledge surface init owns
+// ---------------------------------------------------------------------------
+
+guardedTest('XSKP-P4-05 init does not follow a dangling registry symlink', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-dangling-registry-');
+  const outside = join(dirname(tmpDir), 'outside-registry.json');
+  try {
+    const registryPath = join(tmpDir, REGISTRY_REL);
+    mkdirSync(dirname(registryPath), { recursive: true });
+    symlinkSync(outside, registryPath);
+    const first = runFixedInit(tmpDir);
+    assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
+    assert.equal(lstatSync(registryPath).isSymbolicLink(), true);
+    assert.equal(readlinkSync(registryPath), outside);
+    assert.equal(existsSync(outside), false);
+    const forced = runFixedInit(tmpDir, ['--force']);
+    assert.equal(forced.status, 0, `${forced.stdout}\n${forced.stderr}`);
+    assert.equal(readlinkSync(registryPath), outside);
+    assert.equal(existsSync(outside), false);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+    rmSync(outside, { force: true });
+  }
+});
+
+guardedTest('XSKP-P4-05 init refuses a file occupying the entries directory before writing', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-blocked-entries-');
+  try {
+    mkdirSync(join(tmpDir, '.ai/knowledge'), { recursive: true });
+    writeFileSync(join(tmpDir, '.ai/knowledge/entries'), 'blocked\n');
+    const result = runFixedInit(tmpDir);
+    assert.notEqual(result.status, 0, 'a blocked entries path must refuse');
+    assert.equal(existsSync(join(tmpDir, '.ai/knowledge/registry.json')), false);
+    assert.equal(existsSync(join(tmpDir, '.ai/matrix.json')), false);
+    assert.equal(readFileSync(join(tmpDir, '.ai/knowledge/entries'), 'utf8'), 'blocked\n');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+guardedTest('XSKP-P4-05 init writes the contract empty registry and the entries placeholder', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-registry-');
+  try {
+    const result = runFixedInit(tmpDir);
+    assert.equal(result.status, 0, `init failed\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+    assert.equal(readFileSync(join(tmpDir, REGISTRY_REL), 'utf8'), registryBytes('example-repo'));
+    const gitkeep = join(tmpDir, ENTRIES_GITKEEP_REL);
+    assert.ok(existsSync(gitkeep), 'entries/.gitkeep must exist');
+    assert.equal(readFileSync(gitkeep, 'utf8'), '');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+guardedTest('XSKP-P4-05 init never overwrites an existing registry, with or without --force', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-registry-kept-');
+  try {
+    const registryPath = join(tmpDir, REGISTRY_REL);
+    mkdirSync(dirname(registryPath), { recursive: true });
+    const sentinel = '{"entries": [{"knowledge_id": "kept:plan:one"}], "sentinel": true}\n';
+    writeFileSync(registryPath, sentinel, 'utf8');
+
+    const first = spawnSync(process.execPath, [bin, 'init', tmpDir, ...FIXED_ARGS], { encoding: 'utf8' });
+    assert.equal(
+      first.status, 0,
+      `a pre-existing registry is not a collision\nstdout: ${first.stdout}\nstderr: ${first.stderr}`,
+    );
+    assert.equal(readFileSync(registryPath, 'utf8'), sentinel);
+    assert.ok(existsSync(join(tmpDir, '.ai/matrix.json')), 'the rest of the mechanical scaffold is still written');
+
+    const forced = spawnSync(process.execPath, [bin, 'init', tmpDir, ...FIXED_ARGS, '--force'], { encoding: 'utf8' });
+    assert.equal(forced.status, 0, `init --force failed\nstderr: ${forced.stderr}`);
+    assert.equal(readFileSync(registryPath, 'utf8'), sentinel, '--force never overwrites the registry either');
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+guardedTest('XSKP-P4-05 init emits the registry from code, not from the vendored template', async () => {
+  const { scaffold } = await import('../src/scaffold.ts');
+  const targetDir = makeTmpDir('ai-catapult-init-code-registry-');
+  const fakeTemplatesDir = makeTmpDir('ai-catapult-code-registry-templates-');
+  try {
+    mkdirSync(join(fakeTemplatesDir, 'dot-ai/knowledge'), { recursive: true });
+    mkdirSync(join(fakeTemplatesDir, 'scripts'), { recursive: true });
+    writeFileSync(join(fakeTemplatesDir, 'AGENTS.md'), 'AGENTS {{REPO_ID}}\n', 'utf8');
+    // A hostile vendored template: the registry is code-owned, so it must
+    // never be read, even when the manifest lists it as mechanical.
+    writeFileSync(
+      join(fakeTemplatesDir, 'dot-ai/knowledge/registry.json'),
+      '{"repo_id": "{{REPO_ID}}", "hostile": true}\n',
+      'utf8',
+    );
+    writeFileSync(join(fakeTemplatesDir, 'scripts/validate-rules.sh'), '#!/bin/sh\nexit 0\n', 'utf8');
+    writeFileSync(join(fakeTemplatesDir, 'boundary-manifest.json'), JSON.stringify({
+      schema_version: '1.0',
+      paths: [
+        { path: 'AGENTS.md', classification: 'mechanical', template: 'AGENTS.md' },
+        { path: REGISTRY_REL, classification: 'mechanical', template: 'dot-ai/knowledge/registry.json' },
+      ],
+    }), 'utf8');
+
+    scaffold({
+      targetDir,
+      templatesDir: fakeTemplatesDir,
+      repoId: 'code-owned',
+      date: '2026-01-01',
+      upstreamUrl: '',
+      upstreamRef: 'main',
+      force: true,
+    });
+
+    assert.equal(readFileSync(join(targetDir, REGISTRY_REL), 'utf8'), registryBytes('code-owned'));
+    assert.ok(existsSync(join(targetDir, ENTRIES_GITKEEP_REL)), 'the entries placeholder is code-owned too');
+  } finally {
+    rmSync(targetDir, { recursive: true, force: true });
     rmSync(fakeTemplatesDir, { recursive: true, force: true });
   }
 });

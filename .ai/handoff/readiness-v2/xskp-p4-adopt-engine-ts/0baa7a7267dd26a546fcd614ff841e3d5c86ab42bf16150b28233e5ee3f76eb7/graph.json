@@ -1,0 +1,44 @@
+{
+  "contract": "readiness-contract/2",
+  "edges": [
+    {
+      "source": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "target": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-04:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "target": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-05:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "type": "plans"
+    }
+  ],
+  "generation": "0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+  "goal_ids": [
+    "XSKP-P4-04",
+    "XSKP-P4-05"
+  ],
+  "nodes": [
+    {
+      "id": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/handoff.md",
+      "repo_id": "ai-catapult",
+      "type": "handoff"
+    },
+    {
+      "goal_revision": "a11cc6f3b76269f4c4e419d90f1a803c462d180b50afbebead2e3e0e595a0034",
+      "id": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-04:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    },
+    {
+      "goal_revision": "7ae1b06bdbb4ae8580cc512453b10ca8125930f8133c4e8b0906212b430d2ceb",
+      "id": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-05:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
+      "path": ".ai/handoff/readiness-v2/xskp-p4-adopt-engine-ts/0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    }
+  ],
+  "plan_id": "xskp-p4-adopt-engine-ts",
+  "schema_version": "1.1"
+}

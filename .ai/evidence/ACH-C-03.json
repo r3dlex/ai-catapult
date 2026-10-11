@@ -1,0 +1,12 @@
+{
+  "goal_id": "ACH-C-03",
+  "green": {
+    "command": "node --test --test-name-pattern ACH-C-03 test/init.test.ts test/packed-init.test.ts",
+    "exit_code": 0
+  },
+  "note": "Agent-self: no human approved this work. Red exit 1 was observed by withholding the gitignored vendored template default_mode (agent -> ssh-tag; template sha 4aef64ba50187454b5c32ee5b992bb96934885792d13b7cf9e0e0117494d8372 restored before green). Parent e232de95 already emitted the N3 seed from that template; this goal adds the missing assertions and does not change product bytes or the C-02 fixture.",
+  "red": {
+    "command": "node --test --test-name-pattern ACH-C-03 test/init.test.ts test/packed-init.test.ts",
+    "exit_code": 1
+  }
+}
