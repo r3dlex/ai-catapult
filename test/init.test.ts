@@ -28,6 +28,7 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  symlinkSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -625,6 +626,28 @@ guardedTest('ACH-C-03 init --force restores the seeded policy bytes', () => {
 // ---------------------------------------------------------------------------
 // XSKP-P4-05: the knowledge surface init owns
 // ---------------------------------------------------------------------------
+
+guardedTest('XSKP-P4-05 init does not follow a dangling registry symlink', () => {
+  const tmpDir = makeTmpDir('ai-catapult-init-dangling-registry-');
+  const outside = join(dirname(tmpDir), 'outside-registry.json');
+  try {
+    const registryPath = join(tmpDir, REGISTRY_REL);
+    mkdirSync(dirname(registryPath), { recursive: true });
+    symlinkSync(outside, registryPath);
+    const first = runFixedInit(tmpDir);
+    assert.equal(first.status, 0, `${first.stdout}\n${first.stderr}`);
+    assert.equal(lstatSync(registryPath).isSymbolicLink(), true);
+    assert.equal(readlinkSync(registryPath), outside);
+    assert.equal(existsSync(outside), false);
+    const forced = runFixedInit(tmpDir, ['--force']);
+    assert.equal(forced.status, 0, `${forced.stdout}\n${forced.stderr}`);
+    assert.equal(readlinkSync(registryPath), outside);
+    assert.equal(existsSync(outside), false);
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+    rmSync(outside, { force: true });
+  }
+});
 
 guardedTest('XSKP-P4-05 init refuses a file occupying the entries directory before writing', () => {
   const tmpDir = makeTmpDir('ai-catapult-init-blocked-entries-');

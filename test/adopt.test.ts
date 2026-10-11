@@ -1846,6 +1846,50 @@ void test('a preserved target is not rewritten when it cites a migrated source',
   });
 });
 
+void test('a destination directory without search permission refuses before any write', () => {
+  ac7Guarded('unsearchable-parent', () => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) return;
+    const tmp = stage('legacy-agents', 'single');
+    const parent = join(tmp, 'docs/learning/concept-maps');
+    try {
+      mkdirSync(parent, { recursive: true });
+      chmodSync(parent, 0o666);
+      const before = treeDigest(tmp);
+      const refused = spawnAdopt(['--apply', '--run-id', 'run-36', tmp]);
+      assert.equal(refused.status, 1);
+      assert.equal(errorOf(refused.stdout), 'target_conflict');
+      assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-36/map.json')), false);
+      assert.equal(treeDigest(tmp), before, 'an unsearchable destination refuses before any write');
+    } finally {
+      try {
+        chmodSync(parent, 0o755);
+      } catch {
+        // The directory may not exist if staging failed.
+      }
+      discard(tmp);
+    }
+  });
+});
+
+void test('a multiline reference definition is rebased', () => {
+  ac7Guarded('multiline-definition', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), '[ref]:\n  guide.md\n');
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'multiline definition');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-37', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-37', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      assert.equal(readFileSync(join(tmp, target), 'utf8'), `[ref]:\n  ${guide}\n`);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
 void test('a newline around an inline destination is preserved and rebased', () => {
   ac7Guarded('newline-destination', () => {
     const tmp = stageGitRepo('legacy-agents', 'single');

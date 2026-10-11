@@ -785,10 +785,25 @@ function assertEffectivelyWritable(path: string, relative: string): void {
     if (parent === cursor) break;
     cursor = parent;
   }
+  const creating = !existsSync(path) || !lstatSync(path).isFile();
   try {
-    accessSync(cursor, constants.W_OK);
+    accessSync(cursor, creating ? constants.W_OK | constants.X_OK : constants.W_OK);
   } catch {
     throw new KnowledgeError('target_conflict', `${relative}: not writable`);
+  }
+  let parent = dirname(cursor);
+  while (parent !== cursor) {
+    if (existsSync(parent)) {
+      try {
+        accessSync(parent, constants.X_OK);
+      } catch {
+        throw new KnowledgeError('target_conflict', `${relative}: not writable`);
+      }
+    }
+    const next = dirname(parent);
+    if (next === parent) break;
+    cursor = parent;
+    parent = next;
   }
 }
 
@@ -986,14 +1001,21 @@ function readReferenceDestination(text: string, at: number): { start: number; en
   return { start, end, destination: text.slice(start, end) };
 }
 
+function continuationDestination(text: string, at: number, limit: number): { start: number; end: number; destination: string } | null {
+  let index = at;
+  while (index < limit && (text[index] === ' ' || text[index] === '\t')) index += 1;
+  if (index < limit) return readReferenceDestination(text, at);
+  const next = limit + 1;
+  if (next >= text.length || (text[next] !== ' ' && text[next] !== '\t')) return null;
+  return readReferenceDestination(text, next);
+}
+
 function definitionDestination(text: string, lineStart: number, limit: number): { start: number; end: number; destination: string } | null {
   const open = text.indexOf('[', lineStart);
   if (open < 0 || open >= limit || !/^ {0,3}\[/.test(text.slice(lineStart, open + 1))) return null;
   const close = labelClose(text, open);
-  if (close <= open || text[close + 1] !== ':') return null;
-  const destination = readReferenceDestination(text, close + 2);
-  if (destination === null || destination.end > limit) return null;
-  return destination;
+  if (close <= open || close >= limit || text[close + 1] !== ':') return null;
+  return continuationDestination(text, close + 2, limit);
 }
 
 function referenceDestinations(text: string): Array<{ start: number; end: number; destination: string }> {

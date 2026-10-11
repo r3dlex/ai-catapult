@@ -177,15 +177,23 @@ function emptyRegistryBytes(repoId: string): string {
  * skipped with and without --force (modules/migration.md), which keeps the
  * publisher-managed entry lifecycle and tombstones intact.
  */
+function pathKind(abs: string): 'absent' | 'dir' | 'other' {
+  try {
+    return lstatSync(abs).isDirectory() ? 'dir' : 'other';
+  } catch {
+    return 'absent';
+  }
+}
+
 function knowledgeBlocked(targetDir: string): string | null {
   for (const relative of [REGISTRY_FILE, ENTRIES_GITKEEP]) {
     const parts = relative.split('/');
     let cursor = '';
     for (const part of parts.slice(0, -1)) {
       cursor = cursor === '' ? part : `${cursor}/${part}`;
-      const abs = join(targetDir, cursor);
-      if (!existsSync(abs)) break;
-      if (!lstatSync(abs).isDirectory()) return cursor;
+      const kind = pathKind(join(targetDir, cursor));
+      if (kind === 'absent') break;
+      if (kind === 'other') return cursor;
     }
   }
   return null;
@@ -194,13 +202,13 @@ function knowledgeBlocked(targetDir: string): string | null {
 function emitKnowledgeSkeleton(targetDir: string, repoId: string): string[] {
   const emitted: string[] = [];
   const registryDest = join(targetDir, REGISTRY_FILE);
-  if (!existsSync(registryDest)) {
+  if (pathKind(registryDest) === 'absent') {
     mkdirSync(dirname(registryDest), { recursive: true });
     writeFileSync(registryDest, emptyRegistryBytes(repoId), 'utf8');
     emitted.push(REGISTRY_FILE);
   }
   const gitkeepDest = join(targetDir, ENTRIES_GITKEEP);
-  if (!existsSync(gitkeepDest)) {
+  if (pathKind(gitkeepDest) === 'absent') {
     mkdirSync(dirname(gitkeepDest), { recursive: true });
     writeFileSync(gitkeepDest, '', 'utf8');
   }
