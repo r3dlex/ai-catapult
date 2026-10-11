@@ -9,6 +9,7 @@ import { runMatrixRuntime } from '../src/matrix-runtime.ts';
 import { runCiAdaptersRuntime } from '../src/ci-adapters-runtime.ts';
 import { runKnowledge } from '../src/knowledge.ts';
 import { runAdopt } from '../src/adopt.ts';
+import { runBackfill } from '../src/backfill.ts';
 import type { ReadmeContract } from '../src/readme-contract.ts';
 import {
   assertReadmeWriteAllowed,
@@ -60,6 +61,7 @@ Commands:
   ci-adapters                  Render/check matrix-selected GitHub, ADO, and GitLab CI adapters
   install                      Install Claude Code and Codex plugins into detected harnesses
   graph-hooks install <target> Wire graph-automation git hooks and wrapper into a target git repo
+  backfill --policy-v2         Write the baseline readiness-policy/2 into an existing repo (ledgered)
   knowledge <verb>             Read the .ai/knowledge registry (list|find|show|verify|rebuild|serialize)
   adopt [target]               Dry-run knowledge inventory and migration map
 
@@ -281,6 +283,10 @@ function dispatchVerb(verb: string, rest: string[]): void {
   if (verb === 'graph-hooks') {
     runGraphHooks(rest, TEMPLATES_DIR);
     process.exit(0);
+  }
+  if (verb === 'backfill') {
+    const vendorSkillsDir = existsSync(VENDOR_SKILLS) ? VENDOR_SKILLS : undefined;
+    process.exit(runBackfill(rest, { templatesDir: TEMPLATES_DIR, vendorSkillsDir }));
   }
   if (verb === 'matrix') process.exit(runMatrixRuntime(rest));
   if (verb === 'ci-adapters') process.exit(runCiAdaptersRuntime(rest));
