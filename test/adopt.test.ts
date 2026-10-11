@@ -25,7 +25,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -92,8 +92,122 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+const TARGET_FROZEN = [
+  '.omc', '.omx', '.omo', '.sisyphus', '.memory',
+  '.ai/evidence', '.ai/handoff/readiness-v1', '.ai/workflows/northstar-readiness-v1.json',
+];
+const ENGINE_OUTPUTS = ['.ai/knowledge/migration/', '.ai/drift/backups/', '.ai/knowledge/.locks/'];
+
+type Preserved = { digest: string; frozen: boolean; rel: string };
+
+function isFrozenPath(rel: string): boolean {
+  return TARGET_FROZEN.some((prefix) => rel === prefix || rel.startsWith(`${prefix}/`));
+}
+
+function isEngineOutput(rel: string): boolean {
+  return ENGINE_OUTPUTS.some((prefix) => rel === prefix.slice(0, -1) || rel.startsWith(prefix));
+}
+
+function adoptTarget(args: string[]): string | null {
+  for (let index = args.length - 1; index >= 0; index -= 1) {
+    const arg = args[index];
+    if (arg === undefined || arg.startsWith('-')) continue;
+    try {
+      if (lstatSync(arg).isDirectory()) return arg;
+    } catch {
+      // A missing positional is not the inventory root.
+    }
+  }
+  return null;
+}
+
+function collectFiles(tmp: string, rel: string, found: string[]): void {
+  let info: ReturnType<typeof lstatSync>;
+  try {
+    info = lstatSync(join(tmp, rel));
+  } catch {
+    return;
+  }
+  if (info.isSymbolicLink() || info.isFile()) {
+    found.push(rel);
+    return;
+  }
+  if (!info.isDirectory()) return;
+  for (const name of readdirSync(join(tmp, rel))) collectFiles(tmp, `${rel}/${name}`, found);
+}
+
+function porcelainPaths(text: string): string[] {
+  const found: string[] = [];
+  const parts = text.split('\0');
+  for (let index = 0; index < parts.length; index += 1) {
+    const entry = parts[index];
+    if (entry === undefined || entry.length < 4) continue;
+    found.push(entry.slice(3));
+    if (entry.startsWith('R') || entry.startsWith('C')) {
+      const next = parts[index + 1];
+      if (next) found.push(next);
+      index += 1;
+    }
+  }
+  return found;
+}
+
+function dirtyPaths(tmp: string): string[] {
+  const status = spawnSync('git', ['-C', tmp, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+    encoding: 'utf8', timeout: 30_000,
+  });
+  if (status.status !== 0) return [];
+  return porcelainPaths(status.stdout);
+}
+
+function digestOf(tmp: string, rel: string): string {
+  try {
+    const abs = join(tmp, rel);
+    const info = lstatSync(abs);
+    if (info.isSymbolicLink()) return `link ${readlinkSync(abs)}`;
+    if (!info.isFile()) return 'not-a-file';
+    return createHash('sha256').update(readFileSync(abs)).digest('hex');
+  } catch {
+    return 'missing';
+  }
+}
+
+function preservationSnapshot(tmp: string): Preserved[] {
+  const files: string[] = [];
+  for (const prefix of TARGET_FROZEN) collectFiles(tmp, prefix, files);
+  for (const rel of dirtyPaths(tmp)) {
+    if (!isEngineOutput(rel)) files.push(rel);
+  }
+  return [...new Set(files)].sort().map((rel) => ({
+    digest: digestOf(tmp, rel), frozen: isFrozenPath(rel), rel,
+  }));
+}
+
+function frozenFiles(tmp: string): string[] {
+  const files: string[] = [];
+  for (const prefix of TARGET_FROZEN) collectFiles(tmp, prefix, files);
+  return files.sort();
+}
+
+function assertTargetPreserved(tmp: string, before: Preserved[]): void {
+  for (const item of before) {
+    const now = digestOf(tmp, item.rel);
+    if (now === 'missing') {
+      assert.equal(item.frozen, false, `AC-7: ${item.rel} was removed`);
+      continue;
+    }
+    assert.equal(now, item.digest, `AC-7: ${item.rel} was rewritten`);
+  }
+  const frozenBefore = before.filter((item) => item.frozen).map((item) => item.rel);
+  assert.deepEqual(frozenFiles(tmp), frozenBefore, 'AC-7: a native or immutable path was added');
+}
+
 function spawnAdopt(args: string[]) {
-  return spawnSync(process.execPath, [bin, 'adopt', ...args], { encoding: 'utf8', timeout: 30_000 });
+  const target = adoptTarget(args);
+  const before = target === null ? [] : preservationSnapshot(target);
+  const result = spawnSync(process.execPath, [bin, 'adopt', ...args], { encoding: 'utf8', timeout: 30_000 });
+  if (target !== null) assertTargetPreserved(target, before);
+  return result;
 }
 
 function stage(layout: string, topology: string): string {
@@ -1070,6 +1184,283 @@ void test('a replay verifies a preserved target after-state too', () => {
       assert.equal(rerun.status, 1);
       assert.equal(errorOf(rerun.stdout), 'replay_mismatch');
       assert.equal(readLedger(tmp).length, ledgerBefore.length, 'a refused replay appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+const CONFIRMATIONS_REL = '.ai/knowledge/migration/confirmations.jsonl';
+const REFERENCE = '.agents/skills/researcher/REFERENCE.md';
+const SKILL = '.agents/skills/researcher/SKILL.md';
+const RELATIVE_LINKS = [
+  '# reference',
+  '',
+  'See [skill](SKILL.md) and [usage](SKILL.md#usage).',
+  '',
+  '[skill]: SKILL.md',
+  '',
+].join('\n');
+
+function renderedFrom(fromFile: string, toFile: string): string {
+  return posix.relative(posix.dirname(fromFile), toFile);
+}
+
+function assertRelativeRepair(tmp: string, referenceTarget: string, skillTarget: string): void {
+  const expected = renderedFrom(referenceTarget, skillTarget);
+  const copied = readFileSync(join(tmp, referenceTarget), 'utf8');
+  assert.ok(copied.includes(`[skill](${expected})`), copied);
+  assert.ok(copied.includes(`[usage](${expected}#usage)`), copied);
+  assert.ok(copied.includes(`[skill]: ${expected}`), copied);
+  assert.equal(copied.includes('(SKILL.md)'), false, copied);
+}
+
+void test('a copied document repairs relative links from its original location', () => {
+  ac7Guarded('copied-links', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), RELATIVE_LINKS);
+      commitAll(tmp, 'relative links');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-15', tmp]);
+      const map = parseMap(dry.stdout);
+      const referenceItem = itemBySource(map, REFERENCE);
+      const skillItem = itemBySource(map, SKILL);
+      assert.equal(referenceItem.action, 'copy');
+      assert.equal(skillItem.action, 'copy');
+      const referenceTarget = referenceItem.target as string;
+      const skillTarget = skillItem.target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-15', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assertRelativeRepair(tmp, referenceTarget, skillTarget);
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), RELATIVE_LINKS, 'a copy source keeps its original links');
+      assert.equal(existsSync(join(tmp, SKILL)), true);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a migrated document repairs relative links from its original location', () => {
+  ac7Guarded('migrated-links', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), RELATIVE_LINKS);
+      commitAll(tmp, 'relative links');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-16', tmp]);
+      const map = parseMap(dry.stdout);
+      const referenceItem = itemBySource(map, REFERENCE);
+      const skillItem = itemBySource(map, SKILL);
+      assert.equal(referenceItem.action, 'migrate');
+      assert.equal(skillItem.action, 'migrate');
+      const file = migrateConfirmation(tmp, map, 'run-16');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-16', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assertRelativeRepair(tmp, referenceItem.target as string, skillItem.target as string);
+      assert.equal(existsSync(join(tmp, REFERENCE)), false, 'the migrated source is removed');
+      assert.equal(existsSync(join(tmp, SKILL)), false, 'the migrated sibling is removed');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+const NATIVE_CITERS = [
+  '.omx/plans/check.md',
+  '.omc/plans/check.md',
+  '.omo/plans/check.md',
+  '.sisyphus/plans/check.md',
+];
+const CITATION = 'See `.rules.ts` before the move.\n';
+
+void test('apply does not rewrite native or pre-existing dirty paths', () => {
+  ac7Guarded('protected-citers', () => {
+    const tmp = stageGitRepo('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      for (const rel of NATIVE_CITERS) {
+        mkdirSync(dirname(join(tmp, rel)), { recursive: true });
+        writeFileSync(join(tmp, rel), CITATION);
+      }
+      const immutable = '.ai/evidence/pin.json';
+      writeFileSync(join(tmp, immutable), `${readFileSync(join(tmp, immutable), 'utf8')}\nSee .rules.ts\n`);
+      const dirty = 'notes/dirty.md';
+      mkdirSync(dirname(join(tmp, dirty)), { recursive: true });
+      writeFileSync(join(tmp, dirty), 'clean base\n');
+      commitAll(tmp, 'protected citers');
+      writeFileSync(join(tmp, dirty), CITATION);
+      const untracked = 'notes/untracked.md';
+      writeFileSync(join(tmp, untracked), CITATION);
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-17', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-17');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-17', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      for (const rel of NATIVE_CITERS) assert.equal(readFileSync(join(tmp, rel), 'utf8'), CITATION, rel);
+      assert.equal(readFileSync(join(tmp, dirty), 'utf8'), CITATION, 'a pre-existing dirty citer is not rewritten');
+      assert.equal(readFileSync(join(tmp, untracked), 'utf8'), CITATION, 'a pre-existing untracked citer is not rewritten');
+      assert.ok(readFileSync(join(tmp, immutable), 'utf8').includes('See .rules.ts'), 'an immutable citer is not rewritten');
+      const repaired = readLedger(tmp).flatMap((event) => event.refs_repaired.map((repair) => repair.file));
+      for (const rel of [...NATIVE_CITERS, dirty, untracked, immutable]) {
+        assert.equal(repaired.includes(rel), false, `${rel} must not enter the ledger`);
+      }
+      assert.equal(existsSync(join(tmp, '.rules.ts')), false, 'the confirmed migration still applies');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+function stageAllNoop(runId: string): string {
+  const tmp = stage('legacy-agents', 'single');
+  const dry = spawnAdopt(['--dry-run', '--run-id', runId, tmp]);
+  const map = parseMap(dry.stdout);
+  const copies = map.items.filter((item) => item.action === 'copy' && item.target !== null);
+  assert.equal(copies.length, 2);
+  for (const item of copies) {
+    const target = item.target as string;
+    mkdirSync(dirname(join(tmp, target)), { recursive: true });
+    writeFileSync(join(tmp, target), `kept ${item.source}\n`);
+  }
+  const applied = spawnAdopt(['--apply', '--run-id', runId, tmp]);
+  assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+  assert.deepEqual(readLedger(tmp).map((event) => event.result), ['noop', 'noop']);
+  return tmp;
+}
+
+void test('replay refuses an interrupted ledger tail before the all-noop return', () => {
+  ac7Guarded('replay-tail', () => {
+    const tmp = stageAllNoop('run-18');
+    try {
+      const ledger = join(tmp, LEDGER_REL);
+      const tailed = `${readFileSync(ledger, 'utf8')}{"schema":"knowledge-migration-event/1"`;
+      writeFileSync(ledger, tailed);
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-18', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'invalid_ledger');
+      assert.equal(readFileSync(ledger, 'utf8'), tailed, 'a refused replay appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('replay refuses a contiguous foreign-schema ledger record before the all-noop return', () => {
+  ac7Guarded('replay-foreign', () => {
+    const tmp = stageAllNoop('run-19');
+    try {
+      const ledger = join(tmp, LEDGER_REL);
+      const foreign = `${readFileSync(ledger, 'utf8')}${JSON.stringify({ schema: 'foreign/1', seq: 3 })}\n`;
+      writeFileSync(ledger, foreign);
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-19', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'invalid_ledger');
+      assert.equal(readFileSync(ledger, 'utf8'), foreign, 'a refused replay appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('replay refuses a recorded map whose replacement target does not exist', () => {
+  ac7Guarded('replay-target', () => {
+    const tmp = stageAllNoop('run-20');
+    try {
+      const mapPath = join(tmp, '.ai/knowledge/migration/run-20/map.json');
+      const recorded = JSON.parse(readFileSync(mapPath, 'utf8')) as MigrationMap;
+      const item = recorded.items.find((entry) => entry.action === 'copy' && entry.target !== null);
+      assert.ok(item, 'the recorded map has a copy');
+      item.target = 'docs/missing-replacement.md';
+      writeFileSync(mapPath, `${JSON.stringify(recorded)}\n`);
+      const ledgerBefore = readFileSync(join(tmp, LEDGER_REL), 'utf8');
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-20', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'replay_mismatch');
+      assert.equal(existsSync(join(tmp, 'docs/missing-replacement.md')), false);
+      assert.equal(readFileSync(join(tmp, LEDGER_REL), 'utf8'), ledgerBefore, 'a refused replay appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('replay refuses a malformed recorded map before the all-noop return', () => {
+  ac7Guarded('replay-map', () => {
+    const tmp = stageAllNoop('run-21');
+    try {
+      const mapPath = join(tmp, '.ai/knowledge/migration/run-21/map.json');
+      const recorded = JSON.parse(readFileSync(mapPath, 'utf8')) as { items: Array<Record<string, unknown>> };
+      const item = recorded.items.find((entry) => entry.action === 'copy');
+      assert.ok(item, 'the recorded map has a copy');
+      delete item.reason;
+      writeFileSync(mapPath, `${JSON.stringify(recorded)}\n`);
+      const ledgerBefore = readFileSync(join(tmp, LEDGER_REL), 'utf8');
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-21', tmp]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOf(rerun.stdout), 'invalid_map');
+      assert.equal(readFileSync(join(tmp, LEDGER_REL), 'utf8'), ledgerBefore, 'a refused replay appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+function assertMigrateRefused(label: string, ledger: string): void {
+  const tmp = stage('legacy-ai-sdlc', 'single');
+  try {
+    writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+    const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-22', tmp]);
+    const map = parseMap(dry.stdout);
+    const file = migrateConfirmation(tmp, map, 'run-22');
+    mkdirSync(dirname(join(tmp, CONFIRMATIONS_REL)), { recursive: true });
+    writeFileSync(join(tmp, CONFIRMATIONS_REL), ledger);
+    const before = treeDigest(tmp);
+    const refused = spawnAdopt([
+      '--apply', '--destructive', '--run-id', 'run-22', '--confirm', TOKEN, '--confirm-file', file, tmp,
+    ]);
+    assert.equal(refused.status, 1, label);
+    assert.equal(errorOf(refused.stdout), 'invalid_ledger', label);
+    assert.equal(treeDigest(tmp), before, `${label}: a bad confirmation ledger refuses before any write`);
+    assert.equal(existsSync(join(tmp, '.ai/knowledge/migration/run-22/map.json')), false, label);
+    assert.equal(existsSync(join(tmp, '.rules.ts')), true, label);
+  } finally {
+    discard(tmp);
+  }
+}
+
+void test('a committed empty confirmation record refuses migration before any write', () => {
+  ac7Guarded('empty-confirmation', () => {
+    assertMigrateRefused('empty object', '{}\n');
+    assertMigrateRefused('foreign confirmation', '{"schema":"nope/1","confirmation_token":"ct-2026-10-11-009"}\n');
+    assertMigrateRefused('missing required fields', '{"confirmation_token":"ct-2026-10-11-001","result":"consumed"}\n');
+  });
+});
+
+void test('a schema-valid confirmation for another token still permits this migration', () => {
+  ac7Guarded('other-confirmation', () => {
+    const tmp = stage('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-23', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-23');
+      mkdirSync(dirname(join(tmp, CONFIRMATIONS_REL)), { recursive: true });
+      writeFileSync(join(tmp, CONFIRMATIONS_REL), `${JSON.stringify({
+        at: '2026-10-11T00:00:00.000Z',
+        confirmation_token: 'ct-2026-10-11-002',
+        result: 'consumed',
+        run_id: 'other',
+        schema: 'knowledge-migration-confirmation-event/1',
+        source_commit: 'uncommitted',
+      })}\n`);
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-23', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assert.equal(existsSync(join(tmp, '.rules.ts')), false, 'a valid other-token record does not block this run');
     } finally {
       discard(tmp);
     }

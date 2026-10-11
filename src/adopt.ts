@@ -14,7 +14,11 @@
  *   before any write. A migrate writes its backup under
  *   `.ai/drift/backups/<run_id>/<source>` first, verifies the moved bytes,
  *   removes the source, then repairs tracked citations (plain path tokens
- *   and relative Markdown link destinations); every write is recorded as a
+ *   and relative Markdown link destinations). A link is resolved from the
+ *   citer's original location, mapped through relocated destinations, and
+ *   rendered from the citer's final location — including a document that was
+ *   copied rather than moved. Native, immutable, private and pre-existing
+ *   dirty paths are never rewritten. Every write is recorded as a
  *   knowledge-migration-event/1 line in `.ai/knowledge/migration/ledger.jsonl`.
  * - An existing v3 target is present-not-overwritten: the item is a noop and
  *   the source is kept. Re-running an applied run-id replays the recorded
@@ -126,6 +130,9 @@ const SAFE_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const BACKUPS_DIR = '.ai/drift/backups';
 const MIGRATION_DIR = '.ai/knowledge/migration';
 const EXCLUDED_REPAIRS = ['.ai/drift/backups/', `${MIGRATION_DIR}/`, '.ai/knowledge/.locks/'];
+const NATIVE_ROOTS = ['.omc', '.omx', '.omo', '.sisyphus', '.memory'];
+const MIGRATION_CONFIRMATION = 'knowledge-migration-confirmation-event/1';
+const ARCHIVE_CONFIRMATION = 'knowledge-archive-confirmation-event/1';
 
 /** One planned copy/migrate write. */
 type PlannedAction = {
@@ -663,9 +670,54 @@ function consumedLine(line: string, token: string): boolean {
   }
 }
 
+function hasText(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function exactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  const actual = Object.keys(value).sort(compareCodePoints);
+  const expected = [...keys].sort(compareCodePoints);
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+}
+
+function migrationConfirmationOk(value: Record<string, unknown>): boolean {
+  return value.schema === MIGRATION_CONFIRMATION
+    && hasText(value.at)
+    && hasText(value.run_id)
+    && hasText(value.source_commit)
+    && typeof value.confirmation_token === 'string'
+    && TOKEN.test(value.confirmation_token)
+    && value.result === 'consumed'
+    && exactKeys(value, ['at', 'confirmation_token', 'result', 'run_id', 'schema', 'source_commit']);
+}
+
+function archiveConfirmationOk(value: Record<string, unknown>): boolean {
+  return value.schema === ARCHIVE_CONFIRMATION
+    && hasText(value.at)
+    && hasText(value.run_id)
+    && typeof value.confirmation_token === 'string'
+    && TOKEN.test(value.confirmation_token)
+    && typeof value.manifest_sha256 === 'string'
+    && /^[0-9a-f]{64}$/.test(value.manifest_sha256)
+    && value.result === 'consumed'
+    && exactKeys(value, ['at', 'confirmation_token', 'manifest_sha256', 'result', 'run_id', 'schema']);
+}
+
+/** Every committed confirmation line must be a schema-complete record before a token is spent. */
+function assertConfirmationLedger(root: string): void {
+  assertLedgerTail(root, CONFIRMATIONS);
+  const { values } = readLedger(root, CONFIRMATIONS);
+  for (const value of values) {
+    if (!migrationConfirmationOk(value) && !archiveConfirmationOk(value)) {
+      throw new KnowledgeError('invalid_ledger', `${CONFIRMATIONS}: an existing line is not a confirmation record`);
+    }
+  }
+}
+
 function requireConfirmation(root: string, map: MigrationMap, options: Options): void {
   const pending = map.items.filter((item) => item.action === 'migrate');
   if (pending.length === 0) return;
+  assertConfirmationLedger(root);
   if (options.confirm === undefined && options.confirmFile === undefined) {
     throw new KnowledgeError('confirmation_required', 'migrate actions require a per-run confirmation token');
   }
@@ -806,29 +858,45 @@ function splitDestination(destination: string): { head: string; tail: string; wr
 }
 
 /**
- * The replacement for one Markdown link destination that resolves to the
- * migrated source: a relative link stays relative, an absolute one stays
- * absolute, and any query/fragment suffix survives.
+ * The replacement for one Markdown link destination that resolves to a
+ * relocated source. Resolution uses the citer's original directory — a moved
+ * or copied document still names siblings from where it was written — and the
+ * replacement is rendered from the citer's final directory. A relative link
+ * stays relative, an absolute one stays absolute, and any query or fragment
+ * suffix survives.
  */
-function linkReplacement(citer: string, destination: string, source: string, target: string): string | null {
+function linkReplacement(
+  originalCiter: string,
+  finalCiter: string,
+  destination: string,
+  source: string,
+  target: string,
+): string | null {
   const split = splitDestination(destination);
   if (split === null) return null;
   const absolute = split.head.startsWith('/');
-  const from = posix.dirname(citer);
-  const resolved = posix.normalize(absolute ? split.head.slice(1) : posix.join(from, split.head));
+  const resolved = posix.normalize(
+    absolute ? split.head.slice(1) : posix.join(posix.dirname(originalCiter), split.head),
+  );
   if (resolved !== source) return null;
-  const path = absolute ? `/${target}` : posix.relative(from, target);
+  const path = absolute ? `/${target}` : posix.relative(posix.dirname(finalCiter), target);
   return split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
 }
 
 /** Destination spans of inline links and reference definitions that cite the source. */
-function linkSpans(text: string, citer: string, source: string, target: string): Span[] {
+function linkSpans(
+  text: string,
+  originalCiter: string,
+  finalCiter: string,
+  source: string,
+  target: string,
+): Span[] {
   const spans: Span[] = [];
   for (const pattern of [/\[[^\]]*\]\(([^)\s]+)\)/g, /^ {0,3}\[[^\]]+\]:\s*(\S+)/gm]) {
     for (const match of text.matchAll(pattern)) {
       const destination = match[1];
       if (destination === undefined) continue;
-      const replacement = linkReplacement(citer, destination, source, target);
+      const replacement = linkReplacement(originalCiter, finalCiter, destination, source, target);
       if (replacement === null) continue;
       const start = (match.index ?? 0) + match[0].indexOf(destination);
       spans.push({ start, end: start + destination.length, replacement });
@@ -862,29 +930,73 @@ function applySpans(text: string, spans: Span[]): string {
   return updated;
 }
 
-/** Rewrite a citer's citations of the migrated source, or null when untouched. */
-function repairedBytes(content: Buffer, citer: string, source: string, target: string): Buffer | null {
+/** Rewrite a citer's citations of the relocated source, or null when untouched. */
+function repairedBytes(
+  content: Buffer,
+  originalCiter: string,
+  finalCiter: string,
+  source: string,
+  target: string,
+): Buffer | null {
   if (content.includes(0)) return null;
   const text = content.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(content)) return null;
-  const links = linkSpans(text, citer, source, target);
+  const links = linkSpans(text, originalCiter, finalCiter, source, target);
   const spans = [...links, ...tokenSpans(text, source, target, links)];
   if (spans.length === 0) return null;
   const updated = Buffer.from(applySpans(text, spans), 'utf8');
   return updated.equals(content) ? null : updated;
 }
 
+function nativeRoot(relative: string): boolean {
+  return NATIVE_ROOTS.includes(relative.split('/')[0] ?? '');
+}
+
+function classifiedProtected(root: string, citer: string, policy: Policy): boolean {
+  try {
+    const info = classify(root, citer, policy);
+    return info.classification === 'native'
+      || info.classification === 'native-legacy'
+      || info.classification === 'private';
+  } catch {
+    return true;
+  }
+}
+
 /**
- * A citer this engine may rewrite: its own output never, immutable or private
- * paths never, and only text the secret scan classifies clean — a citer that
- * classifies private or unscannable is left byte-unchanged and never hashed
- * into the ledger.
+ * Paths the spec never rewrites: native roots, immutable readiness bytes,
+ * private paths, managed (reference-only) children, and pre-existing dirty or
+ * untracked work. A classification failure is protected too — an unreadable
+ * path is not treated as rewriteable.
  */
-function repairAllowed(root: string, citer: string, policy: Policy, source: string, target: string): boolean {
-  if (citer === source || citer === target) return false;
-  if (EXCLUDED_REPAIRS.some((prefix) => citer.startsWith(prefix))) return false;
-  if (policy.immutable.some((pattern) => policyMatches(citer, pattern))) return false;
-  if (denied(citer, policy.deny.paths)) return false;
+function repairBlocked(root: string, citer: string, policy: Policy, dirty: Set<string>, managed: string[]): boolean {
+  if (nativeRoot(citer) || dirty.has(citer) || underManaged(citer, managed)) return true;
+  if (EXCLUDED_REPAIRS.some((prefix) => citer.startsWith(prefix))) return true;
+  if (policy.immutable.some((pattern) => policyMatches(citer, pattern))) return true;
+  if (denied(citer, policy.deny.paths)) return true;
+  return classifiedProtected(root, citer, policy);
+}
+
+function underManaged(citer: string, managed: string[]): boolean {
+  return managed.some((path) => citer === path || citer.startsWith(`${path}/`));
+}
+
+/**
+ * A citer this engine may rewrite: not the source or target of this pass, not
+ * a protected path, and only text the secret scan classifies clean. A citer
+ * that classifies private or unscannable is left byte-unchanged and never
+ * hashed into the ledger.
+ */
+function repairAllowed(
+  root: string,
+  citer: string,
+  policy: Policy,
+  source: string,
+  target: string,
+  dirty: Set<string>,
+  managed: string[],
+): boolean {
+  if (citer === source || citer === target || repairBlocked(root, citer, policy, dirty, managed)) return false;
   try {
     return scanSecret(safePath(root, citer), policy) === 'clean';
   } catch {
@@ -900,24 +1012,58 @@ function trackedFiles(root: string): string[] {
   return listed.stdout.split('\0').filter((name) => name !== '').sort(compareCodePoints);
 }
 
-/** Repair every citer's references to a migrated source; returns exactly what changed. */
-function repairReferences(root: string, policy: Policy, source: string, target: string, citers: string[]): RefRepair[] {
+type AppliedMove = { action: string; source: string; target: string };
+
+function originalCiter(citer: string, relocations: AppliedMove[]): string {
+  return relocations.find((entry) => entry.target === citer)?.source ?? citer;
+}
+
+/** A copy leaves its source in place, so only relocated documents are retargeted. */
+function repairCiters(action: string, citers: string[], relocations: AppliedMove[]): string[] {
+  if (action !== 'copy') return citers;
+  const targets = new Set(relocations.map((entry) => entry.target));
+  return citers.filter((citer) => targets.has(citer));
+}
+
+function rewriteCiter(
+  root: string,
+  citer: string,
+  original: string,
+  source: string,
+  target: string,
+): RefRepair | null {
+  const path = safePath(root, citer);
+  let content: Buffer;
+  try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    content = readFileSync(path);
+  } catch {
+    return null;
+  }
+  const updated = repairedBytes(content, original, citer, source, target);
+  if (updated === null) return null;
+  writeFileSync(path, updated);
+  return { file: citer, before: content, after: updated };
+}
+
+/** Repair every allowed citer's references to one relocated source. */
+function repairReferences(
+  root: string,
+  policy: Policy,
+  source: string,
+  target: string,
+  citers: string[],
+  relocations: AppliedMove[],
+  dirty: Set<string>,
+  managed: string[],
+): RefRepair[] {
   const repairs: RefRepair[] = [];
   for (const citer of citers) {
-    if (!repairAllowed(root, citer, policy, source, target)) continue;
-    const path = safePath(root, citer);
-    let content: Buffer;
-    try {
-      const stat = lstatSync(path);
-      if (!stat.isFile() || stat.isSymbolicLink()) continue;
-      content = readFileSync(path);
-    } catch {
-      continue;
-    }
-    const updated = repairedBytes(content, citer, source, target);
+    if (!repairAllowed(root, citer, policy, source, target, dirty, managed)) continue;
+    const updated = rewriteCiter(root, citer, originalCiter(citer, relocations), source, target);
     if (updated === null) continue;
-    writeFileSync(path, updated);
-    repairs.push({ file: citer, before: content, after: updated });
+    repairs.push(updated);
   }
   return repairs;
 }
@@ -1089,21 +1235,60 @@ function recordFailed(root: string, map: MigrationMap, failing: PlannedAction | 
   }
 }
 
+function appliedMoves(moved: Moved[]): AppliedMove[] {
+  return moved.filter((item) => item.result === 'applied').map((item) => ({
+    action: item.entry.item.action,
+    source: item.entry.item.source,
+    target: item.entry.target,
+  }));
+}
+
+function repairsFor(
+  root: string,
+  policy: Policy,
+  item: Moved,
+  citers: string[],
+  relocations: AppliedMove[],
+  dirty: Set<string>,
+  managed: string[],
+): RefRepair[] {
+  if (item.result !== 'applied') return [];
+  const action = item.entry.item.action;
+  if (action !== 'migrate' && action !== 'copy') return [];
+  return repairReferences(
+    root,
+    policy,
+    item.entry.item.source,
+    item.entry.target,
+    repairCiters(action, citers, relocations),
+    relocations,
+    dirty,
+    managed,
+  );
+}
+
 /**
  * Move every planned item, then repair every citation, then record the run's
  * final bytes: no event hash is read before the last repair lands, so a citer
- * touched by two passes is recorded consistently.
+ * touched by two passes is recorded consistently. Copy repairs run too, but
+ * only inside relocated documents, so a copied source stays byte-identical.
  */
-function executePlan(root: string, plan: PlannedAction[], map: MigrationMap, policy: Policy): MigrationEvent[] {
+function executePlan(
+  root: string,
+  plan: PlannedAction[],
+  map: MigrationMap,
+  policy: Policy,
+  dirty: Set<string>,
+  managed: string[],
+): MigrationEvent[] {
   const citers = citersFor(root, plan);
   const moved: Moved[] = [];
   try {
     for (const entry of plan) moved.push(moveOne(root, entry));
+    const relocations = appliedMoves(moved);
     const repairs = new Map<PlannedAction, RefRepair[]>();
     for (const item of moved) {
-      if (item.result === 'applied' && item.entry.item.action === 'migrate') {
-        repairs.set(item.entry, repairReferences(root, policy, item.entry.item.source, item.entry.target, citers));
-      }
+      repairs.set(item.entry, repairsFor(root, policy, item, citers, relocations, dirty, managed));
     }
     return moved.map((item) => (
       eventFor(root, map, item.entry, item.result, finalAfterSha(root, item), repairs.get(item.entry) ?? [])
@@ -1154,13 +1339,59 @@ function assertRunOutputs(root: string, map: MigrationMap, hasMigrate: boolean):
   if (hasMigrate) assertWritableTarget(root, readLedger(root, CONFIRMATIONS).path, CONFIRMATIONS);
 }
 
+function porcelainPaths(text: string): string[] {
+  const found: string[] = [];
+  const parts = text.split('\0');
+  for (let index = 0; index < parts.length; index += 1) {
+    const entry = parts[index];
+    if (entry === undefined || entry.length < 4) continue;
+    found.push(entry.slice(3));
+    if (entry.startsWith('R') || entry.startsWith('C')) {
+      const next = parts[index + 1];
+      if (next) found.push(next);
+      index += 1;
+    }
+  }
+  return found;
+}
+
+/**
+ * Paths dirty or untracked before the run. A work tree whose status cannot be
+ * listed refuses the run: a missing listing is not treated as a clean tree.
+ * A directory that is not a work tree has no git dirty set.
+ */
+function preExistingDirty(root: string): Set<string> {
+  const inside = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {
+    cwd: root, encoding: 'utf8', env: gitEnv(),
+  });
+  if (inside.status !== 0 || inside.stdout.trim() !== 'true') return new Set();
+  const status = spawnSync('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+    cwd: root, encoding: 'utf8', env: gitEnv(), maxBuffer: 64 * 1024 * 1024,
+  });
+  if (status.status !== 0) {
+    throw new KnowledgeError('invalid_ledger', 'pre-existing dirty paths could not be listed');
+  }
+  return new Set(porcelainPaths(status.stdout));
+}
+
+function managedRoots(root: string): string[] {
+  const matrix = readMatrix(root);
+  if (matrix === null || !Array.isArray(matrix.managed_repositories)) return [];
+  const found: string[] = [];
+  for (const entry of matrix.managed_repositories) {
+    if (isRecord(entry) && typeof entry.path === 'string') found.push(entry.path);
+  }
+  return found;
+}
+
 /**
  * Every predictable refusal of a run, before its first write: confirmation
- * binding, map shape, source/target/backup state (including the type of every
- * existing ancestor), overlap, event shape and both contract ledgers
- * (committed lines and an unterminated tail).
+ * binding and confirmation-ledger schema, map shape, source/target/backup
+ * state (including the type of every existing ancestor), overlap, event shape,
+ * both contract ledgers (committed lines and an unterminated tail), and a
+ * listable dirty set.
  */
-function preflightApply(root: string, map: MigrationMap, options: Options): PlannedAction[] {
+function preflightApply(root: string, map: MigrationMap, options: Options): { dirty: Set<string>; plan: PlannedAction[] } {
   requireConfirmation(root, map, options);
   assertMigrateTargets(map);
   const plan = planItems(root, map);
@@ -1170,17 +1401,17 @@ function preflightApply(root: string, map: MigrationMap, options: Options): Plan
   if (hasMigrate) assertLedgerTail(root, CONFIRMATIONS);
   assertEventLedger(root);
   assertRunOutputs(root, map, hasMigrate);
-  return plan;
+  return { dirty: preExistingDirty(root), plan };
 }
 
 function freshApply(root: string, map: MigrationMap, options: Options): MigrationMap {
   const policy = loadPolicy();
-  const plan = preflightApply(root, map, options);
+  const prepared = preflightApply(root, map, options);
   const mapPath = recordedMapPath(root, map.run_id);
   mkdirSync(dirname(mapPath), { recursive: true });
   writeFileSync(mapPath, canonical(map), 'utf8');
-  if (plan.some((entry) => entry.item.action === 'migrate')) consumeToken(root, map, options);
-  appendEvents(root, executePlan(root, plan, map, policy));
+  if (prepared.plan.some((entry) => entry.item.action === 'migrate')) consumeToken(root, map, options);
+  appendEvents(root, executePlan(root, prepared.plan, map, policy, prepared.dirty, managedRoots(root)));
   return map;
 }
 
@@ -1236,12 +1467,40 @@ function verifyAfterStates(root: string, events: Record<string, unknown>[]): voi
   }
 }
 
-function requireRunEvent(runEvents: Record<string, unknown>[], item: Item): void {
-  const completed = runEvents.some((event) => event.source === item.source
-    && (event.result === 'applied' || event.result === 'noop'));
-  if (!completed) {
-    throw new KnowledgeError('replay_mismatch', `${item.source}: the recorded run has no completed event`);
+function eventBound(event: Record<string, unknown>, item: Relocation): boolean {
+  return event.source === item.source
+    && event.action === item.action
+    && event.target === item.target
+    && (event.result === 'applied' || event.result === 'noop')
+    && typeof event.after_sha256 === 'string';
+}
+
+function assertReplayBound(events: Record<string, unknown>[], items: Relocation[]): void {
+  for (const item of items) {
+    if (!events.some((event) => eventBound(event, item))) {
+      throw new KnowledgeError('replay_mismatch', `${item.source}: the recorded run has no completed event for this action`);
+    }
   }
+  for (const event of events) {
+    if (event.result !== 'applied' && event.result !== 'noop') continue;
+    if (!items.some((item) => eventBound(event, item))) {
+      throw new KnowledgeError('replay_mismatch', `${String(event.source)}: completion event is not bound to a recorded action`);
+    }
+  }
+}
+
+/** Schema, tail and binding checks. They run before replay's all-noop return. */
+function assertReplayReady(root: string, recorded: MigrationMap): Record<string, unknown>[] {
+  assertValid(recorded);
+  assertLedgerTail(root, MIGRATION_LEDGER);
+  assertEventLedger(root);
+  const runEvents = readLedger(root, MIGRATION_LEDGER).values.filter((event) => event.run_id === recorded.run_id);
+  if (runEvents.some((event) => event.result === 'failed' || event.result === 'rolled-back')) {
+    throw new KnowledgeError('replay_mismatch', 'the recorded run is marked failed; recover under a fresh run id');
+  }
+  assertReplayBound(runEvents, relocations(recorded));
+  verifyAfterStates(root, runEvents);
+  return runEvents;
 }
 
 /** Replay the recorded map of a completed run: verify the after-state, append noops. */
@@ -1249,16 +1508,7 @@ function replayRun(root: string, recorded: MigrationMap): MigrationMap {
   if (recorded.source_commit !== 'uncommitted' && sourceCommit(root) !== recorded.source_commit) {
     throw new KnowledgeError('source_commit_mismatch', 'the recorded run map names another source commit');
   }
-  const { values } = readLedger(root, MIGRATION_LEDGER);
-  assertLedgerSequence(values);
-  const runEvents = values.filter((event) => event.run_id === recorded.run_id);
-  if (runEvents.some((event) => event.result === 'failed' || event.result === 'rolled-back')) {
-    throw new KnowledgeError('replay_mismatch', 'the recorded run is marked failed; recover under a fresh run id');
-  }
-  for (const item of relocations(recorded)) requireRunEvent(runEvents, item);
-  // Every recorded after-state is verified before a run may be replayed, also
-  // when every relocation was initially a noop.
-  verifyAfterStates(root, runEvents);
+  const runEvents = assertReplayReady(root, recorded);
   const applied = runEvents.filter((event) => event.result === 'applied');
   if (applied.length === 0) return recorded;
   appendEvents(root, applied.map((event) => ({ ...event, result: 'noop' })));
