@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.1",
+  "topology_type": "umbrella",
+  "max_allowed_depth": 3,
+  "current_depth": 1,
+  "sync_strategy": "physical-copy",
+  "repo_id": "fixture-umbrella",
+  "managed_repositories": [
+    {
+      "path": "child",
+      "depth": 1,
+      "inherits_assets_from": ".",
+      "repo_id": "child",
+      "canonical_origin": "https://github.com/example/child.git"
+    }
+  ]
+}

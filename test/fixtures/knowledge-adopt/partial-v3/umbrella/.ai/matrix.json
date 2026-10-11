@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.1",
+  "topology_type": "umbrella",
+  "max_allowed_depth": 3,
+  "current_depth": 1,
+  "sync_strategy": "physical-copy",
+  "repo_id": "aitool-root",
+  "upstream_authority": {
+    "type": "git",
+    "url": "https://github.com/example/ai-tool-workspace.git",
+    "ref": "main"
+  },
+  "managed_repositories": [
+    {
+      "path": "graphify",
+      "depth": 1,
+      "inherits_assets_from": ".",
+      "repo_id": "graphify",
+      "canonical_origin": "https://github.com/example/graphify.git"
+    },
+    {
+      "path": "skills",
+      "depth": 1,
+      "inherits_assets_from": ".",
+      "repo_id": "skills",
+      "canonical_origin": "https://github.com/example/skills.git"
+    }
+  ]
+}
