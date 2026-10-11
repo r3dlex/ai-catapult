@@ -39,19 +39,23 @@
  *     relative to the bound inode. A relocation first detected only after a
  *     kernel mutation is compensated only for bytes this call can still
  *     identify as its own: a created file is unlinked by inode identity; an
- *     appended suffix is removed only while it is still the file's tail and
- *     the bytes immediately before that tail are not the same suffix. If they
- *     are, the tail may be a competing writer's copy and the append is not
- *     truncated. A replaced file is restored from its captured original bytes
+ *     appended suffix is removed only when this descriptor's append placement
+ *     is still the end of the file and those bytes are still the bytes this
+ *     call wrote. A matching tail is not ownership. If that placement is not
+ *     the end of the file, or cannot be identified, the file is left
+ *     untouched. A replaced file is restored from its captured original bytes
  *     only while the file still equals the bytes this call wrote. Otherwise
- *     the call refuses and does not truncate or rewrite. Ambiguous ownership
- *     leaves the bytes untouched. This is not a claim that net external change
- *     is zero.
- *   - Missing-root creation: the caller path is walked before any create.
- *     Missing components are created one level at a time only after the parent
- *     is a real directory, and a create observed to have followed a substituted
+ *     the call refuses and does not truncate or rewrite. This is not a claim
+ *     that net external change is zero.
+ *   - Missing-root creation: the caller path is walked before any create and
+ *     each existing component's device+inode is recorded. Missing components
+ *     are created one level at a time only after every recorded ancestor still
+ *     has that identity. A create observed to have followed a substituted
  *     ancestor is removed by device+inode (empty directory only) before the
  *     refusal is returned.
+ *   - A missing descended directory is created only after the recorded chain
+ *     is re-verified. A create that followed a substitution observed after
+ *     mkdir is removed before the refusal is returned.
  *   - Hard-linked leaves: a regular file with nlink > 1 is refused before any
  *     write, so an outside hard link is not mutated.
  *   - Known residual, declared: darwin has no openat2/RESOLVE_BENEATH and Node
@@ -120,9 +124,9 @@ function bindRoot(root: string): RootBinding {
   // caller path must itself be symlink-free (macOS /var, /tmp callers
   // canonicalize before binding).
   const anchor = resolve(root);
-  const chain = callerPathChain(anchor);
-  if (chain !== null) return bindVerifiedRoot(anchor, chain);
-  return bindVerifiedRoot(anchor, createMissingRoot(anchor));
+  const walked = walkCallerPath(anchor);
+  if (walked.complete) return bindVerifiedRoot(anchor, walked.levels);
+  return bindVerifiedRoot(anchor, createMissingRoot(anchor, walked.levels));
 }
 
 interface CreatedDir {
@@ -132,15 +136,15 @@ interface CreatedDir {
 }
 
 /**
- * Create only the missing suffix, after the existing prefix is a real
- * directory chain. A mkdir that followed a substituted ancestor is removed
- * by identity before the refusal propagates.
+ * Create only the missing suffix, after every recorded ancestor still has the
+ * identity captured on the pre-create walk. A mkdir that followed a substituted
+ * ancestor is removed by identity before the refusal propagates.
  */
-function createMissingRoot(anchor: string): BoundLevel[] {
+function createMissingRoot(anchor: string, recorded: readonly BoundLevel[]): BoundLevel[] {
   const created: CreatedDir[] = [];
   try {
-    for (const path of missingCallerSuffix(anchor)) {
-      verifyParentBeforeCreate(path);
+    for (const path of missingAfter(anchor, recorded)) {
+      verifyRecordedIdentities(recorded, created);
       createOneDirectory(path, created);
     }
     const chain = callerPathChain(anchor);
@@ -154,26 +158,31 @@ function createMissingRoot(anchor: string): BoundLevel[] {
   }
 }
 
-function missingCallerSuffix(anchor: string): string[] {
+function missingAfter(anchor: string, recorded: readonly BoundLevel[]): string[] {
+  const have = new Set(recorded.map((level) => level.path));
   const missing: string[] = [];
   let prefix = '';
-  let gap = false;
   for (const part of anchor.split('/').filter((segment) => segment !== '')) {
     prefix = `${prefix}/${part}`;
-    if (gap) {
-      missing.push(prefix);
-      continue;
-    }
-    const stat = lstatOrMissing(prefix);
-    if (stat === null) {
-      gap = true;
-      missing.push(prefix);
-      continue;
-    }
-    if (stat.isSymbolicLink()) throw symlinkedRootRefusal(prefix);
-    if (!stat.isDirectory()) throw nonDirectoryRootRefusal(prefix);
+    if (!have.has(prefix)) missing.push(prefix);
   }
   return missing;
+}
+
+function verifyRecordedIdentities(recorded: readonly BoundLevel[], created: readonly CreatedDir[]): void {
+  for (const level of recorded) verifyLevel(level);
+  for (const dir of created) {
+    const stat = lstatOrMissing(dir.path);
+    if (
+      stat === null ||
+      stat.isSymbolicLink() ||
+      !stat.isDirectory() ||
+      stat.dev !== dir.dev ||
+      stat.ino !== dir.ino
+    ) {
+      throw movedRefusal(dir.path);
+    }
+  }
 }
 
 function lstatOrMissing(path: string): Stats | null {
@@ -183,13 +192,6 @@ function lstatOrMissing(path: string): Stats | null {
     if (nodeErrorCode(error) === 'ENOENT') return null;
     throw error;
   }
-}
-
-function verifyParentBeforeCreate(path: string): void {
-  const parent = path.slice(0, path.lastIndexOf('/'));
-  if (parent === '') return;
-  const stat = lstatOrMissing(parent);
-  if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) throw movedRefusal(parent);
 }
 
 function createOneDirectory(path: string, created: CreatedDir[]): void {
@@ -267,8 +269,13 @@ function openRootDirectory(root: string): number {
   }
 }
 
-/** Walk the caller path top-down; null when some component does not exist yet. */
-function callerPathChain(anchor: string): BoundLevel[] | null {
+interface WalkedPath {
+  readonly levels: BoundLevel[];
+  readonly complete: boolean;
+}
+
+/** Walk the caller path top-down. `complete` is false when a component is missing. */
+function walkCallerPath(anchor: string): WalkedPath {
   const levels: BoundLevel[] = [];
   let prefix = '';
   for (const part of anchor.split('/').filter((segment) => segment !== '')) {
@@ -277,14 +284,20 @@ function callerPathChain(anchor: string): BoundLevel[] | null {
     try {
       stat = lstatSync(prefix);
     } catch (error) {
-      if (nodeErrorCode(error) === 'ENOENT') return null;
+      if (nodeErrorCode(error) === 'ENOENT') return { levels, complete: false };
       throw error;
     }
     if (stat.isSymbolicLink()) throw symlinkedRootRefusal(prefix);
     if (!stat.isDirectory()) throw nonDirectoryRootRefusal(prefix);
     levels.push({ path: prefix, dev: stat.dev, ino: stat.ino });
   }
-  return levels;
+  return { levels, complete: true };
+}
+
+/** Walk the caller path top-down; null when some component does not exist yet. */
+function callerPathChain(anchor: string): BoundLevel[] | null {
+  const walked = walkCallerPath(anchor);
+  return walked.complete ? walked.levels : null;
 }
 
 function nonDirectoryRootRefusal(path: string): EvolveError {
@@ -331,6 +344,7 @@ export function ensureDirectoryHere(name: string, from: string): boolean {
     verifyBoundChain();
     return false;
   }
+  verifyBoundChain();
   let created = false;
   try {
     mkdirSync(name);
@@ -515,11 +529,11 @@ export function appendFileHere(name: string, contents: string): Buffer {
   try {
     refuseMultiplyLinked(fd, name);
     verifyBoundChain();
-    writeAll(fd, contents);
+    const placedEnd = appendOwned(fd, contents);
     try {
       verifyBoundChain();
     } catch (error) {
-      rollbackOwnSuffix(fd, contents);
+      rollbackOwnSuffix(fd, contents, placedEnd);
       throw error;
     }
     return readAll(fd);
@@ -529,18 +543,68 @@ export function appendFileHere(name: string, contents: string): Buffer {
 }
 
 /**
- * Remove our suffix only while it is the tail and the preceding window is not
- * the same suffix. An identical copy immediately before the tail means the
- * tail may belong to a competing writer; leave the file untouched. Never
- * truncate to a size captured before the write.
+ * Append `contents` and return the offset where this descriptor's write ended,
+ * or null when that placement is not a removable tail. A later matching suffix
+ * is not this placement: O_APPEND leaves this fd's offset at the end of its
+ * own write, and a competing append does not move it.
  */
-function rollbackOwnSuffix(fd: number, contents: string): void {
+function appendOwned(fd: number, contents: string): number | null {
+  const bytes = Buffer.from(contents, 'utf8');
+  if (bytes.length === 0) return null;
+  let offset = 0;
+  let placedEnd: number | null = null;
+  while (offset < bytes.length) {
+    const wrote = writeSync(fd, bytes, offset, bytes.length - offset, null);
+    if (wrote <= 0) {
+      if (offset < bytes.length) writeAll(fd, bytes.subarray(offset));
+      return null;
+    }
+    const end = placementEnd(fd);
+    if (end === null || (placedEnd !== null && end - wrote !== placedEnd)) {
+      if (offset + wrote < bytes.length) writeAll(fd, bytes.subarray(offset + wrote));
+      return null;
+    }
+    placedEnd = end;
+    offset += wrote;
+  }
+  return placedEnd;
+}
+
+/**
+ * File offset after this fd's O_APPEND write. Null when a byte already follows
+ * that write, so the tail is not proof that the suffix is ours.
+ */
+function placementEnd(fd: number): number | null {
+  const before = fstatSync(fd).size;
+  const probe = Buffer.alloc(1);
+  const read = readSync(fd, probe, 0, 1, null);
+  if (read !== 0) return null;
+  if (fstatSync(fd).size !== before) return null;
+  return before;
+}
+
+/**
+ * Remove the byte range this descriptor placed, and only while that range is
+ * still the end of the file and still holds the bytes this call wrote. A
+ * matching tail is not ownership. Never truncate to a size captured before
+ * the write, and never truncate once the file no longer ends at the placement.
+ */
+function rollbackOwnSuffix(fd: number, contents: string, placedEnd: number | null): void {
+  if (placedEnd === null) return;
   const ours = Buffer.from(contents, 'utf8');
-  if (ours.length === 0) return;
-  const size = fstatSync(fd).size;
-  if (size < ours.length || !regionEquals(fd, size - ours.length, ours)) return;
-  if (size >= ours.length * 2 && regionEquals(fd, size - ours.length * 2, ours)) return;
-  ftruncateSync(fd, size - ours.length);
+  if (ours.length === 0 || placedEnd < ours.length) return;
+  const start = placedEnd - ours.length;
+  if (!ownedTailIntact(fd, start, ours, placedEnd)) return;
+  ftruncateSync(fd, start);
+}
+
+function ownedTailIntact(fd: number, start: number, ours: Buffer, placedEnd: number): boolean {
+  if (fstatSync(fd).size !== placedEnd) return false;
+  if (!regionEquals(fd, start, ours)) return false;
+  if (fstatSync(fd).size !== placedEnd) return false;
+  const probe = Buffer.alloc(1);
+  if (readSync(fd, probe, 0, 1, placedEnd) !== 0) return false;
+  return fstatSync(fd).size === placedEnd;
 }
 
 function regionEquals(fd: number, position: number, expected: Buffer): boolean {
@@ -554,7 +618,10 @@ function regionEquals(fd: number, position: number, expected: Buffer): boolean {
  * this call wrote. A competing write after ours is left untouched.
  */
 function restoreReplacement(fd: number, original: Buffer, contents: string): void {
-  if (!readAll(fd).equals(Buffer.from(contents, 'utf8'))) return;
+  const ours = Buffer.from(contents, 'utf8');
+  if (!readAll(fd).equals(ours)) return;
+  if (fstatSync(fd).size !== ours.length) return;
+  if (!readAll(fd).equals(ours)) return;
   ftruncateSync(fd, 0);
   writeAt(fd, original, 0);
 }

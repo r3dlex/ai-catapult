@@ -879,6 +879,138 @@ void test('append rollback does not remove an identical suffix a competing write
   }
 });
 
+void test('append rollback does not truncate a competing suffix that merely matches ours', () => {
+  const { paths, root } = initTmpLayout('evolve-append-rollback-racer-ours-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-wiki');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    writeFileSync(paths.wikiLogsFile, 'ORIGINAL\n');
+    withPatchedFs(
+      {
+        // Our append is the first OURS\n. The competitor then appends
+        // RACER\nOURS\n. The tail matches ours; the preceding window is
+        // ACER\n, not OURS\n. That tail is not ours and must survive.
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            const written = originalWriteSync(...args);
+            appendFileSync(paths.wikiLogsFile, 'RACER\nOURS\n');
+            renameSync(paths.wikiDir, moved);
+            symlinkSync(moved, paths.wikiDir);
+            return written;
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => appendWikiFile(paths, 'logs.md', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'logs.md'), 'utf8'), 'ORIGINAL\nOURS\nRACER\nOURS\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('missing directory create verifies recorded ancestors before mkdir', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-mkdir-before-verify-')));
+  const parent = join(base, 'parent');
+  const outside = join(base, 'outside');
+  const root = join(parent, 'workspace');
+  const originalLstat = Reflect.get(fs, 'lstatSync') as PatchedFsFunction;
+  const originalMkdir = Reflect.get(fs, 'mkdirSync') as PatchedFsFunction;
+  let substituted = false;
+  let mkdirAfterSubstitution = false;
+  try {
+    mkdirSync(root, { recursive: true });
+    mkdirSync(join(outside, 'workspace'), { recursive: true });
+    withPatchedFs(
+      {
+        lstatSync: (...args: unknown[]) => {
+          if (!substituted && args[0] === EVOLVE_DIR) {
+            substituted = true;
+            renameSync(parent, `${parent}-saved`);
+            symlinkSync(outside, parent);
+          }
+          return originalLstat(...args);
+        },
+        mkdirSync: (...args: unknown[]) => {
+          if (substituted && args[0] === EVOLVE_DIR) mkdirAfterSubstitution = true;
+          return originalMkdir(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => initEvolveLayout(root),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(substituted, true);
+    assert.equal(mkdirAfterSubstitution, false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('missing-root create compares recorded ancestor identities before mkdir', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-missing-root-identity-')));
+  const grand = join(base, 'grand');
+  const parent = join(grand, 'parent');
+  const outside = join(base, 'outside');
+  const root = join(parent, 'new-root');
+  const originalLstat = Reflect.get(fs, 'lstatSync') as PatchedFsFunction;
+  const originalMkdir = Reflect.get(fs, 'mkdirSync') as PatchedFsFunction;
+  let parentStats = 0;
+  let substituted = false;
+  let mkdirOfRoot = false;
+  try {
+    mkdirSync(parent, { recursive: true });
+    mkdirSync(join(outside, 'parent'), { recursive: true });
+    withPatchedFs(
+      {
+        // After the first observation of parent, replace grand with a symlink
+        // to outside. outside/parent is a real directory, so an immediate-parent
+        // type check still passes. Recorded grand identity must refuse first.
+        lstatSync: (...args: unknown[]) => {
+          if (args[0] === parent) {
+            parentStats += 1;
+            if (parentStats === 2 && !substituted) {
+              substituted = true;
+              renameSync(grand, `${grand}-saved`);
+              symlinkSync(outside, grand);
+            }
+          }
+          return originalLstat(...args);
+        },
+        mkdirSync: (...args: unknown[]) => {
+          if (args[0] === root) mkdirOfRoot = true;
+          return originalMkdir(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => initEvolveLayout(root),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(substituted, true);
+    assert.equal(mkdirOfRoot, false);
+    assert.equal(existsSync(join(outside, 'parent', 'new-root')), false);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 void test('final-root substitution that returns ENOTDIR is an unsafe-path refusal', () => {
   const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-enotdir-')));
   const root = join(base, 'workspace');

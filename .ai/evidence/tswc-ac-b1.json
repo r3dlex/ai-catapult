@@ -26,6 +26,10 @@
     "successor_r2_red_architect_log_sha256": "936e849bebdf83c4082e4a6fcc33a45b8d7cbe2214bf326f3a0e58403552b358",
     "successor_r2_red_test_log_sha256": "533063ad1a37d5af8d8b04f5f38911b2ea2a5052599f2c06c79e8b38095f6b13",
     "successor_r3_boundary_correction": "Corrects the successor_round2_contract phrase 'net external change zero or the call fails closed' and the 'append truncated to the prior size' compensation. Append rollback no longer truncates to a size captured before the write. The enforced claim, stated in src/evolve/containment.ts, is: an appended suffix is removed only while it is the tail and the preceding window is not that same suffix; if the preceding window is the same suffix, ownership of the tail is ambiguous and the file is left untouched. A replaced file is restored only while it still equals the bytes this call wrote, and that restore is written at position 0. Ambiguous ownership leaves the bytes untouched. This is not a claim that net external change is zero. The interval between the final identity check and the kernel write remains outside the boundary and is not closed. no human approved this work.",
+    "successor_r3_cure3": "b1-R3 cure3 after two consecutive REQUEST_CHANGES on append ownership. Append rollback no longer treats a matching tail as ownership. The removable range is the offset where this descriptor's O_APPEND write ended. The round-2 bytes ORIGINAL\\nOURS\\nRACER\\nOURS\\n are left intact: the competitor's final OURS\\n follows that placement, so it is not truncated. Missing-directory mkdir is preceded by verifyBoundChain. Missing-root create re-compares recorded ancestor device+inode before mkdir, not only the immediate parent's type. Clause (c) is not claimed closed. no human approved this work.",
+    "successor_r3_cure3_green_log_sha256": "4e866d560c2b3c7f8e72b570c21ea32dbeaf6c4397e300cb71281f69b5825ca7",
+    "successor_r3_cure3_green_suite_log_sha256": "566cf477d9c102718f18c11540ceb3b2a1f7dff0ed18beefec50558471469e22",
+    "successor_r3_cure3_red_log_sha256": "946611bbe392c7d5942e92efd8f91ad07d3c4d8ae76f85b989995e52becacb88",
     "successor_r3_cure": "b1-R3 after the human asked to fix PR #63 on 2026-10-11. Merged origin/main 12162383f6d6923b866e8da562bbb226faf8e62c (no rebase); package.json pin is the union of main 0.4.4 and this branch's schemas/ entry. (F1) missing-root bind walks the caller path before create, mkdir one level at a time, and removes a create that followed a substituted ancestor by device+inode before returning unsafe-path. Architect repro: outsideNewRootExists false. (F2) append rollback removes the tail only when it equals our suffix and the preceding window is not that same suffix. Architect repro content is ORIGINAL\\nRACER\\n, not ORIGINAL\\n. A later different suffix is not truncated. An identical suffix appended after ours is left in place (ORIGINAL\\nOURS\\nOURS\\n). (F3) openRootDirectory maps Darwin ENOTDIR, alongside ELOOP, to EvolveError kind unsafe-path. Hard-linked leaves: linkSync of a wiki or overlay file succeeds on this volume (nlink 2); create/replace/append refuse nlink > 1 before any write, alias bytes unchanged. ensureDirectoryHere relative mkdir was probed (ancestor swapped inside mkdir of evolve): already unsafe-path with an empty outside directory; regression locks that, no new refusal invented. Caller-component battery 30/30, 0 sentinel escapes; the two former ENOTDIR cases are now unsafe-path (unsafe 21, layout-violation 5, ENOENT 4). Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
     "successor_r3_dead_refs_log_sha256": "cdc85c011a25b0dd5fb552107aede72a1d453071d9dc4db257c0ee777975d4af",
     "successor_r3_green_log_sha256": "e5708b7bac30b81719b8f4264aaaac3fe3a2c318e8de6140732d5fe222c56254",
@@ -43,6 +47,26 @@
     "successor_round2_probe_log_sha256": "7d4e523cfa6d85ccc638accab76452e3382b3f32721e2835d18276c242cb088c",
     "successor_round2_red_log_sha256": "38efedd0734572b1e3ccce8af92d6ec3bee9581cae49cd1ca49cfc91b627912d",
     "test_corrections": "test/evolve-flow.test.ts was corrected in the green commit and not amended into the red commit. The committed assertion omitted the evolve/ prefix collectFiles(root) reports, and expected a second Accepted audit append to byte-match the Rejected block. Both corrections make the assertions match the helpers and the rendered bytes. The purpose_sha256 placeholder was filled from PURPOSE.md bytes."
+  },
+  "cure3": {
+    "green": {
+      "command": "node --test --test-name-pattern 'append rollback does not truncate a competing suffix|missing directory create verifies recorded ancestors|missing-root create compares recorded ancestor' test/evolve-layout.test.ts",
+      "exit_code": 0,
+      "log": ".ai/evidence/tswc-ac-b1-cure3/green-new.log",
+      "log_sha256": "4e866d560c2b3c7f8e72b570c21ea32dbeaf6c4397e300cb71281f69b5825ca7"
+    },
+    "green_suite": {
+      "command": "node --test test/evolve-layout.test.ts test/evolve-schemas.test.ts test/evolve-flow.test.ts",
+      "exit_code": 0,
+      "log": ".ai/evidence/tswc-ac-b1-cure3/green-evolve.log",
+      "log_sha256": "566cf477d9c102718f18c11540ceb3b2a1f7dff0ed18beefec50558471469e22"
+    },
+    "red": {
+      "command": "node --test --test-name-pattern 'append rollback does not truncate a competing suffix|missing directory create verifies recorded ancestors|missing-root create compares recorded ancestor' test/evolve-layout.test.ts",
+      "exit_code": 1,
+      "log": ".ai/evidence/tswc-ac-b1-cure3/red.log",
+      "log_sha256": "946611bbe392c7d5942e92efd8f91ad07d3c4d8ae76f85b989995e52becacb88"
+    }
   },
   "goal_id": "tswc-ac-b1",
   "green": {

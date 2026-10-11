@@ -1,0 +1,11 @@
+✔ append rollback does not truncate a competing suffix that merely matches ours (4.195958ms)
+✔ missing directory create verifies recorded ancestors before mkdir (1.647ms)
+✔ missing-root create compares recorded ancestor identities before mkdir (1.430959ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 153.813875
