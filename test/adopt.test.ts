@@ -1,9 +1,11 @@
 /**
  * XSKP-P4-04: `ai-catapult adopt` dry-run inventory.
+ * XSKP-P4-05: `ai-catapult adopt --apply` writes (backups, run map, ledger
+ * events, reference repairs) and the idempotent rerun.
  *
  * The engine is spawned, never imported. Fixtures are copied to a neutral
  * temp directory (`…/adopt-XXXX/repo`) so layout and topology cannot be read
- * off the fixture path. AC-7 wraps every inventory and refusal test.
+ * off the fixture path. AC-7 wraps every inventory, apply and refusal test.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -14,6 +16,7 @@ import {
   cpSync,
   existsSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -104,10 +107,41 @@ function discard(tmp: string): void {
   rmSync(dirname(tmp), { recursive: true, force: true });
 }
 
-function treeDigest(dir: string): string {
+/**
+ * `git -C <dir>` with an explicit identity, so fixture repos commit without
+ * touching the user's global git config.
+ */
+function gitIn(dir: string, ...args: string[]) {
+  return spawnSync('git', ['-C', dir, '-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args], {
+    encoding: 'utf8',
+    timeout: 30_000,
+  });
+}
+
+/** Stage a fixture and commit it, so the inventory reads a real source_commit. */
+function stageGitRepo(layout: string, topology: string): string {
+  const tmp = stage(layout, topology);
+  const init = gitIn(tmp, 'init', '-q');
+  assert.equal(init.status, 0, init.stderr);
+  const add = gitIn(tmp, 'add', '-A');
+  assert.equal(add.status, 0, add.stderr);
+  const commit = gitIn(tmp, 'commit', '-q', '-m', 'fixture base');
+  assert.equal(commit.status, 0, commit.stderr);
+  return tmp;
+}
+
+function commitAll(tmp: string, message: string): void {
+  const add = gitIn(tmp, 'add', '-A');
+  assert.equal(add.status, 0, add.stderr);
+  const commit = gitIn(tmp, 'commit', '-q', '-m', message);
+  assert.equal(commit.status, 0, commit.stderr);
+}
+
+function treeDigest(dir: string, skip: (rel: string) => boolean = () => false): string {
   const lines: string[] = [];
   const visit = (rel: string): void => {
     const abs = rel === '' ? dir : join(dir, rel);
+    if (rel !== '' && skip(rel)) return;
     const info = lstatSync(abs);
     if (info.isSymbolicLink()) {
       lines.push(`${rel} -> ${readlinkSync(abs)}`);
@@ -338,6 +372,56 @@ function confirmFile(tmp: string, map: MigrationMap, runId: string, backup: (sou
   return path;
 }
 
+const LEDGER_REL = '.ai/knowledge/migration/ledger.jsonl';
+
+type RefRepair = { file: string; before_sha256: string; after_sha256: string };
+
+type LedgerEvent = {
+  action: string;
+  after_sha256: string | null;
+  at: string;
+  backup: string | null;
+  before_sha256: string | null;
+  refs_repaired: RefRepair[];
+  result: string;
+  run_id: string;
+  schema: string;
+  seq: number;
+  source: string;
+  target: string | null;
+};
+
+function readLedger(tmp: string): LedgerEvent[] {
+  const path = join(tmp, LEDGER_REL);
+  if (!existsSync(path)) return [];
+  return readFileSync(path, 'utf8').split('\n').filter((line) => line.trim() !== '')
+    .map((line) => JSON.parse(line) as LedgerEvent);
+}
+
+function sha256File(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+function assertEventShape(event: LedgerEvent): void {
+  assert.equal(event.schema, 'knowledge-migration-event/1');
+  assert.ok(['applied', 'noop', 'failed', 'rolled-back'].includes(event.result), event.result);
+  assert.equal(typeof event.run_id, 'string');
+  assert.equal(typeof event.at, 'string');
+  assert.ok(Number.isInteger(event.seq) && event.seq >= 1, `seq ${event.seq}`);
+  assert.match(event.before_sha256 ?? '', /^[0-9a-f]{64}$/);
+  assert.match(event.after_sha256 ?? '', /^[0-9a-f]{64}$/);
+  assert.ok(Array.isArray(event.refs_repaired));
+  for (const repair of event.refs_repaired) {
+    assert.equal(typeof repair.file, 'string');
+    assert.match(repair.before_sha256, /^[0-9a-f]{64}$/);
+    assert.match(repair.after_sha256, /^[0-9a-f]{64}$/);
+  }
+}
+
+function migrateConfirmation(tmp: string, map: MigrationMap, runId: string): string {
+  return confirmFile(tmp, map, runId, (source) => `.ai/drift/backups/${runId}/${source}`);
+}
+
 void test('test/adopt.test.ts is auto-discovered by node --test under npm test', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { scripts: { test: string } };
   assert.match(pkg.scripts.test, /node --test test\/\*\.test\.ts/);
@@ -478,20 +562,243 @@ void test('a token that does not bind this run is refused', () => {
   });
 });
 
-void test('a token bound to this run is not refused', () => {
-  ac7Guarded('bound', () => {
+void test('a token bound to this run applies the migration: backups, run map and ledger events', () => {
+  ac7Guarded('bound-apply', () => {
     const tmp = stage('legacy-ai-sdlc', 'single');
     try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
       const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-1', tmp]);
       const map = parseMap(dry.stdout);
-      const file = confirmFile(tmp, map, 'run-1', (source) => `.ai/drift/backups/run-1/${source}`);
-      const before = treeDigest(tmp);
+      const file = migrateConfirmation(tmp, map, 'run-1');
       const accepted = spawnAdopt([
         '--apply', '--destructive', '--run-id', 'run-1', '--confirm', TOKEN, '--confirm-file', file, tmp,
       ]);
-      assert.equal(accepted.status, 0, accepted.stdout);
+      assert.equal(accepted.status, 0, `${accepted.stdout}\n${accepted.stderr}`);
       assert.equal(errorOfSafe(accepted.stdout), '');
-      assert.equal(treeDigest(tmp), before, 'apply writes belong to XSKP-P4-05');
+
+      // The run map is written before the write phase and describes this run.
+      const recorded = JSON.parse(
+        readFileSync(join(tmp, '.ai/knowledge/migration/run-1/map.json'), 'utf8'),
+      ) as MigrationMap;
+      assert.equal(recorded.schema, 'knowledge-migration-map/1');
+      assert.equal(recorded.run_id, 'run-1');
+
+      const migrations = recorded.items.filter((item) => item.action === 'migrate');
+      assert.ok(migrations.length >= 1);
+      const events = readLedger(tmp);
+      events.forEach(assertEventShape);
+      assert.deepEqual(events.map((event) => event.seq), events.map((_, index) => index + 1));
+      for (const item of migrations) {
+        assert.equal(existsSync(join(tmp, item.source)), false, `${item.source} must be removed`);
+        const target = item.target as string;
+        assert.ok(existsSync(join(tmp, target)), `${target} must be written`);
+        const event = events.find((entry) => entry.run_id === 'run-1' && entry.source === item.source);
+        assert.ok(event, `no ledger event for ${item.source}`);
+        assert.equal(event.result, 'applied');
+        assert.equal(event.action, 'migrate');
+        assert.equal(event.backup, `.ai/drift/backups/run-1/${item.source}`);
+        const backup = event.backup;
+        assert.ok(backup, 'a migrate event names its backup');
+        assert.equal(sha256File(join(tmp, backup)), event.before_sha256);
+        assert.equal(sha256File(join(tmp, target)), event.after_sha256);
+      }
+
+      // The per-run token is consumed exactly once, on this run.
+      const confirmations = readFileSync(join(tmp, '.ai/knowledge/migration/confirmations.jsonl'), 'utf8');
+      const consumed = confirmations.split('\n').filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line) as { confirmation_token: string; run_id: string });
+      assert.ok(consumed.some((entry) => entry.confirmation_token === TOKEN && entry.run_id === 'run-1'));
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a rerun on the same commit appends only noop events and rewrites nothing', () => {
+  ac7Guarded('rerun-noop', () => {
+    const tmp = stage('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-1', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-1');
+      const first = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-1', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(first.status, 0, first.stdout);
+      const ledgerBefore = readLedger(tmp);
+      const applied = ledgerBefore.filter((event) => event.result === 'applied');
+      assert.ok(applied.length > 0, 'the first apply must have applied the migration');
+      const treeBefore = treeDigest(tmp, (rel) => rel === LEDGER_REL);
+
+      const rerun = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-1', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(rerun.status, 0, `${rerun.stdout}\n${rerun.stderr}`);
+      assert.equal(errorOfSafe(rerun.stdout), '');
+
+      const ledgerAfter = readLedger(tmp);
+      const added = ledgerAfter.slice(ledgerBefore.length);
+      assert.equal(added.length, applied.length, 'the rerun appends one noop per applied event');
+      assert.deepEqual(added.map((event) => event.result), added.map(() => 'noop'));
+      assert.deepEqual(ledgerAfter.map((event) => event.seq), ledgerAfter.map((_, index) => index + 1));
+      for (const event of added) assertEventShape(event);
+      assert.equal(treeDigest(tmp, (rel) => rel === LEDGER_REL), treeBefore, 'the rerun rewrites nothing but the ledger');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('apply copies legacy skill files without a token and keeps the source', () => {
+  ac7Guarded('copy-apply', () => {
+    const tmp = stage('legacy-agents', 'single');
+    try {
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-2', tmp]);
+      const map = parseMap(dry.stdout);
+      const copies = map.items.filter((item) => item.action === 'copy');
+      assert.equal(copies.length, 2);
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-2', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assert.equal(errorOfSafe(applied.stdout), '');
+      for (const item of copies) {
+        const target = item.target as string;
+        assert.ok(existsSync(join(tmp, target)), `${target} must be written`);
+        assert.ok(existsSync(join(tmp, item.source)), `${item.source} must be kept`);
+        assert.equal(sha256File(join(tmp, target)), item.sha256);
+      }
+      const events = readLedger(tmp);
+      assert.equal(events.length, copies.length);
+      for (const event of events) {
+        assertEventShape(event);
+        assert.equal(event.action, 'copy');
+        assert.equal(event.result, 'applied');
+        assert.equal(event.backup, null, 'a copy changes no source bytes');
+      }
+      assert.equal(existsSync(join(tmp, '.ai/drift/backups/run-2')), false, 'no backup is written for copy');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('apply never overwrites an existing v3 target: present-not-overwritten is a noop', () => {
+  ac7Guarded('present-not-overwritten', () => {
+    const tmp = stage('legacy-agents', 'single');
+    try {
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-3', tmp]);
+      const map = parseMap(dry.stdout);
+      const item = map.items.find((entry) => entry.action === 'copy');
+      assert.ok(item, 'the fixture carries a copy item');
+      const target = item.target as string;
+      mkdirSync(dirname(join(tmp, target)), { recursive: true });
+      writeFileSync(join(tmp, target), 'user content that is not the template\n');
+      const targetBefore = sha256File(join(tmp, target));
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-3', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      assert.equal(sha256File(join(tmp, target)), targetBefore, 'an existing v3 path is never overwritten');
+      const event = readLedger(tmp).find((entry) => entry.source === item.source);
+      assert.ok(event);
+      assert.equal(event.result, 'noop');
+      assertEventShape(event);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a replay after the recorded after-state drifted refuses and appends nothing', () => {
+  ac7Guarded('replay-mismatch', () => {
+    const tmp = stage('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-4', tmp]);
+      const map = parseMap(dry.stdout);
+      const file = migrateConfirmation(tmp, map, 'run-4');
+      const first = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-4', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(first.status, 0, first.stdout);
+      const ledgerBefore = readLedger(tmp);
+      const migrated = map.items.find((item) => item.source === '.rules.ts') as MapItem;
+      writeFileSync(join(tmp, migrated.target as string), 'drifted bytes\n');
+      const rerun = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-4', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(rerun.status, 1);
+      assert.equal(errorOfSafe(rerun.stdout), 'replay_mismatch');
+      assert.equal(readLedger(tmp).length, ledgerBefore.length, 'a refused replay appends nothing');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('apply repairs tracked citations of a migrated source and records them', () => {
+  ac7Guarded('reference-repair', () => {
+    const tmp = stageGitRepo('legacy-ai-sdlc', 'single');
+    try {
+      writeFileSync(join(tmp, '.rules.ts'), 'export const rules: readonly string[] = [];\n');
+      const refs = 'notes/refs.md';
+      mkdirSync(dirname(join(tmp, refs)), { recursive: true });
+      writeFileSync(join(tmp, refs), [
+        '# References',
+        '',
+        'The rules live at `.rules.ts`.',
+        '',
+        'See [the ADR](../docs/adr/0001-init.md) for the decision.',
+        '',
+      ].join('\n'));
+      commitAll(tmp, 'add refs');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-5', tmp]);
+      const map = parseMap(dry.stdout);
+      assert.match(map.source_commit, /^[0-9a-f]{40}$/, 'a committed fixture reads a real HEAD');
+      const file = migrateConfirmation(tmp, map, 'run-5');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-5', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+
+      const repaired = readFileSync(join(tmp, refs), 'utf8');
+      assert.ok(repaired.includes('`.ai/rules/technical-bounds.md`'), repaired);
+      assert.ok(repaired.includes('[the ADR](../docs/architecture/adr/0001-init.md)'), repaired);
+      assert.ok(!repaired.includes('`.rules.ts`'), repaired);
+      assert.ok(!repaired.includes('docs/adr/0001-init.md'), repaired);
+
+      const events = readLedger(tmp);
+      const event = events.find((entry) => entry.source === '.rules.ts');
+      assert.ok(event, 'the .rules.ts migration is ledgered');
+      assert.ok(
+        event.refs_repaired.some((entry) => entry.file === refs),
+        'the .rules.ts citation repair rides its event',
+      );
+      // Both migrate passes repair the same citer; the last recorded after-hash
+      // must equal the file's final bytes.
+      const allRepairs = events.flatMap((entry) => entry.refs_repaired.filter((repair) => repair.file === refs));
+      assert.ok(allRepairs.length >= 2, 'both citations are repaired and recorded');
+      const last = allRepairs[allRepairs.length - 1] as RefRepair;
+      assert.equal(last.after_sha256, sha256File(join(tmp, refs)));
+      for (const repair of allRepairs) assert.notEqual(repair.before_sha256, repair.after_sha256);
+
+      // A rerun on the same commit replays: only noop events, nothing rewritten.
+      const ledgerBefore = readLedger(tmp);
+      const treeBefore = treeDigest(tmp, (rel) => rel === LEDGER_REL);
+      const rerun = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-5', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(rerun.status, 0, `${rerun.stdout}\n${rerun.stderr}`);
+      const added = readLedger(tmp).slice(ledgerBefore.length);
+      assert.equal(added.length, ledgerBefore.filter((entry) => entry.result === 'applied').length);
+      assert.deepEqual(added.map((entry) => entry.result), added.map(() => 'noop'));
+      assert.equal(treeDigest(tmp, (rel) => rel === LEDGER_REL), treeBefore);
+
+      // A new commit moves source_commit; the replay of the old map refuses.
+      commitAll(tmp, 'drift');
+      const stale = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-5', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(stale.status, 1);
+      assert.equal(errorOfSafe(stale.stdout), 'source_commit_mismatch');
     } finally {
       discard(tmp);
     }

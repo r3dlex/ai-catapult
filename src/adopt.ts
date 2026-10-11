@@ -1,26 +1,57 @@
 /**
- * Dry-run knowledge inventory for `ai-catapult adopt`.
+ * Knowledge inventory and migration for `ai-catapult adopt`.
  *
  * Layout and topology are detected from the target tree, not from its path.
- * Migrate is refused unless a per-run confirmation token is bound to every
- * migrate item. Token shape is the example in ai-catapult-init
- * modules/migration.md (`ct-YYYY-MM-DD-NNN`), the same shape archive
- * confirmation already binds. Apply writes (backups, ledger, reference
- * repair) belong to XSKP-P4-05; this module only opens that gate.
+ * The dry-run prints the knowledge-migration-map/1 document. `--apply`
+ * performs the relocation actions of the frozen vocabulary (XSKP-P4-05):
+ *
+ * - `copy` promotes a legacy artifact to its v3 target and leaves the source
+ *   in place; `migrate` is the only destructive action and is refused unless
+ *   a per-run confirmation token is bound to its source, target and backup
+ *   (ai-catapult-init modules/migration.md; token shape ct-YYYY-MM-DD-NNN,
+ *   the same shape archive confirmation binds).
+ * - The run map is written under `.ai/knowledge/migration/<run_id>/map.json`
+ *   before any write. A migrate writes its backup under
+ *   `.ai/drift/backups/<run_id>/<source>` first, verifies the moved bytes,
+ *   removes the source, then repairs tracked citations (plain path tokens
+ *   and relative Markdown link destinations); every write is recorded as a
+ *   knowledge-migration-event/1 line in `.ai/knowledge/migration/ledger.jsonl`.
+ * - An existing v3 target is present-not-overwritten: the item is a noop and
+ *   the source is kept. Re-running an applied run-id replays the recorded
+ *   map: the after-state is re-verified and only noop events are appended.
+ *
+ * The remaining vocabulary (`supersede`, `deprecate`, `reference`, `adopt`)
+ * stays an inventory disposition: apply never rewrites those paths.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
-import type { Stats } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
 import {
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import type { Stats } from 'node:fs';
+import { basename, dirname, join, posix, resolve } from 'node:path';
+import {
+  appendLedger,
+  canonical,
   classify,
   compileSecretPattern,
   compareCodePoints,
+  CONFIRMATIONS,
   CONTRACT_DIR,
   emit,
   KnowledgeError,
+  MIGRATION_LEDGER,
   policyMatches,
+  readLedger,
+  safePath,
   schemaErrors,
   verifyContract,
 } from './knowledge.ts';
@@ -85,20 +116,45 @@ const V3_MARKER = '<!-- v3-ai-sdlc-init:start -->';
 const NATIVE = new Set(['native', 'native-legacy', 'workspace-convention']);
 const TOKEN = /^ct-\d{4}-\d{2}-\d{2}-\d{3}$/;
 const VALUED = new Set(['run-id', 'repo-id', 'confirm', 'confirm-file']);
+const SAFE_RUN_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const BACKUPS_DIR = '.ai/drift/backups';
+const MIGRATION_DIR = '.ai/knowledge/migration';
+const EXCLUDED_REPAIRS = ['.ai/drift/backups/', `${MIGRATION_DIR}/`, '.ai/knowledge/.locks/'];
+
+/** One planned copy/migrate write. */
+type PlannedAction = {
+  item: Item;
+  sourceBytes: Buffer;
+  beforeSha: string;
+  target: string;
+  /** sha256 of a pre-existing target, null when the target is absent. */
+  targetSha: string | null;
+  /** Relative backup path for migrate; null for copy (no source bytes change). */
+  backup: string | null;
+};
+
+type RefRepair = { file: string; before: Buffer; after: Buffer };
+type MigrationEvent = Record<string, unknown>;
 
 const ADOPT_HELP = `Usage: ai-catapult adopt [target] [options]
 
 dry-run inventory of a repository. Prints a knowledge-migration-map/1 document
-and does not write. --apply refuses migrate actions unless a per-run
-confirmation token is bound to them (ai-catapult-init modules/migration.md).
-Apply writes are not performed here.
+and does not write. --apply performs the copy and migrate actions: a migrate is
+refused unless a per-run confirmation token is bound to its source, target and
+backup, then moves the file (backup first under .ai/drift/backups/<run-id>/,
+source removed only after the written bytes verify), repairs tracked citations
+and appends knowledge-migration-event/1 lines to
+.ai/knowledge/migration/ledger.jsonl. The run map lands at
+.ai/knowledge/migration/<run-id>/map.json before any write. Re-running an
+applied run-id replays the recorded map: the after-state must still hold and
+only noop events are appended.
 
 Arguments:
   target                 Directory to inventory (default: current directory)
 
 Options:
   --dry-run              Inventory only (default)
-  --apply                Refuse unbound migrate actions; do not write
+  --apply                Apply copy and migrate actions (backup, ledger, repair)
   --destructive          Classify legacy-map copy defaults as migrate
   --run-id <id>          Run id recorded on the map
   --repo-id <id>         Repository id (default: matrix repo_id, else directory name)
@@ -615,6 +671,422 @@ function defaultRunId(): string {
   return `adopt-${new Date().toISOString().replace(/[:.]/g, '')}`;
 }
 
+// ---------------------------------------------------------------------------
+// Apply: copy/migrate writes, backups, ledger events and reference repair
+// ---------------------------------------------------------------------------
+
+function sha256Bytes(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+function fileDigest(path: string): string | null {
+  try {
+    return sha256Bytes(readFileSync(path));
+  } catch {
+    return null;
+  }
+}
+
+/** The relocation actions apply performs; the rest stays an inventory disposition. */
+function actionableItems(map: MigrationMap): Item[] {
+  return map.items.filter((item) => item.action === 'copy' || item.action === 'migrate');
+}
+
+function planOne(root: string, item: Item, target: string, runId: string): PlannedAction {
+  const sourcePath = safePath(root, item.source);
+  const targetPath = safePath(root, target);
+  const stat = lstatSync(sourcePath);
+  if (!stat.isFile() || stat.isSymbolicLink()) {
+    throw new KnowledgeError('invalid_map', `${item.source}: apply requires a regular file`);
+  }
+  const sourceBytes = readFileSync(sourcePath);
+  const exists = existsSync(targetPath);
+  if (exists && !lstatSync(targetPath).isFile()) {
+    throw new KnowledgeError('target_conflict', `${target}: the v3 target is not a regular file`);
+  }
+  return {
+    item,
+    sourceBytes,
+    beforeSha: sha256Bytes(sourceBytes),
+    target,
+    targetSha: exists ? fileDigest(targetPath) : null,
+    backup: item.action === 'migrate' ? `${BACKUPS_DIR}/${runId}/${item.source}` : null,
+  };
+}
+
+function planItems(root: string, map: MigrationMap): PlannedAction[] {
+  const targets = new Set<string>();
+  const plan: PlannedAction[] = [];
+  for (const item of actionableItems(map)) {
+    if (item.target === null) {
+      throw new KnowledgeError('invalid_map', `${item.source}: ${item.action} requires a target`);
+    }
+    if (targets.has(item.target)) {
+      throw new KnowledgeError('invalid_map', `${item.target}: two actions share one target`);
+    }
+    targets.add(item.target);
+    plan.push(planOne(root, item, item.target, map.run_id));
+  }
+  return plan;
+}
+
+/** Write the migrate backup, reusing identical existing bytes and refusing drift. */
+function writeBackup(root: string, entry: PlannedAction): void {
+  const backup = entry.backup as string;
+  const path = safePath(root, backup);
+  if (existsSync(path)) {
+    if (fileDigest(path) !== entry.beforeSha) {
+      throw new KnowledgeError('backup_conflict', `${backup}: an existing backup holds different bytes`);
+    }
+    return;
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, entry.sourceBytes);
+}
+
+/** One candidate rewrite: replace [start, end) with `replacement`. */
+type Span = { start: number; end: number; replacement: string };
+
+function splitDestination(destination: string): { head: string; tail: string; wrapped: boolean } | null {
+  const wrapped = destination.startsWith('<') && destination.endsWith('>');
+  const inner = wrapped ? destination.slice(1, -1) : destination;
+  const cut = inner.search(/[#?]/);
+  const head = cut < 0 ? inner : inner.slice(0, cut);
+  const tail = cut < 0 ? '' : inner.slice(cut);
+  if (head === '' || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(head)) return null;
+  return { head, tail, wrapped };
+}
+
+/**
+ * The replacement for one Markdown link destination that resolves to the
+ * migrated source: a relative link stays relative, an absolute one stays
+ * absolute, and any query/fragment suffix survives.
+ */
+function linkReplacement(citer: string, destination: string, source: string, target: string): string | null {
+  const split = splitDestination(destination);
+  if (split === null) return null;
+  const absolute = split.head.startsWith('/');
+  const from = posix.dirname(citer);
+  const resolved = posix.normalize(absolute ? split.head.slice(1) : posix.join(from, split.head));
+  if (resolved !== source) return null;
+  const path = absolute ? `/${target}` : posix.relative(from, target);
+  return split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
+}
+
+/** Destination spans of inline links and reference definitions that cite the source. */
+function linkSpans(text: string, citer: string, source: string, target: string): Span[] {
+  const spans: Span[] = [];
+  for (const pattern of [/\[[^\]]*\]\(([^)\s]+)\)/g, /^ {0,3}\[[^\]]+\]:\s*(\S+)/gm]) {
+    for (const match of text.matchAll(pattern)) {
+      const destination = match[1];
+      if (destination === undefined) continue;
+      const replacement = linkReplacement(citer, destination, source, target);
+      if (replacement === null) continue;
+      const start = (match.index ?? 0) + match[0].indexOf(destination);
+      spans.push({ start, end: start + destination.length, replacement });
+    }
+  }
+  return spans;
+}
+
+function isPathChar(char: string | undefined): boolean {
+  return char !== undefined && /[\w./-]/.test(char);
+}
+
+/** Every bare occurrence of `source` on a path boundary, outside `covered`. */
+function tokenSpans(text: string, source: string, target: string, covered: Span[]): Span[] {
+  const spans: Span[] = [];
+  for (let at = text.indexOf(source); at >= 0; at = text.indexOf(source, at + 1)) {
+    const end = at + source.length;
+    if (isPathChar(text[at - 1]) || isPathChar(text[end])) continue;
+    if (covered.some((span) => at >= span.start && at < span.end)) continue;
+    spans.push({ start: at, end, replacement: target });
+  }
+  return spans;
+}
+
+/** Apply every span right-to-left, so earlier offsets stay valid. */
+function applySpans(text: string, spans: Span[]): string {
+  let updated = text;
+  for (const span of [...spans].sort((left, right) => right.start - left.start)) {
+    updated = updated.slice(0, span.start) + span.replacement + updated.slice(span.end);
+  }
+  return updated;
+}
+
+/** Rewrite a citer's citations of the migrated source, or null when untouched. */
+function repairedBytes(content: Buffer, citer: string, source: string, target: string): Buffer | null {
+  if (content.includes(0)) return null;
+  const text = content.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(content)) return null;
+  if (!text.includes(source)) return null;
+  const links = linkSpans(text, citer, source, target);
+  const spans = [...links, ...tokenSpans(text, source, target, links)];
+  if (spans.length === 0) return null;
+  const updated = Buffer.from(applySpans(text, spans), 'utf8');
+  return updated.equals(content) ? null : updated;
+}
+
+/** A citer this engine may rewrite: tracked text, never immutable/private or its own output. */
+function repairAllowed(citer: string, policy: Policy, source: string, target: string): boolean {
+  if (citer === source || citer === target) return false;
+  if (EXCLUDED_REPAIRS.some((prefix) => citer.startsWith(prefix))) return false;
+  if (policy.immutable.some((pattern) => policyMatches(citer, pattern))) return false;
+  return !denied(citer, policy.deny.paths);
+}
+
+function trackedFiles(root: string): string[] {
+  const listed = spawnSync('git', ['ls-files', '-z'], {
+    cwd: root, encoding: 'utf8', env: gitEnv(), maxBuffer: 64 * 1024 * 1024,
+  });
+  if (listed.status !== 0) return [];
+  return listed.stdout.split('\0').filter((name) => name !== '').sort(compareCodePoints);
+}
+
+/** Repair every tracked citation of a migrated source; returns exactly what changed. */
+function repairReferences(root: string, policy: Policy, source: string, target: string): RefRepair[] {
+  const repairs: RefRepair[] = [];
+  for (const citer of trackedFiles(root)) {
+    if (!repairAllowed(citer, policy, source, target)) continue;
+    const path = safePath(root, citer);
+    let content: Buffer;
+    try {
+      const stat = lstatSync(path);
+      if (!stat.isFile() || stat.isSymbolicLink()) continue;
+      content = readFileSync(path);
+    } catch {
+      continue;
+    }
+    const updated = repairedBytes(content, citer, source, target);
+    if (updated === null) continue;
+    writeFileSync(path, updated);
+    repairs.push({ file: citer, before: content, after: updated });
+  }
+  return repairs;
+}
+
+function eventFor(
+  map: MigrationMap,
+  entry: PlannedAction,
+  result: 'applied' | 'noop',
+  afterSha: string,
+  repairs: RefRepair[],
+): MigrationEvent {
+  const { item } = entry;
+  return {
+    schema: 'knowledge-migration-event/1',
+    run_id: map.run_id,
+    action: item.action,
+    source: item.source,
+    target: item.target,
+    before_sha256: entry.beforeSha,
+    after_sha256: afterSha,
+    backup: result === 'applied' && entry.backup !== null ? entry.backup : null,
+    refs_repaired: repairs.map((repair) => ({
+      file: repair.file,
+      before_sha256: sha256Bytes(repair.before),
+      after_sha256: sha256Bytes(repair.after),
+    })),
+    result,
+  };
+}
+
+function assertValidEvents(events: MigrationEvent[]): void {
+  if (events.length === 0) return;
+  const raw = JSON.parse(
+    readFileSync(join(CONTRACT_DIR, 'migration.schema.json'), 'utf8'),
+  ) as { $defs?: Record<string, unknown> };
+  const defs = raw.$defs ?? {};
+  for (const event of events) {
+    const resolved = resolveRefs(defs.event ?? {}, defs) as JsonSchema;
+    const errors = schemaErrors(event, resolved, 'event');
+    if (errors.length > 0) throw new KnowledgeError('invalid_map', errors.join('; '));
+  }
+}
+
+/** Catch a schema drift in the event shape before the first write. */
+function validateEventShape(plan: PlannedAction[], map: MigrationMap): void {
+  const first = plan[0];
+  if (first === undefined) return;
+  const probe = { ...eventFor(map, first, 'applied', first.beforeSha, []), seq: 1, at: new Date().toISOString() };
+  assertValidEvents([probe]);
+}
+
+function assertLedgerSequence(values: Record<string, unknown>[]): void {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index]?.seq !== index + 1) {
+      throw new KnowledgeError('invalid_ledger', `${MIGRATION_LEDGER}: seq must be contiguous from 1`);
+    }
+  }
+}
+
+/** Validate and append events, assigning the run's seq and timestamp. */
+function appendEvents(root: string, events: MigrationEvent[]): void {
+  if (events.length === 0) return;
+  const { values } = readLedger(root, MIGRATION_LEDGER);
+  assertLedgerSequence(values);
+  const dated = events.map((event, index) => ({
+    ...event,
+    seq: values.length + index + 1,
+    at: new Date().toISOString(),
+  }));
+  assertValidEvents(dated);
+  for (const event of dated) appendLedger(root, MIGRATION_LEDGER, event);
+}
+
+type Moved = { entry: PlannedAction; result: 'applied' | 'noop'; afterSha: string };
+
+function moveOne(root: string, entry: PlannedAction): Moved {
+  if (entry.targetSha !== null) {
+    // present-not-overwritten: an existing v3 path is skipped, never rewritten.
+    return { entry, result: 'noop', afterSha: entry.targetSha };
+  }
+  if (entry.item.action === 'migrate') writeBackup(root, entry);
+  const target = safePath(root, entry.target);
+  mkdirSync(dirname(target), { recursive: true });
+  copyFileSync(safePath(root, entry.item.source), target);
+  const afterSha = fileDigest(target);
+  if (afterSha === null || afterSha !== entry.beforeSha) {
+    throw new KnowledgeError('apply_failed', `${entry.item.source}: the written bytes differ`);
+  }
+  if (entry.item.action === 'migrate') unlinkSync(safePath(root, entry.item.source));
+  return { entry, result: 'applied', afterSha };
+}
+
+function repairsFor(root: string, moved: Moved, policy: Policy): RefRepair[] {
+  if (moved.result !== 'applied') return [];
+  if (moved.entry.item.action !== 'migrate') return [];
+  return repairReferences(root, policy, moved.entry.item.source, moved.entry.target);
+}
+
+/** Move every planned item first, then repair its citations, then record. */
+function executePlan(root: string, plan: PlannedAction[], map: MigrationMap, policy: Policy): MigrationEvent[] {
+  const moved = plan.map((entry) => moveOne(root, entry));
+  return moved.map((item) => eventFor(map, item.entry, item.result, item.afterSha, repairsFor(root, item, policy)));
+}
+
+function recordedMapPath(root: string, runId: string): string {
+  return safePath(root, `${MIGRATION_DIR}/${runId}/map.json`);
+}
+
+function readRecordedMap(root: string, runId: string): MigrationMap | null {
+  const path = recordedMapPath(root, runId);
+  if (!existsSync(path)) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    throw new KnowledgeError('invalid_map', `recorded run map is unreadable: ${(error as Error).message}`);
+  }
+  if (!isRecord(value) || value.schema !== 'knowledge-migration-map/1' || value.run_id !== runId
+    || typeof value.source_commit !== 'string' || !Array.isArray(value.items)) {
+    throw new KnowledgeError('invalid_map', 'the recorded run map does not describe this run');
+  }
+  return value as unknown as MigrationMap;
+}
+
+/** Consume the confirmation token before the first mutation: no retry under it. */
+function consumeToken(root: string, map: MigrationMap, options: Options): void {
+  if (options.confirm === undefined) return;
+  appendLedger(root, CONFIRMATIONS, {
+    schema: 'knowledge-migration-confirmation-event/1',
+    at: new Date().toISOString(),
+    run_id: map.run_id,
+    source_commit: map.source_commit,
+    confirmation_token: options.confirm,
+    result: 'consumed',
+  });
+}
+
+function freshApply(root: string, map: MigrationMap, options: Options): MigrationMap {
+  const policy = loadPolicy();
+  requireConfirmation(root, map, options);
+  const plan = planItems(root, map);
+  validateEventShape(plan, map);
+  const mapPath = recordedMapPath(root, map.run_id);
+  mkdirSync(dirname(mapPath), { recursive: true });
+  writeFileSync(mapPath, canonical(map), 'utf8');
+  if (plan.some((entry) => entry.item.action === 'migrate')) consumeToken(root, map, options);
+  appendEvents(root, executePlan(root, plan, map, policy));
+  return map;
+}
+
+function asRefRepairs(value: unknown): Array<{ file: string; after_sha256: string }> {
+  if (!Array.isArray(value)) return [];
+  const repairs: Array<{ file: string; after_sha256: string }> = [];
+  for (const entry of value) {
+    if (isRecord(entry) && typeof entry.file === 'string' && typeof entry.after_sha256 === 'string') {
+      repairs.push({ file: entry.file, after_sha256: entry.after_sha256 });
+    }
+  }
+  return repairs;
+}
+
+function verifyTarget(root: string, target: unknown, after: unknown): void {
+  if (typeof target !== 'string' || typeof after !== 'string') return;
+  if (fileDigest(safePath(root, target)) !== after) {
+    throw new KnowledgeError('replay_mismatch', `${target}: after-state drifted`);
+  }
+}
+
+function verifyBackup(root: string, backup: unknown, before: unknown): void {
+  if (typeof backup !== 'string' || typeof before !== 'string') return;
+  if (fileDigest(safePath(root, backup)) !== before) {
+    throw new KnowledgeError('replay_mismatch', `${backup}: backup bytes drifted`);
+  }
+}
+
+function verifySourceGone(root: string, action: unknown, source: unknown): void {
+  if (action !== 'migrate' || typeof source !== 'string') return;
+  if (existsSync(safePath(root, source))) {
+    throw new KnowledgeError('replay_mismatch', `${source}: the migrated source exists again`);
+  }
+}
+
+/** Verify every applied event's after-state; a drifted run is never replayed. */
+function verifyAfterStates(root: string, applied: Record<string, unknown>[]): void {
+  const final = new Map<string, string>();
+  for (const event of applied) {
+    verifyTarget(root, event.target, event.after_sha256);
+    verifyBackup(root, event.backup, event.before_sha256);
+    verifySourceGone(root, event.action, event.source);
+    for (const repair of asRefRepairs(event.refs_repaired)) final.set(repair.file, repair.after_sha256);
+  }
+  for (const [file, after] of final) {
+    if (fileDigest(safePath(root, file)) !== after) {
+      throw new KnowledgeError('replay_mismatch', `${file}: repaired citation drifted`);
+    }
+  }
+}
+
+function requireRunEvent(runEvents: Record<string, unknown>[], item: Item): void {
+  if (!runEvents.some((event) => event.source === item.source)) {
+    throw new KnowledgeError('replay_mismatch', `${item.source}: the recorded run has no event`);
+  }
+}
+
+/** Replay the recorded map of an applied run: verify the after-state, append noops. */
+function replayRun(root: string, recorded: MigrationMap): MigrationMap {
+  if (recorded.source_commit !== 'uncommitted' && sourceCommit(root) !== recorded.source_commit) {
+    throw new KnowledgeError('source_commit_mismatch', 'the recorded run map names another source commit');
+  }
+  const { values } = readLedger(root, MIGRATION_LEDGER);
+  assertLedgerSequence(values);
+  const runEvents = values.filter((event) => event.run_id === recorded.run_id);
+  for (const item of actionableItems(recorded)) requireRunEvent(runEvents, item);
+  const applied = runEvents.filter((event) => event.result === 'applied');
+  if (applied.length === 0) return recorded;
+  verifyAfterStates(root, applied);
+  appendEvents(root, applied.map((event) => ({ ...event, result: 'noop' })));
+  return recorded;
+}
+
+function applyRun(root: string, map: MigrationMap, options: Options): MigrationMap {
+  const recorded = readRecordedMap(root, options.runId);
+  if (recorded !== null) return replayRun(root, recorded);
+  return freshApply(root, map, options);
+}
+
 function flagValue(argv: string[], index: number): { next: number; value: string } | string {
   const value = argv[index + 1];
   if (value === undefined || value.startsWith('-')) return 'missing value';
@@ -630,6 +1102,8 @@ function consumeLong(argv: string[], arg: string, index: number, flags: Map<stri
   if (!VALUED.has(name)) return `unknown argument: ${arg}`;
   const taken = flagValue(argv, index);
   if (typeof taken === 'string') return `${arg} ${taken}`;
+  // The run id addresses .ai/knowledge/migration/<run_id>/: one safe segment.
+  if (name === 'run-id' && !SAFE_RUN_ID.test(taken.value)) return `${arg} ${taken.value}: unsafe run id`;
   flags.set(name, taken.value);
   return taken.next;
 }
@@ -729,7 +1203,10 @@ export function runAdopt(argv: string[]): number {
   try {
     const map = buildMap(parsed.root, parsed.options);
     assertValid(map);
-    if (parsed.options.apply) requireConfirmation(parsed.root, map, parsed.options);
+    if (parsed.options.apply) {
+      emit(applyRun(parsed.root, map, parsed.options));
+      return 0;
+    }
     emit(map);
     return 0;
   } catch (error) {

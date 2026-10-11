@@ -13,12 +13,29 @@
  *      .ai/handoff/NEXT-STEPS.md — and that matrix.json parses with the
  *      expected schema_version and standalone topology.
  *
+ * XSKP-P4-05: the packed lane also asserts the contract serialization of the
+ * empty registry, the entries placeholder, the presence of the contract pack
+ * in the tarball, and that the source checkout's vendor/skills and
+ * skills.lock.json stay byte-unchanged. AC-7 wraps every test.
+ *
  * This test runs SLOW (~5-10 s) because of npm pack; it runs once per file
  * via before() so the pack cost is paid exactly once.
  */
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, existsSync, readFileSync, realpathSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -120,6 +137,67 @@ after(() => {
 });
 
 // ---------------------------------------------------------------------------
+// AC-7 executable guard: every packed init test snapshots this checkout's
+// native and immutable paths before and after, and fails if any byte moved.
+// ---------------------------------------------------------------------------
+
+const GUARDED = ['.omc', '.omx', '.omo', '.sisyphus', '.ai/evidence', '.ai/handoff/readiness-v1', '.ai/workflows/northstar-readiness-v1.json'];
+
+function guardedDigests(): string[] {
+  const lines: string[] = [];
+  const visit = (rel: string): void => {
+    const abs = join(root, rel);
+    if (!existsSync(abs)) return;
+    const info = lstatSync(abs);
+    if (info.isSymbolicLink()) {
+      lines.push(`${rel} -> ${readlinkSync(abs)}`);
+      return;
+    }
+    if (info.isDirectory()) {
+      for (const name of readdirSync(abs)) visit(`${rel}/${name}`);
+      return;
+    }
+    lines.push(`${rel} ${createHash('sha256').update(readFileSync(abs)).digest('hex')}`);
+  };
+  for (const prefix of GUARDED) visit(prefix);
+  return lines.sort();
+}
+
+function checkoutSnapshot(): { status: string; digests: string[] } {
+  const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=all', '--', ...GUARDED], {
+    cwd: root, encoding: 'utf8', timeout: 60_000,
+  });
+  assert.equal(status.status, 0, status.stderr);
+  return { status: status.stdout, digests: guardedDigests() };
+}
+
+function toError(failure: unknown): Error {
+  return failure instanceof Error ? failure : new Error(String(failure));
+}
+
+function ac7Guarded(name: string, body: () => void): void {
+  const beforeSnapshot = checkoutSnapshot();
+  let failure: unknown = null;
+  try {
+    body();
+  } catch (error) {
+    failure = error;
+  }
+  const after = checkoutSnapshot();
+  if (failure) {
+    const error = toError(failure);
+    if (JSON.stringify(after) !== JSON.stringify(beforeSnapshot)) error.message += `\nAC-7: ${name} also changed the checkout`;
+    throw error;
+  }
+  assert.deepEqual(after, beforeSnapshot, `AC-7: ${name} changed the checkout`);
+}
+
+/** One packed-init test under the AC-7 checkout guard. */
+function guardedTest(name: string, body: () => void): void {
+  void test(name, () => ac7Guarded(name, body));
+}
+
+// ---------------------------------------------------------------------------
 // Helper — run init from extracted package with a sandboxed HOME/CODEX_HOME
 // ---------------------------------------------------------------------------
 
@@ -149,7 +227,7 @@ function runExtractedInit(args: string[] = []): SpawnSyncReturns<string> {
 // Test: init from extracted package produces the expected scaffold
 // ---------------------------------------------------------------------------
 
-void test('packed-init: init from extracted npm tarball exits 0', () => {
+guardedTest('packed-init: init from extracted npm tarball exits 0', () => {
   const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-target-'));
 
   try {
@@ -170,7 +248,7 @@ void test('packed-init: init from extracted npm tarball exits 0', () => {
   }
 });
 
-void test('packed-init: .ai/matrix.json exists and parses correctly', () => {
+guardedTest('packed-init: .ai/matrix.json exists and parses correctly', () => {
   const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-matrix-'));
 
   try {
@@ -207,7 +285,7 @@ void test('packed-init: .ai/matrix.json exists and parses correctly', () => {
   }
 });
 
-void test('packed-init: AGENTS.md exists after init', () => {
+guardedTest('packed-init: AGENTS.md exists after init', () => {
   const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-agents-'));
 
   try {
@@ -231,7 +309,7 @@ void test('packed-init: AGENTS.md exists after init', () => {
   }
 });
 
-void test('packed-init: canonical README.md exists with observable generated-state verification', () => {
+guardedTest('packed-init: canonical README.md exists with observable generated-state verification', () => {
   const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-readme-'));
 
   try {
@@ -253,7 +331,7 @@ void test('packed-init: canonical README.md exists with observable generated-sta
   }
 });
 
-void test('packed-init: .ai/handoff/NEXT-STEPS.md exists after init', () => {
+guardedTest('packed-init: .ai/handoff/NEXT-STEPS.md exists after init', () => {
   const targetDir = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-nextsteps-'));
 
   try {
@@ -277,7 +355,7 @@ void test('packed-init: .ai/handoff/NEXT-STEPS.md exists after init', () => {
   }
 });
 
-void test('packed-init: vendor/ directory is NOT present in extracted tarball', () => {
+guardedTest('packed-init: vendor/ directory is NOT present in extracted tarball', () => {
   // This confirms the extracted package truly reproduces the published scenario
   // (vendor/ is not shipped), so the fallback to dist/skill-templates/ is exercised.
   assert.ok(extractDir, 'extract dir prepared in before()');
@@ -288,7 +366,7 @@ void test('packed-init: vendor/ directory is NOT present in extracted tarball', 
   );
 });
 
-void test('packed-init: dist/skill-templates/ IS present in extracted tarball', () => {
+guardedTest('packed-init: dist/skill-templates/ IS present in extracted tarball', () => {
   // Confirms the staging step in prepack placed the templates where the fallback expects.
   assert.ok(extractDir, 'extract dir prepared in before()');
   const skillTemplatesDir = join(extractDir, 'package', 'dist', 'skill-templates');
@@ -359,7 +437,7 @@ function sourcePolicyBytes(): string {
   }
 }
 
-void test('ACH-C-03 packed-init emits the same policy bytes as source init', () => {
+guardedTest('ACH-C-03 packed-init emits the same policy bytes as source init', () => {
   const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-policy-'));
   try {
     const packed = runExtractedInit([target, ...FIXED_POLICY_ARGS]);
@@ -372,7 +450,7 @@ void test('ACH-C-03 packed-init emits the same policy bytes as source init', () 
   }
 });
 
-void test('ACH-C-03 packed-init refuses a policy-only collision without --force', () => {
+guardedTest('ACH-C-03 packed-init refuses a policy-only collision without --force', () => {
   const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-policy-collision-'));
   try {
     const policyPath = writeSentinelPolicy(target);
@@ -388,7 +466,7 @@ void test('ACH-C-03 packed-init refuses a policy-only collision without --force'
   }
 });
 
-void test('ACH-C-03 packed-init --force restores the seeded policy bytes', () => {
+guardedTest('ACH-C-03 packed-init --force restores the seeded policy bytes', () => {
   const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-policy-force-'));
   try {
     writeSentinelPolicy(target);
@@ -397,6 +475,79 @@ void test('ACH-C-03 packed-init --force restores the seeded policy bytes', () =>
     const emitted = readFileSync(join(target, POLICY_REL), 'utf8');
     assert.equal(emitted, sourcePolicyBytes(), '--force must restore the same bytes the source path emits');
     assert.ok(!emitted.includes('sentinel'));
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// XSKP-P4-05: the packed lane asserts the registry, the contract and that the
+// run leaves the dev checkout's vendored skills untouched.
+// ---------------------------------------------------------------------------
+
+const REGISTRY_REL = '.ai/knowledge/registry.json';
+const ENTRIES_GITKEEP_REL = '.ai/knowledge/entries/.gitkeep';
+
+function registryBytes(repoId: string): string {
+  return `{\n  "entries": [],\n  "generated_from": ".ai/knowledge/entries",\n  "repo_id": ${JSON.stringify(repoId)},\n  "schema": "knowledge-registry/1"\n}\n`;
+}
+
+/** Sorted path+sha256 digest of a whole tree; symlinks record their target. */
+function treeDigest(dir: string): string {
+  const lines: string[] = [];
+  const visit = (rel: string): void => {
+    const abs = rel === '' ? dir : join(dir, rel);
+    const info = lstatSync(abs);
+    if (info.isSymbolicLink()) {
+      lines.push(`${rel} -> ${readlinkSync(abs)}`);
+      return;
+    }
+    if (info.isDirectory()) {
+      for (const name of readdirSync(abs).sort()) visit(rel === '' ? name : `${rel}/${name}`);
+      return;
+    }
+    lines.push(`${rel} ${createHash('sha256').update(readFileSync(abs)).digest('hex')}`);
+  };
+  visit('');
+  return lines.join('\n');
+}
+
+guardedTest('XSKP-P4-05 packed-init: registry bytes, entries placeholder and the contract pack are shipped', () => {
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-registry-'));
+  try {
+    const r = runExtractedInit([target, ...FIXED_POLICY_ARGS]);
+    assert.equal(r.status, 0, `packed init failed\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.equal(readFileSync(join(target, REGISTRY_REL), 'utf8'), registryBytes('example-repo'));
+    const gitkeep = join(target, ENTRIES_GITKEEP_REL);
+    assert.ok(existsSync(gitkeep), 'entries/.gitkeep must exist after packed init');
+    assert.equal(readFileSync(gitkeep, 'utf8'), '');
+
+    // The contract pack rides the tarball; init never reads vendor/skills.
+    assert.ok(extractDir, 'extract dir prepared in before()');
+    const contract = join(extractDir, 'package', '.ai', 'knowledge', 'contract');
+    assert.ok(existsSync(join(contract, 'contract.lock.json')), 'contract.lock.json must ship in the tarball');
+    assert.ok(
+      existsSync(join(contract, 'knowledge-registry.schema.json')),
+      'the registry schema must ship in the tarball',
+    );
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
+});
+
+guardedTest('XSKP-P4-05 packed-init: the source vendor/skills and skills.lock.json stay byte-unchanged', () => {
+  const vendorSkills = join(root, 'vendor', 'skills');
+  const lockPath = join(root, 'skills.lock.json');
+  assert.ok(existsSync(vendorSkills), 'the dev checkout vendors skills before npm test');
+  const vendorBefore = treeDigest(vendorSkills);
+  const lockBefore = readFileSync(lockPath);
+
+  const target = mkdtempSync(join(tmpdir(), 'ai-catapult-packed-vendor-'));
+  try {
+    const r = runExtractedInit([target, ...FIXED_POLICY_ARGS]);
+    assert.equal(r.status, 0, `packed init failed\nstdout: ${r.stdout}\nstderr: ${r.stderr}`);
+    assert.equal(treeDigest(vendorSkills), vendorBefore, 'vendor/skills must be byte-unchanged after a packed init');
+    assert.deepEqual(readFileSync(lockPath), lockBefore, 'skills.lock.json must be byte-unchanged after a packed init');
   } finally {
     rmSync(target, { recursive: true, force: true });
   }

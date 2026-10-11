@@ -28,10 +28,18 @@
  * scripts/validate-rules.sh validator into <target>/scripts/ — the template's
  * prek.toml hook and the emitted .rules.ts header reference it (packaged
  * installs source the staged copy; see scripts/stage-skill-templates.ts).
+ *
+ * The knowledge surface init owns is code-generated, never read from the
+ * vendored templates (XSKP-P4-05): `.ai/knowledge/registry.json` carries the
+ * knowledge-registry/1 contract serialization of the empty aggregate, and a
+ * pre-existing registry is present-not-overwritten — init skips it with and
+ * without --force, and never reports it as a collision
+ * (ai-catapult-init modules/migration.md).
  */
 
 import { mkdirSync, readdirSync, readFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
+import { canonical, ENTRIES_DIR, REGISTRY_FILE, SCHEMA } from './knowledge.ts';
 
 type BoundaryManifestEntry = {
   path?: string;
@@ -139,7 +147,50 @@ function emitGitkeeps(
 function mechanicalEntries(manifest: BoundaryManifest): Array<{ path: string; template: string }> {
   return manifest.paths
     .filter((entry) => entry.classification === 'mechanical' && entry.template !== null)
+    // The registry is code-owned (emitKnowledgeSkeleton): its vendored
+    // template is never read and an existing registry is never a collision,
+    // so it is dropped from the manifest-driven writes entirely.
+    .filter((entry) => manifestPathToRealPath(entry.path as string) !== REGISTRY_FILE)
     .map((entry) => ({ path: entry.path as string, template: entry.template as string }));
+}
+
+/** The entries placeholder tracked so the directory survives a clean clone. */
+const ENTRIES_GITKEEP = `${ENTRIES_DIR}/.gitkeep`;
+
+/**
+ * The empty registry bytes init owns: the contract serialization of the
+ * knowledge-registry/1 aggregate, generated here so a stale or hostile
+ * vendored template cannot change what init writes.
+ */
+function emptyRegistryBytes(repoId: string): string {
+  return canonical({
+    entries: [],
+    generated_from: ENTRIES_DIR,
+    repo_id: repoId,
+    schema: SCHEMA,
+  });
+}
+
+/**
+ * Emit the knowledge surface init owns and return the paths written. A
+ * pre-existing registry.json is present-not-overwritten: the write is
+ * skipped with and without --force (modules/migration.md), which keeps the
+ * publisher-managed entry lifecycle and tombstones intact.
+ */
+function emitKnowledgeSkeleton(targetDir: string, repoId: string): string[] {
+  const emitted: string[] = [];
+  const registryDest = join(targetDir, REGISTRY_FILE);
+  if (!existsSync(registryDest)) {
+    mkdirSync(dirname(registryDest), { recursive: true });
+    writeFileSync(registryDest, emptyRegistryBytes(repoId), 'utf8');
+    emitted.push(REGISTRY_FILE);
+  }
+  const gitkeepDest = join(targetDir, ENTRIES_GITKEEP);
+  if (!existsSync(gitkeepDest)) {
+    mkdirSync(dirname(gitkeepDest), { recursive: true });
+    writeFileSync(gitkeepDest, '', 'utf8');
+  }
+  return emitted;
 }
 
 /**
@@ -277,6 +328,11 @@ export function scaffold({ targetDir, templatesDir, skillsDir, repoId, date, ups
 
   // All clear — write files
   const emittedPaths = writeMechanicalFiles(manifest, templatesDir, targetDir, tokens);
+
+  // The code-owned knowledge surface lands before the template walk so the
+  // walk sees the entries placeholder already in place (it skips existing
+  // .gitkeep files). A pre-existing registry is left byte-unchanged.
+  emittedPaths.push(...emitKnowledgeSkeleton(targetDir, repoId));
 
   // Emit .gitkeep files so tracked empty directories land in the target.
   // These are not listed in the boundary-manifest (they are git artifacts),

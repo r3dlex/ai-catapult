@@ -1677,6 +1677,20 @@ function appendEvent(path: string, event: Record<string, unknown>): void {
   }
 }
 
+/**
+ * The committed records of an append-only JSONL ledger. Exported for the
+ * adopt engine's migration ledger, which shares the archive ledgers' commit
+ * marker and interrupted-tail repair (ledgerLines above).
+ */
+export function readLedger(root: string, relative: string): { path: string; values: Record<string, unknown>[] } {
+  return ledgerLines(root, relative);
+}
+
+/** Append one ledger record under the same durability rules as the archive ledgers. */
+export function appendLedger(root: string, relative: string, event: Record<string, unknown>): void {
+  appendEvent(ledgerPath(root, relative), event);
+}
+
 // ---------------------------------------------------------------------------
 // Write half: write verbs (publish.py main dispatch)
 // ---------------------------------------------------------------------------
