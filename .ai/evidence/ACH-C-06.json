@@ -1,0 +1,11 @@
+{
+  "goal_id": "ACH-C-06",
+  "green": {
+    "command": "node --test test/release-0.4.4.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "node --test test/release-0.4.4.test.ts",
+    "exit_code": 1
+  }
+}
