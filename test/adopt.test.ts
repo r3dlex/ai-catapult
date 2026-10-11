@@ -100,10 +100,6 @@ const ENGINE_OUTPUTS = ['.ai/knowledge/migration/', '.ai/drift/backups/', '.ai/k
 
 type Preserved = { digest: string; frozen: boolean; rel: string };
 
-function isFrozenPath(rel: string): boolean {
-  return TARGET_FROZEN.some((prefix) => rel === prefix || rel.startsWith(`${prefix}/`));
-}
-
 function isEngineOutput(rel: string): boolean {
   return ENGINE_OUTPUTS.some((prefix) => rel === prefix.slice(0, -1) || rel.startsWith(prefix));
 }
@@ -152,11 +148,122 @@ function porcelainPaths(text: string): string[] {
   return found;
 }
 
+function gitTestEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  delete env.GIT_DIR;
+  delete env.GIT_WORK_TREE;
+  delete env.GIT_COMMON_DIR;
+  delete env.GIT_INDEX_FILE;
+  delete env.GIT_OBJECT_DIRECTORY;
+  return env;
+}
+
+/**
+ * Policy glob, matching src/knowledge.ts. The guard classifies the target's
+ * private paths itself so a missed deny cannot hide a rewrite.
+ */
+function policyMatches(path: string, pattern: string): boolean {
+  let expression = '';
+  let index = 0;
+  while (index < pattern.length) {
+    if (pattern.startsWith('**/', index)) {
+      expression += '(?:.*/)?';
+      index += 3;
+    } else if (pattern.startsWith('**', index)) {
+      expression += '.*';
+      index += 2;
+    } else if (pattern.charAt(index) === '*') {
+      expression += '[^/]*';
+      index += 1;
+    } else {
+      expression += pattern.charAt(index).replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&');
+      index += 1;
+    }
+  }
+  return new RegExp(`^(?:${expression})$`, 's').test(path);
+}
+
+function denyPatterns(): string[] {
+  const policy = JSON.parse(readFileSync(policyPath, 'utf8')) as Policy;
+  return policy.deny.paths;
+}
+
+function managedRootsOf(tmp: string): string[] {
+  const matrixPath = join(tmp, '.ai/matrix.json');
+  if (!existsSync(matrixPath)) return [];
+  try {
+    const value: unknown = JSON.parse(readFileSync(matrixPath, 'utf8'));
+    if (!isRecord(value) || !Array.isArray(value.managed_repositories)) return [];
+    const found: string[] = [];
+    for (const entry of value.managed_repositories) {
+      if (isRecord(entry) && typeof entry.path === 'string' && entry.path !== '') found.push(entry.path);
+    }
+    return found;
+  } catch {
+    return [];
+  }
+}
+
+function isDenied(rel: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => policyMatches(rel, pattern) || policyMatches(`${rel}/x`, pattern));
+}
+
+function isManagedRel(rel: string, managed: string[]): boolean {
+  return managed.some((path) => rel === path || rel.startsWith(`${path}/`));
+}
+
+function isGitMetadata(rel: string): boolean {
+  return rel === '.git' || rel.startsWith('.git/') || rel.endsWith('/.git') || rel.includes('/.git/');
+}
+
+function rememberProtected(rel: string, patterns: string[], managed: string[], found: string[]): void {
+  if (rel !== '' && (isDenied(rel, patterns) || isManagedRel(rel, managed))) found.push(rel);
+}
+
+function walkProtected(tmp: string, rel: string, patterns: string[], managed: string[], found: string[]): void {
+  if (isGitMetadata(rel)) return;
+  const abs = rel === '' ? tmp : join(tmp, rel);
+  let info: ReturnType<typeof lstatSync>;
+  try {
+    info = lstatSync(abs);
+  } catch {
+    return;
+  }
+  if (info.isSymbolicLink() || info.isFile()) {
+    rememberProtected(rel, patterns, managed, found);
+    return;
+  }
+  if (!info.isDirectory()) return;
+  for (const name of readdirSync(abs)) {
+    walkProtected(tmp, rel === '' ? name : `${rel}/${name}`, patterns, managed, found);
+  }
+}
+
+function policyProtected(tmp: string): string[] {
+  const found: string[] = [];
+  walkProtected(tmp, '', denyPatterns(), managedRootsOf(tmp), found);
+  return found;
+}
+
+function protectedFiles(tmp: string): string[] {
+  const files: string[] = [];
+  for (const prefix of TARGET_FROZEN) collectFiles(tmp, prefix, files);
+  files.push(...policyProtected(tmp));
+  return [...new Set(files)].sort();
+}
+
 function dirtyPaths(tmp: string): string[] {
-  const status = spawnSync('git', ['-C', tmp, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
-    encoding: 'utf8', timeout: 30_000,
+  const env = gitTestEnv();
+  const inside = spawnSync('git', ['-C', tmp, 'rev-parse', '--is-inside-work-tree'], {
+    encoding: 'utf8', env, timeout: 30_000,
   });
-  if (status.status !== 0) return [];
+  if (inside.status !== 0 || inside.stdout.trim() !== 'true') return [];
+  const status = spawnSync('git', ['-C', tmp, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+    encoding: 'utf8', env, timeout: 30_000,
+  });
+  if (status.status !== 0) {
+    throw new Error(`AC-7: dirty listing failed: ${status.stderr}`);
+  }
   return porcelainPaths(status.stdout);
 }
 
@@ -173,20 +280,18 @@ function digestOf(tmp: string, rel: string): string {
 }
 
 function preservationSnapshot(tmp: string): Preserved[] {
-  const files: string[] = [];
-  for (const prefix of TARGET_FROZEN) collectFiles(tmp, prefix, files);
+  const frozen = new Set(protectedFiles(tmp));
+  const files = [...frozen];
   for (const rel of dirtyPaths(tmp)) {
     if (!isEngineOutput(rel)) files.push(rel);
   }
   return [...new Set(files)].sort().map((rel) => ({
-    digest: digestOf(tmp, rel), frozen: isFrozenPath(rel), rel,
+    digest: digestOf(tmp, rel), frozen: frozen.has(rel), rel,
   }));
 }
 
 function frozenFiles(tmp: string): string[] {
-  const files: string[] = [];
-  for (const prefix of TARGET_FROZEN) collectFiles(tmp, prefix, files);
-  return files.sort();
+  return protectedFiles(tmp);
 }
 
 function assertTargetPreserved(tmp: string, before: Preserved[]): void {
@@ -1472,3 +1577,178 @@ function errorOfSafe(stdout: string): string {
   if (!isRecord(value) || !Object.prototype.hasOwnProperty.call(value, 'error')) return '';
   return String(value.error);
 }
+
+const GUIDE = '.agents/skills/researcher/guide.md';
+const NOTES = '.agents/skills/notes/extra.md';
+const STAY = 'docs/stay.md';
+const LOCAL_LINKS = [
+  '# reference',
+  '',
+  'See [asset](guide.md) and [self](REFERENCE.md#intro).',
+  'Also [dot](./guide.md), [notes](../notes/extra.md) and [out](../../outside.md).',
+  'Query [raw](guide.md?raw=1) and image ![fig](guide.md).',
+  'Absolute [abs](/.agents/skills/researcher/guide.md) and [selfabs](/.agents/skills/researcher/REFERENCE.md#intro).',
+  'Wrapped [wrap](<guide.md>) and titled [titled](guide.md "keep").',
+  'Keep [web](https://example.com/guide.md) and [here](#intro).',
+  '',
+  '[asset]: guide.md',
+  '[selfdef]: REFERENCE.md#intro',
+  '',
+].join('\n');
+
+function assertLocalLinksRebased(text: string, referenceTarget: string): void {
+  const from = posix.dirname(referenceTarget);
+  const guide = posix.relative(from, GUIDE);
+  const notes = posix.relative(from, NOTES);
+  const outside = posix.relative(from, '.agents/outside.md');
+  const self = `${posix.relative(from, referenceTarget)}#intro`;
+  assert.ok(text.includes(`[asset](${guide})`), text);
+  assert.ok(text.includes(`[self](${self})`), text);
+  assert.ok(text.includes(`[dot](${guide})`), text);
+  assert.ok(text.includes(`[notes](${notes})`), text);
+  assert.ok(text.includes(`[out](${outside})`), text);
+  assert.ok(text.includes(`[raw](${guide}?raw=1)`), text);
+  assert.ok(text.includes(`![fig](${guide})`), text);
+  assert.ok(text.includes(`[asset]: ${guide}`), text);
+  assert.ok(text.includes(`[wrap](<${guide}>)`), text);
+  assert.ok(text.includes(`[titled](${guide} "keep")`), text);
+  assert.ok(text.includes(`[selfdef]: ${self}`), text);
+  assert.ok(text.includes('[abs](/.agents/skills/researcher/guide.md)'), text);
+  assert.ok(text.includes('[selfabs](/docs/learning/concept-maps/researcher.md#intro)'), text);
+  assert.ok(text.includes('[web](https://example.com/guide.md)'), text);
+  assert.ok(text.includes('[here](#intro)'), text);
+  assert.equal(text.includes('(guide.md)'), false, text);
+  assert.equal(text.includes('(./guide.md)'), false, text);
+  assert.equal(text.includes('(REFERENCE.md'), false, text);
+  assert.equal(text.includes('(../notes/extra.md)'), false, text);
+  assert.equal(text.includes('(../../outside.md)'), false, text);
+}
+
+function plantLocalLinks(tmp: string): void {
+  mkdirSync(dirname(join(tmp, GUIDE)), { recursive: true });
+  mkdirSync(dirname(join(tmp, NOTES)), { recursive: true });
+  mkdirSync(dirname(join(tmp, STAY)), { recursive: true });
+  writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+  writeFileSync(join(tmp, NOTES), 'notes stay\n');
+  writeFileSync(join(tmp, REFERENCE), LOCAL_LINKS);
+  writeFileSync(join(tmp, STAY), 'See [asset](guide.md) and `.agents/skills/researcher/REFERENCE.md`.\n');
+  commitAll(tmp, 'local links');
+}
+
+void test('a relocated document rebases every local link, including unmoved destinations and self-links', () => {
+  ac7Guarded('rebase-links', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      plantLocalLinks(tmp);
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-24', tmp]);
+      const map = parseMap(dry.stdout);
+      const referenceItem = itemBySource(map, REFERENCE);
+      assert.equal(referenceItem.action, 'copy');
+      const referenceTarget = referenceItem.target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-24', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const rebased = readFileSync(join(tmp, referenceTarget), 'utf8');
+      assertLocalLinksRebased(rebased, referenceTarget);
+      const recorded = readLedger(tmp).flatMap((event) => event.refs_repaired)
+        .find((repair) => repair.file === referenceTarget);
+      assert.ok(recorded, 'the relocated document rebase is recorded');
+      assert.equal(recorded.after_sha256, sha256File(join(tmp, referenceTarget)));
+      const rerun = spawnAdopt(['--apply', '--run-id', 'run-24', tmp]);
+      assert.equal(rerun.status, 0, `${rerun.stdout}\n${rerun.stderr}`);
+      assert.equal(readFileSync(join(tmp, referenceTarget), 'utf8'), rebased, 'a rerun does not rebase again');
+      assert.ok(readLedger(tmp).some((event) => event.result === 'noop'), 'a rerun appends noop events');
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), LOCAL_LINKS, 'a copy source keeps its original links');
+      assert.equal(readFileSync(join(tmp, GUIDE), 'utf8'), 'guide stays\n', 'an unmoved destination is not rewritten');
+      assert.equal(
+        readFileSync(join(tmp, STAY), 'utf8'),
+        'See [asset](guide.md) and `.agents/skills/researcher/REFERENCE.md`.\n',
+        'an unmoved document does not rebase links whose destination stayed',
+      );
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a migrated document rebases unmoved and self links and still retargets sibling links', () => {
+  ac7Guarded('rebase-migrate', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      plantLocalLinks(tmp);
+      writeFileSync(join(tmp, REFERENCE), `${LOCAL_LINKS}See [skill](SKILL.md) and [usage](SKILL.md#usage).\n`);
+      commitAll(tmp, 'migrate local links');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-25', tmp]);
+      const map = parseMap(dry.stdout);
+      const referenceItem = itemBySource(map, REFERENCE);
+      const skillItem = itemBySource(map, SKILL);
+      assert.equal(referenceItem.action, 'migrate');
+      const referenceTarget = referenceItem.target as string;
+      const skillTarget = skillItem.target as string;
+      const file = migrateConfirmation(tmp, map, 'run-25');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-25', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const moved = readFileSync(join(tmp, referenceTarget), 'utf8');
+      assertLocalLinksRebased(moved, referenceTarget);
+      const skill = posix.relative(posix.dirname(referenceTarget), skillTarget);
+      assert.ok(moved.includes(`[skill](${skill})`), moved);
+      assert.ok(moved.includes(`[usage](${skill}#usage)`), moved);
+      assert.equal(existsSync(join(tmp, REFERENCE)), false, 'the migrated source is removed');
+      assert.equal(readFileSync(join(tmp, GUIDE), 'utf8'), 'guide stays\n');
+      assert.equal(
+        readFileSync(join(tmp, STAY), 'utf8'),
+        'See [asset](guide.md) and `docs/learning/concept-maps/researcher.md`.\n',
+        'a migrate still retargets a citation in an unmoved document',
+      );
+      assert.ok(readFileSync(join(tmp, STAY), 'utf8').includes('[asset](guide.md)'), 'an unmoved link is not rebased');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('the target AC-7 guard snapshots private and managed paths', () => {
+  ac7Guarded('guard-private-managed', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, '.env'), 'SECRET=1\n');
+      mkdirSync(join(tmp, 'nested'), { recursive: true });
+      writeFileSync(join(tmp, 'nested/.env'), 'SECRET=2\n');
+      mkdirSync(join(tmp, 'skills/nested'), { recursive: true });
+      writeFileSync(join(tmp, 'skills/nested/SKILL.md'), '# managed\n');
+      writeFileSync(join(tmp, '.ai/matrix.json'), `${JSON.stringify({
+        managed_repositories: [{ path: 'skills' }],
+      })}\n`);
+      commitAll(tmp, 'private and managed');
+      const snap = preservationSnapshot(tmp);
+      const rels = snap.map((item) => item.rel);
+      assert.ok(rels.includes('.env'), `private path missing: ${rels.join(', ')}`);
+      assert.ok(rels.includes('nested/.env'), `nested private path missing: ${rels.join(', ')}`);
+      assert.ok(rels.includes('skills/nested/SKILL.md'), `managed path missing: ${rels.join(', ')}`);
+      assert.equal(snap.find((item) => item.rel === '.env')?.frozen, true);
+      assert.equal(snap.find((item) => item.rel === 'skills/nested/SKILL.md')?.frozen, true);
+      const before = preservationSnapshot(tmp);
+      mkdirSync(join(tmp, 'added'), { recursive: true });
+      writeFileSync(join(tmp, 'added/.env'), 'NEW=1\n');
+      writeFileSync(join(tmp, 'skills/nested/extra.md'), 'added\n');
+      assert.throws(() => assertTargetPreserved(tmp, before), /AC-7/);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('the target AC-7 guard does not treat a failed dirty listing as empty', () => {
+  ac7Guarded('guard-dirty-listing', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, 'notes-dirty.md'), 'dirty\n');
+      rmSync(join(tmp, '.git/index'));
+      mkdirSync(join(tmp, '.git/index'));
+      assert.throws(() => preservationSnapshot(tmp), /AC-7: dirty listing failed/);
+    } finally {
+      discard(tmp);
+    }
+  });
+});

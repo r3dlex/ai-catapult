@@ -17,8 +17,10 @@
  *   and relative Markdown link destinations). A link is resolved from the
  *   citer's original location, mapped through relocated destinations, and
  *   rendered from the citer's final location — including a document that was
- *   copied rather than moved. Native, immutable, private and pre-existing
- *   dirty paths are never rewritten. Every write is recorded as a
+ *   copied rather than moved. A relocated document rebases every local link,
+ *   including destinations that stay in place and links to itself. Native,
+ *   immutable, private and pre-existing dirty paths are never rewritten.
+ *   Every write is recorded as a
  *   knowledge-migration-event/1 line in `.ai/knowledge/migration/ledger.jsonl`.
  * - An existing v3 target is present-not-overwritten: the item is a noop and
  *   the source is kept. Re-running an applied run-id replays the recorded
@@ -883,6 +885,22 @@ function linkReplacement(
   return split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
 }
 
+/** Destination spans of inline links and reference definitions, rewritten by `replace`. */
+function destinationSpans(text: string, replace: (destination: string) => string | null): Span[] {
+  const spans: Span[] = [];
+  for (const pattern of [/\[[^\]]*\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'))?\)/g, /^ {0,3}\[[^\]]+\]:\s*(\S+)/gm]) {
+    for (const match of text.matchAll(pattern)) {
+      const destination = match[1];
+      if (destination === undefined) continue;
+      const replacement = replace(destination);
+      if (replacement === null) continue;
+      const start = (match.index ?? 0) + match[0].indexOf(destination);
+      spans.push({ start, end: start + destination.length, replacement });
+    }
+  }
+  return spans;
+}
+
 /** Destination spans of inline links and reference definitions that cite the source. */
 function linkSpans(
   text: string,
@@ -891,18 +909,72 @@ function linkSpans(
   source: string,
   target: string,
 ): Span[] {
-  const spans: Span[] = [];
-  for (const pattern of [/\[[^\]]*\]\(([^)\s]+)\)/g, /^ {0,3}\[[^\]]+\]:\s*(\S+)/gm]) {
-    for (const match of text.matchAll(pattern)) {
-      const destination = match[1];
-      if (destination === undefined) continue;
-      const replacement = linkReplacement(originalCiter, finalCiter, destination, source, target);
-      if (replacement === null) continue;
-      const start = (match.index ?? 0) + match[0].indexOf(destination);
-      spans.push({ start, end: start + destination.length, replacement });
-    }
+  return destinationSpans(
+    text,
+    (destination) => linkReplacement(originalCiter, finalCiter, destination, source, target),
+  );
+}
+
+function relocationTarget(resolved: string, relocations: AppliedMove[]): string {
+  return relocations.find((entry) => entry.source === resolved)?.target ?? resolved;
+}
+
+function resolveLink(originalCiter: string, head: string): string {
+  const joined = head.startsWith('/') ? head.slice(1) : posix.join(posix.dirname(originalCiter), head);
+  return posix.normalize(joined);
+}
+
+function escapeRelative(fromDir: string, toPath: string): string {
+  const depth = fromDir === '' || fromDir === '.' ? 0 : fromDir.split('/').length;
+  const parts = toPath.split('/');
+  let ups = 0;
+  while (parts[0] === '..') {
+    ups += 1;
+    parts.shift();
   }
-  return spans;
+  const prefix = '../'.repeat(depth + ups).replace(/\/$/, '');
+  const rest = parts.join('/');
+  if (prefix === '') return rest === '' ? '.' : rest;
+  return rest === '' ? prefix : `${prefix}/${rest}`;
+}
+
+function relativeLink(fromDir: string, toPath: string): string {
+  if (toPath === '..' || toPath.startsWith('../')) return escapeRelative(fromDir, toPath);
+  const relative = posix.relative(fromDir === '' ? '.' : fromDir, toPath);
+  return relative === '' ? '.' : relative;
+}
+
+/**
+ * Rebase one local link from the citer's original directory onto its final
+ * directory. A destination that was itself relocated lands on that target;
+ * one that stayed in place keeps its resolved path. Self-links are included.
+ */
+function rebaseDestination(
+  originalCiter: string,
+  finalCiter: string,
+  destination: string,
+  relocations: AppliedMove[],
+): string | null {
+  const split = splitDestination(destination);
+  if (split === null) return null;
+  const resolved = resolveLink(originalCiter, split.head);
+  if (resolved === '' || (split.head.startsWith('/') && resolved.startsWith('..'))) return null;
+  const landed = relocationTarget(resolved, relocations);
+  const path = split.head.startsWith('/') ? `/${landed}` : relativeLink(posix.dirname(finalCiter), landed);
+  const rendered = split.wrapped ? `<${path}${split.tail}>` : `${path}${split.tail}`;
+  return rendered === destination ? null : rendered;
+}
+
+function rebaseLinkSpans(
+  text: string,
+  originalCiter: string,
+  finalCiter: string,
+  relocations: AppliedMove[],
+): Span[] {
+  return destinationSpans(
+    text,
+    (destination) => rebaseDestination(originalCiter, finalCiter, destination, relocations),
+  );
 }
 
 function isPathChar(char: string | undefined): boolean {
@@ -928,6 +1000,50 @@ function applySpans(text: string, spans: Span[]): string {
     updated = updated.slice(0, span.start) + span.replacement + updated.slice(span.end);
   }
   return updated;
+}
+
+/**
+ * Rebase every local link in a relocated document, plus bare tokens of
+ * relocated sources. Unmoved destinations keep their resolved path; self-links
+ * land on this document's final path.
+ */
+function rebaseBytes(
+  content: Buffer,
+  originalCiter: string,
+  finalCiter: string,
+  relocations: AppliedMove[],
+): Buffer | null {
+  if (content.includes(0)) return null;
+  const text = content.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(content)) return null;
+  const spans = rebaseLinkSpans(text, originalCiter, finalCiter, relocations);
+  for (const entry of relocations) {
+    spans.push(...tokenSpans(text, entry.source, entry.target, spans));
+  }
+  if (spans.length === 0) return null;
+  const updated = Buffer.from(applySpans(text, spans), 'utf8');
+  return updated.equals(content) ? null : updated;
+}
+
+function rebaseOne(
+  root: string,
+  source: string,
+  target: string,
+  relocations: AppliedMove[],
+): RefRepair | null {
+  const path = safePath(root, target);
+  let content: Buffer;
+  try {
+    const stat = lstatSync(path);
+    if (!stat.isFile() || stat.isSymbolicLink()) return null;
+    content = readFileSync(path);
+  } catch {
+    return null;
+  }
+  const updated = rebaseBytes(content, source, target, relocations);
+  if (updated === null) return null;
+  writeFileSync(path, updated);
+  return { file: target, before: content, after: updated };
 }
 
 /** Rewrite a citer's citations of the relocated source, or null when untouched. */
@@ -1058,8 +1174,13 @@ function repairReferences(
   dirty: Set<string>,
   managed: string[],
 ): RefRepair[] {
+  const relocatedTargets = new Set(relocations.map((entry) => entry.target));
   const repairs: RefRepair[] = [];
   for (const citer of citers) {
+    // A relocated document is rebased once, with every local link, before this
+    // per-source pass. Rewriting it again would resolve already-rebased links
+    // from the original directory.
+    if (relocatedTargets.has(citer)) continue;
     if (!repairAllowed(root, citer, policy, source, target, dirty, managed)) continue;
     const updated = rewriteCiter(root, citer, originalCiter(citer, relocations), source, target);
     if (updated === null) continue;
@@ -1286,9 +1407,16 @@ function executePlan(
   try {
     for (const entry of plan) moved.push(moveOne(root, entry));
     const relocations = appliedMoves(moved);
+    const rebased = new Map<string, RefRepair>();
+    for (const entry of relocations) {
+      const repair = rebaseOne(root, entry.source, entry.target, relocations);
+      if (repair !== null) rebased.set(entry.target, repair);
+    }
     const repairs = new Map<PlannedAction, RefRepair[]>();
     for (const item of moved) {
-      repairs.set(item.entry, repairsFor(root, policy, item, citers, relocations, dirty, managed));
+      const citation = repairsFor(root, policy, item, citers, relocations, dirty, managed);
+      const own = rebased.get(item.entry.target);
+      repairs.set(item.entry, own === undefined ? citation : [own, ...citation]);
     }
     return moved.map((item) => (
       eventFor(root, map, item.entry, item.result, finalAfterSha(root, item), repairs.get(item.entry) ?? [])
