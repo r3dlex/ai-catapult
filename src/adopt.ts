@@ -928,9 +928,26 @@ function linkReplacement(
   return finishDestination(path, split.tail, split.wrapped);
 }
 
-function skipTitle(text: string, at: number): number {
+/** Spaces, tabs, and at most one line ending — the whitespace a title may follow. */
+function skipTitleSpace(text: string, at: number): number {
   let index = at;
-  while (text[index] === ' ' || text[index] === '\t') index += 1;
+  let broke = false;
+  while (index < text.length) {
+    const char = text[index];
+    if (char === ' ' || char === '\t') {
+      index += 1;
+      continue;
+    }
+    if (char !== '\n' && char !== '\r') break;
+    if (broke) break;
+    broke = true;
+    index += char === '\r' && text[index + 1] === '\n' ? 2 : 1;
+  }
+  return index;
+}
+
+function skipTitle(text: string, at: number): number {
+  const index = skipTitleSpace(text, at);
   if (index === at) return at;
   const quote = text[index];
   if (quote === '"' || quote === "'") {
@@ -1001,13 +1018,32 @@ function readReferenceDestination(text: string, at: number): { start: number; en
   return { start, end, destination: text.slice(start, end) };
 }
 
-function continuationDestination(text: string, at: number, limit: number): { start: number; end: number; destination: string } | null {
+/** A continuation is valid only when the destination line has no trailing prose. */
+function definitionTail(text: string, at: number): boolean {
+  const titled = skipTitle(text, at);
+  let index = titled === at ? at : titled;
+  while (text[index] === ' ' || text[index] === '\t') index += 1;
+  return index >= text.length || text[index] === '\n' || text[index] === '\r';
+}
+
+function sameLineDestination(text: string, at: number, limit: number): boolean {
   let index = at;
   while (index < limit && (text[index] === ' ' || text[index] === '\t')) index += 1;
-  if (index < limit) return readReferenceDestination(text, at);
-  const next = limit + 1;
-  if (next >= text.length || (text[next] !== ' ' && text[next] !== '\t')) return null;
-  return readReferenceDestination(text, next);
+  if (text[index] === '\r' && index + 1 === limit && text[limit] === '\n') return false;
+  return index < limit;
+}
+
+function nextLineAt(text: string, limit: number): number {
+  return limit < text.length && text[limit] === '\n' ? limit + 1 : limit;
+}
+
+function continuationDestination(text: string, at: number, limit: number): { start: number; end: number; destination: string } | null {
+  if (sameLineDestination(text, at, limit)) return readReferenceDestination(text, at);
+  const next = nextLineAt(text, limit);
+  if (next >= text.length) return null;
+  const found = readReferenceDestination(text, next);
+  if (found === null || !definitionTail(text, found.end)) return null;
+  return found;
 }
 
 function definitionDestination(text: string, lineStart: number, limit: number): { start: number; end: number; destination: string } | null {
@@ -1152,6 +1188,15 @@ function isPathChar(char: string | undefined): boolean {
   return char !== undefined && /[\w./-]/.test(char);
 }
 
+/** Every parsed destination, including ones the rebase leaves unchanged. */
+function destinationCoverage(text: string): Span[] {
+  return [...inlineDestinations(text), ...referenceDestinations(text)].map((found) => ({
+    start: found.start,
+    end: found.end,
+    replacement: '',
+  }));
+}
+
 /** Every bare occurrence of `source` on a path boundary, outside `covered`. */
 function tokenSpans(text: string, source: string, target: string, covered: Span[]): Span[] {
   const spans: Span[] = [];
@@ -1200,7 +1245,7 @@ function rebaseBytes(
   const text = content.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(content)) return null;
   const spans = rebaseLinkSpans(text, originalCiter, finalCiter, relocations);
-  const covered = [...spans, ...markdownLabelSpans(text)];
+  const covered = [...destinationCoverage(text), ...markdownLabelSpans(text)];
   for (const entry of relocations) {
     spans.push(...tokenSpans(text, entry.source, entry.target, covered));
   }
@@ -1242,7 +1287,7 @@ function repairedBytes(
   const text = content.toString('utf8');
   if (!Buffer.from(text, 'utf8').equals(content)) return null;
   const links = linkSpans(text, originalCiter, finalCiter, source, target);
-  const covered = [...links, ...markdownLabelSpans(text)];
+  const covered = [...destinationCoverage(text), ...markdownLabelSpans(text)];
   const spans = [...links, ...tokenSpans(text, source, target, covered)];
   if (spans.length === 0) return null;
   const updated = Buffer.from(applySpans(text, spans), 'utf8');

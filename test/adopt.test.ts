@@ -2037,6 +2037,102 @@ void test('a read-only destination directory refuses before any write', () => {
   });
 });
 
+void test('a CRLF reference definition is rebased without rewriting the line endings', () => {
+  ac7Guarded('crlf-definition', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), '[ref]:\r\n  guide.md\r\n');
+      writeFileSync(join(tmp, GUIDE), 'guide stays\r\n');
+      commitAll(tmp, 'crlf definition');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-38', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-38', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      assert.equal(readFileSync(join(tmp, target), 'utf8'), `[ref]:\r\n  ${guide}\r\n`);
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), '[ref]:\r\n  guide.md\r\n');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('an unindented reference destination on the next line is rebased', () => {
+  ac7Guarded('unindented-definition', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      writeFileSync(join(tmp, REFERENCE), '[ref]:\nguide.md\n');
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'unindented definition');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-39', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-39', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      assert.equal(readFileSync(join(tmp, target), 'utf8'), `[ref]:\n${guide}\n`);
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), '[ref]:\nguide.md\n');
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('a title on the next line is preserved and its destination is rebased', () => {
+  ac7Guarded('newline-title', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      const body = '[inline](guide.md\n"title")\n';
+      writeFileSync(join(tmp, REFERENCE), body);
+      writeFileSync(join(tmp, GUIDE), 'guide stays\n');
+      commitAll(tmp, 'newline title');
+      const dry = spawnAdopt(['--dry-run', '--run-id', 'run-40', tmp]);
+      const target = itemBySource(parseMap(dry.stdout), REFERENCE).target as string;
+      const applied = spawnAdopt(['--apply', '--run-id', 'run-40', tmp]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const guide = posix.relative(posix.dirname(target), GUIDE);
+      assert.equal(readFileSync(join(tmp, target), 'utf8'), `[inline](${guide}\n"title")\n`);
+      assert.equal(readFileSync(join(tmp, REFERENCE), 'utf8'), body);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
+void test('an external URL query is not rewritten when it contains a relocated path', () => {
+  ac7Guarded('external-query', () => {
+    const tmp = stageGitRepo('legacy-agents', 'single');
+    try {
+      const url = 'https://example.test/?file=.agents/skills/researcher/REFERENCE.md';
+      writeFileSync(join(tmp, REFERENCE), `[external](${url})\nSee .agents/skills/researcher/SKILL.md nearby.\n`);
+      writeFileSync(join(tmp, STAY), `See [external](${url}) and \`.agents/skills/researcher/REFERENCE.md\`.\n`);
+      commitAll(tmp, 'external query');
+      const dry = spawnAdopt(['--dry-run', '--destructive', '--run-id', 'run-41', tmp]);
+      const map = parseMap(dry.stdout);
+      const reference = itemBySource(map, REFERENCE);
+      const skill = itemBySource(map, SKILL);
+      assert.equal(reference.action, 'migrate');
+      const file = migrateConfirmation(tmp, map, 'run-41');
+      const applied = spawnAdopt([
+        '--apply', '--destructive', '--run-id', 'run-41', '--confirm', TOKEN, '--confirm-file', file, tmp,
+      ]);
+      assert.equal(applied.status, 0, `${applied.stdout}\n${applied.stderr}`);
+      const referenceTarget = reference.target as string;
+      const skillTarget = skill.target as string;
+      const moved = readFileSync(join(tmp, referenceTarget), 'utf8');
+      assert.ok(moved.includes(`[external](${url})`), moved);
+      assert.ok(moved.includes(skillTarget), moved);
+      assert.equal(moved.includes('.agents/skills/researcher/SKILL.md'), false, moved);
+      assert.equal(moved.includes('docs/learning/concept-maps/researcher.md)'), false, moved);
+      const stayed = readFileSync(join(tmp, STAY), 'utf8');
+      assert.ok(stayed.includes(`[external](${url})`), stayed);
+      assert.ok(stayed.includes(referenceTarget), stayed);
+      assert.equal(stayed.includes('`.agents/skills/researcher/REFERENCE.md`'), false, stayed);
+    } finally {
+      discard(tmp);
+    }
+  });
+});
+
 void test('the target AC-7 guard does not treat a failed dirty listing as empty', () => {
   ac7Guarded('guard-dirty-listing', () => {
     const tmp = stageGitRepo('legacy-agents', 'single');
