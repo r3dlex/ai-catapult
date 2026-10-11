@@ -1,11 +1,30 @@
 {
   "goal_id": "ACH-C-06",
-  "green": {
-    "command": "node --test test/release-0.4.4.test.ts",
-    "exit_code": 0
-  },
+  "command": "node --test test/release-0.4.4.test.ts",
+  "sequence": [
+    "red",
+    "green"
+  ],
   "red": {
     "command": "node --test test/release-0.4.4.test.ts",
-    "exit_code": 1
+    "exit_code": 1,
+    "observed_at": "2026-10-11T11:28:37Z",
+    "tree": "1a64d65cfcb91f92063ecfcc59c22c5efe9d1603",
+    "tree_role": "pre-change",
+    "package_version": "0.4.3",
+    "test_sha256": "1d1603f0b23a6a741a1fecd1265292f7a386db50e49b3d184433b308bf8739af",
+    "note": "Detached worktree at the pre-change commit. package.json stayed 0.4.3. Only the release test and the recorded npm baseline were added, then the build scripts generated the 0.4.3 manifests. The command failed because package.json was 0.4.3, not 0.4.4.",
+    "output": "\u2716 package version is 0.4.4 and newer than both recorded npm latest baselines (1.345625ms)\n\u2714 generated claude, codex and opencode manifests agree on the package version (0.95425ms)\n\u2714 packed tarball agrees on the package version and carries the pinned v2 contract files (2146.468958ms)\n\u2139 tests 3\n\u2139 suites 0\n\u2139 pass 2\n\u2139 fail 1\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 2298.912917\n\n\u2716 failing tests:\n\ntest at test/release-0.4.4.test.ts:115:6\n\u2716 package version is 0.4.4 and newer than both recorded npm latest baselines (1.345625ms)\n  AssertionError [ERR_ASSERTION]: package.json must be the unpublished 0.4.4\n  \n  '0.4.3' !== '0.4.4'\n  \n      at TestContext.<anonymous> (file:///private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/opencode/ach-c06-red-tree/test/release-0.4.4.test.ts:118:10)\n      at Test.runInAsyncScope (node:async_hooks:226:14)\n      at Test.run (node:internal/test_runner/test:1402:25)\n      at Test.start (node:internal/test_runner/test:1262:17)\n      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {\n    generatedMessage: false,\n    code: 'ERR_ASSERTION',\n    actual: '0.4.3',\n    expected: '0.4.4',\n    operator: 'strictEqual',\n    diff: 'simple'\n  }\n"
+  },
+  "green": {
+    "command": "node --test test/release-0.4.4.test.ts",
+    "exit_code": 0,
+    "observed_at": "2026-10-11T11:28:40Z",
+    "tree": "30a5279c36813bb0f19c6b7a34f97ab3db509e30",
+    "tree_role": "reviewed",
+    "package_version": "0.4.4",
+    "test_sha256": "1d1603f0b23a6a741a1fecd1265292f7a386db50e49b3d184433b308bf8739af",
+    "note": "Same command, same test bytes, run after the red leg on the reviewed commit. package.json is 0.4.4 and the build scripts generated the 0.4.4 manifests. Clean worktree.",
+    "output": "\u2714 package version is 0.4.4 and newer than both recorded npm latest baselines (0.73525ms)\n\u2714 generated claude, codex and opencode manifests agree on the package version (0.935917ms)\n\u2714 packed tarball agrees on the package version and carries the pinned v2 contract files (1977.201958ms)\n\u2139 tests 3\n\u2139 suites 0\n\u2139 pass 3\n\u2139 fail 0\n\u2139 cancelled 0\n\u2139 skipped 0\n\u2139 todo 0\n\u2139 duration_ms 2139.2615\n"
   }
 }
