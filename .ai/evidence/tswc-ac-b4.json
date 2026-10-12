@@ -6,6 +6,7 @@
     "scope_note": ".ai/evidence/tswc-ac-b4.json is outside the goal scope array [src, scripts, test] and is included because AC-4 and the tdd-evidence gate require it. skills.lock.json and vendor/ are not edited. The lock bump is a runtime action against a caller-supplied fixture lock and a local stub upstream. No skills PR was opened.",
     "cure": "One bounded cure after REQUEST_CHANGES x2. A shared source_path is not a single-skill publish. A lock SHA that is not the upstream HEAD is refused before any commit. A case-variant skills remote is refused. Vendored bytes that differ from the locked commit are refused before payload rewrite. A failed payload rebuild restores the vendor tree and the stub HEAD. Approval tag was not re-minted. no human approved this work.",
     "cure_final": "Final cure after the pair-2 critic REQUEST_CHANGES. git update-index --assume-unchanged hid an edited vendored SKILL.md from git status, and rebuildPayloads copied the injected bytes. verifyHandoff now compares worktree bytes to the HEAD blob and refuses a hiding index flag before any payload copy. Prior red/green pair is preserved under pairs[0]. no human approved this work.",
+    "cure2": "Cure after pair-3 REQUEST_CHANGES x2. A pre-commit hook that exits 1 left the stub on the evolve branch with the overlay staged; the failure now restores the stub branch and unstages the overlay. A symlinked SKILL.md was overwritten through preview before refusal; a symlink, hard link, or other non-regular skill path is refused before any overlay write. Prior pairs are preserved. no human approved this work.",
     "tdd": "legacy-safe: coverage unknown; the flow is sprouted into src/evolve/upstream.ts and the legacy call site is one dispatch in src/evolve/cli.ts. The red leg is the missing module. The red-leg fixture inside the suite mutates the lock SHA and proves handoff_sha_mismatch before any payload rewrite."
   },
   "goal_id": "tswc-ac-b4",
@@ -32,6 +33,18 @@
     {
       "round": "cure-final",
       "note": "assume-unchanged vendored SKILL.md. red exit 1 observed before the byte comparison; green exit 0 after.",
+      "red": {
+        "command": "node --test test/evolve-upstream.test.ts",
+        "exit_code": 1
+      },
+      "green": {
+        "command": "node --test test/evolve-upstream.test.ts",
+        "exit_code": 0
+      }
+    },
+    {
+      "round": "cure2",
+      "note": "pre-commit hook failure and symlinked SKILL.md. red exit 1 observed before the product change (stub left on evolve/evolution-rollout/cf6dc34d0188; external symlink target overwritten). green exit 0 after the restore and the pre-write refusal. no human approved this work.",
       "red": {
         "command": "node --test test/evolve-upstream.test.ts",
         "exit_code": 1

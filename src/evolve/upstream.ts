@@ -8,12 +8,15 @@
  * overlay, leaves the wiki untouched, and does not write upstream. A lock SHA
  * that does not match the vendored checkout is refused before any payload
  * rewrite. Consumed worktree bytes are compared to the locked Git object;
- * an index flag that hides an edit is not trusted. This module never pushes
- * and never calls gh.
+ * an index flag that hides an edit is not trusted. A skill path that follows
+ * a symlink, or is not a single regular file, is refused before any overlay
+ * write. A commit that fails restores
+ * the stub branch and unstages the overlay. This module never pushes and
+ * never calls gh.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, constants, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
 import { dropFileHere, enterDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
@@ -116,6 +119,7 @@ function acceptOverlay(request: UpstreamFlowRequest): UpstreamFlowReport {
   if (accepted === null) return refusedReport('overlay_unaccepted');
   const source = singleSkillPath(request.upstreamDir, request.skill);
   if (typeof source !== 'string') return refusedReport(source.code);
+  if (unsafeSkillPath(request.upstreamDir, `${source}/SKILL.md`)) return refusedReport('upstream_refused');
   const preview = previewPayload(request.upstreamDir, source, accepted.bytes);
   if (preview !== null) return refusedReport(preview);
   return publishAccepted(request, source, accepted.bytes);
@@ -133,7 +137,14 @@ function publishAccepted(request: UpstreamFlowRequest, source: string, bytes: st
   const beforeSha = gitSha(request.upstreamDir);
   const before = commitCount(request.upstreamDir);
   const previous = readFileSync(request.lockFile, 'utf8');
-  const published = commitSkill(request.upstreamDir, request.skill, source, bytes);
+  const branch = evolveBranch(request.skill, bytes);
+  let published: { branch: string; code: string | null; files: readonly string[] };
+  try {
+    published = commitSkill(request.upstreamDir, request.skill, source, bytes);
+  } catch {
+    restoreStubBranch(request.upstreamDir, branch);
+    return refusedReport('upstream_refused');
+  }
   if (published.code !== null) return refusedReport(published.code);
   const vendorAside = takeAside(request.vendorDir);
   const payloadAside = takeAside(request.payloadRoot);
@@ -255,14 +266,24 @@ function singleSkillPath(upstreamDir: string, skill: string): string | { code: s
 }
 
 function previewPayload(upstreamDir: string, source: string, bytes: string): string | null {
+  const relative = `${source}/SKILL.md`;
+  // cpSync keeps a symlink as a symlink, and a hard link shares an inode.
+  // Either write would mutate the external target, so refuse before it.
+  if (unsafeSkillPath(upstreamDir, relative)) return 'upstream_refused';
   const temp = realpathSync(mkdtempSync(join(tmpdir(), 'b4-preview-')));
   try {
-    cpSync(upstreamDir, temp, { recursive: true, filter: (path) => !path.split(sep).includes('.git') });
-    mkdirSync(join(temp, source), { recursive: true });
-    writeFileSync(join(temp, source, 'SKILL.md'), bytes);
+    cpSync(upstreamDir, temp, {
+      dereference: false,
+      recursive: true,
+      filter: (path) => !path.split(sep).includes('.git'),
+    });
+    if (unsafeSkillPath(temp, relative)) return 'upstream_refused';
+    mkdirSync(dirname(join(temp, relative)), { recursive: true });
+    writeSkillFile(temp, relative, bytes);
     for (const host of HOSTS) resolveBundledSkills(temp, { host });
     return null;
-  } catch {
+  } catch (error) {
+    if (error instanceof EvolveError && error.kind === 'unsafe-path') return 'upstream_refused';
     return 'payload_unresolved';
   } finally {
     rmSync(temp, { recursive: true, force: true });
@@ -276,23 +297,38 @@ function commitSkill(
   bytes: string,
 ): { branch: string; code: string | null; files: readonly string[] } {
   const relative = `${source}/SKILL.md`;
-  const branch = `evolve/${skill}/${sha256Hex(Buffer.from(bytes, 'utf8')).slice(0, 12)}`;
-  gitOrThrow(upstreamDir, ['checkout', '-q', '-b', branch]);
-  mkdirSync(dirname(join(upstreamDir, relative)), { recursive: true });
-  writeFileSync(join(upstreamDir, relative), bytes);
-  gitOrThrow(upstreamDir, ['add', '--', relative]);
-  const staged = gitText(upstreamDir, ['diff', '--cached', '--name-only']);
-  if (staged !== relative) {
-    abortBranch(upstreamDir, branch);
-    return { branch, code: 'not_single_skill', files: [] };
+  const branch = evolveBranch(skill, bytes);
+  let branched = false;
+  try {
+    gitOrThrow(upstreamDir, ['checkout', '-q', '-b', branch]);
+    branched = true;
+    if (unsafeSkillPath(upstreamDir, relative)) {
+      restoreStubBranch(upstreamDir, branch);
+      return { branch, code: 'upstream_refused', files: [] };
+    }
+    mkdirSync(dirname(join(upstreamDir, relative)), { recursive: true });
+    writeSkillFile(upstreamDir, relative, bytes);
+    gitOrThrow(upstreamDir, ['add', '--', relative]);
+    const staged = gitText(upstreamDir, ['diff', '--cached', '--name-only']);
+    if (staged !== relative) {
+      abortBranch(upstreamDir, branch);
+      return { branch, code: 'not_single_skill', files: [] };
+    }
+    gitOrThrow(upstreamDir, ['commit', '-q', '-m', `evolve: ${skill}`]);
+    const files = gitText(upstreamDir, ['diff', '--name-only', `main...${branch}`]).split('\n').filter(Boolean);
+    if (files.length !== 1 || files[0] !== relative) {
+      abortBranch(upstreamDir, branch);
+      return { branch, code: 'not_single_skill', files: [] };
+    }
+    return { branch, code: null, files };
+  } catch {
+    if (branched) restoreStubBranch(upstreamDir, branch);
+    return { branch, code: 'upstream_refused', files: [] };
   }
-  gitOrThrow(upstreamDir, ['commit', '-q', '-m', `evolve: ${skill}`]);
-  const files = gitText(upstreamDir, ['diff', '--name-only', `main...${branch}`]).split('\n').filter(Boolean);
-  if (files.length !== 1 || files[0] !== relative) {
-    abortBranch(upstreamDir, branch);
-    return { branch, code: 'not_single_skill', files: [] };
-  }
-  return { branch, code: null, files };
+}
+
+function evolveBranch(skill: string, bytes: string): string {
+  return `evolve/${skill}/${sha256Hex(Buffer.from(bytes, 'utf8')).slice(0, 12)}`;
 }
 
 function mergeSkill(upstreamDir: string, branch: string): string {
@@ -302,8 +338,59 @@ function mergeSkill(upstreamDir: string, branch: string): string {
 }
 
 function abortBranch(upstreamDir: string, branch: string): void {
-  gitOrThrow(upstreamDir, ['checkout', '-q', 'main']);
-  gitOrThrow(upstreamDir, ['branch', '-D', branch]);
+  restoreStubBranch(upstreamDir, branch);
+}
+
+function restoreStubBranch(upstreamDir: string, branch: string): void {
+  // A failed commit leaves the overlay staged on the evolve branch. Reset
+  // before switching so checkout does not carry that index back to main.
+  gitOrThrow(upstreamDir, ['reset', '--hard', 'HEAD']);
+  if (gitText(upstreamDir, ['branch', '--show-current']) !== 'main') {
+    gitOrThrow(upstreamDir, ['checkout', '-q', 'main']);
+  }
+  const listed = gitText(upstreamDir, ['branch', '--list', branch]);
+  if (listed !== '') gitOrThrow(upstreamDir, ['branch', '-D', branch]);
+}
+
+function followsSymlink(root: string, relative: string): boolean {
+  let current = root;
+  for (const part of relative.split('/')) {
+    if (part.length === 0 || part === '.' || part === '..') return true;
+    current = join(current, part);
+    if (isSymlink(current)) return true;
+  }
+  return false;
+}
+
+function unsafeSkillPath(root: string, relative: string): boolean {
+  if (followsSymlink(root, relative)) return true;
+  try {
+    const stat = lstatSync(join(root, relative));
+    return !stat.isFile() || stat.isSymbolicLink() || stat.nlink > 1;
+  } catch {
+    return false;
+  }
+}
+
+function writeSkillFile(root: string, relative: string, bytes: string): void {
+  if (unsafeSkillPath(root, relative)) throw new EvolveError('unsafe-path', 'symlink');
+  const path = join(root, relative);
+  const flags = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW;
+  let fd: number;
+  try {
+    fd = openSync(path, flags);
+  } catch (error) {
+    const code = error instanceof Error && 'code' in error ? String(error.code) : '';
+    if (code === 'ELOOP' || code === 'ENOTDIR') throw new EvolveError('unsafe-path', 'symlink');
+    throw error;
+  }
+  try {
+    const data = Buffer.from(bytes, 'utf8');
+    let offset = 0;
+    while (offset < data.length) offset += writeSync(fd, data, offset);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 function resetUpstream(upstreamDir: string, sha: string, branch: string): void {

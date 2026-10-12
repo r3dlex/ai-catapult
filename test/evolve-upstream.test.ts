@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -455,6 +455,36 @@ void test('assume-unchanged hides an edited vendored SKILL.md from status but no
   }
 });
 
+void test('skip-worktree hides an edited vendored SKILL.md from status but not from handoff', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const injected = 'skip-worktree-injected\n';
+  const relative = `skills/${SKILL}/SKILL.md`;
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'accept');
+    git(box.vendor, ['update-index', '--skip-worktree', '--', relative]);
+    writeFileSync(join(box.vendor, relative), injected);
+    const hidden = git(box.vendor, ['status', '--porcelain', '--untracked-files=all']);
+    assert.equal(hidden.includes(relative), false);
+    const codexSkill = join(box.payload, 'codex-plugin', 'skills', SKILL, 'SKILL.md');
+    assert.equal(readFileSync(codexSkill, 'utf8'), OVERLAY);
+    writeFileSync(join(box.payload, 'MARKER'), 'before\n');
+    assert.throws(() => verifyHandoff(box.lockFile, box.vendor), /handoff_sha_mismatch/);
+    assert.throws(() => rebuildPayloads({
+      lockFile: box.lockFile,
+      payloadRoot: box.payload,
+      repoRoot: REPO,
+      vendorDir: box.vendor,
+    }), /handoff_sha_mismatch/);
+    assert.equal(readFileSync(join(box.payload, 'MARKER'), 'utf8'), 'before\n');
+    assert.equal(readFileSync(codexSkill, 'utf8'), OVERLAY);
+    assert.equal(readFileSync(codexSkill, 'utf8').includes(injected.trim()), false);
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
 void test('vendored bytes that differ from the locked commit are refused before payload rewrite', () => {
   const box = fixture();
   const evolve = acceptWorkspace();
@@ -473,6 +503,124 @@ void test('vendored bytes that differ from the locked commit are refused before 
     assert.equal(readFileSync(join(box.payload, 'MARKER'), 'utf8'), 'before\n');
   } finally {
     finish([box.root, box.stub, evolve]);
+  }
+});
+
+void test('a failing pre-commit hook restores the stub branch and unstages the overlay', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  const skillFile = join(box.stub, 'skills', SKILL, 'SKILL.md');
+  const baseline = readFileSync(skillFile, 'utf8');
+  const hooks = join(box.stub, '.git', 'hooks');
+  mkdirSync(hooks, { recursive: true });
+  const hook = join(hooks, 'pre-commit');
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n');
+  chmodSync(hook, 0o755);
+  git(box.stub, ['config', 'core.hooksPath', hooks]);
+  let report: UpstreamFlowReport | null;
+  try {
+    try {
+      report = flow(box, evolve);
+    } catch {
+      report = null;
+    }
+    assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
+    assert.equal(git(box.stub, ['status', '--porcelain']), '');
+    assert.equal(git(box.stub, ['diff', '--cached', '--name-only']), '');
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(readFileSync(skillFile, 'utf8'), baseline);
+    assert.equal(git(box.stub, ['branch', '--list', 'evolve/*']), '');
+    assert.equal(report?.decision, 'refused');
+    assert.equal(report?.code, 'upstream_refused');
+    assert.equal(report?.upstreamWrites, 0);
+    rmSync(hook);
+    const again = flow(box, evolve);
+    assert.equal(again.decision, 'accept');
+    assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
+    assert.equal(git(box.stub, ['status', '--porcelain']), '');
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
+void test('a symlinked SKILL.md is refused before any write through the link', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const external = realpathSync(mkdtempSync(join(tmpdir(), 'b4-external-')));
+  const externalFile = join(external, 'SKILL.md');
+  const original = 'external-baseline\n';
+  writeFileSync(externalFile, original);
+  const skillFile = join(box.stub, 'skills', SKILL, 'SKILL.md');
+  rmSync(skillFile);
+  symlinkSync(externalFile, skillFile);
+  git(box.stub, ['add', '--', `skills/${SKILL}/SKILL.md`]);
+  git(box.stub, ['commit', '-q', '-m', 'symlink skill']);
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  writeLock(box.lockFile, box.stub, head);
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'refused');
+    assert.equal(report.upstreamWrites, 0);
+    assert.equal(readFileSync(externalFile, 'utf8'), original);
+    assert.equal(readFileSync(externalFile, 'utf8').includes('evolved rollout'), false);
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(git(box.stub, ['status', '--porcelain']), '');
+    assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
+    assert.equal(git(box.stub, ['diff', '--cached', '--name-only']), '');
+  } finally {
+    finish([box.root, box.stub, evolve, external]);
+  }
+});
+
+void test('a hardlinked SKILL.md is refused before any write through the link', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const external = realpathSync(mkdtempSync(join(tmpdir(), 'b4-hardlink-')));
+  const skillFile = join(box.stub, 'skills', SKILL, 'SKILL.md');
+  const baseline = readFileSync(skillFile, 'utf8');
+  const externalFile = join(external, 'SKILL.md');
+  writeFileSync(externalFile, baseline);
+  rmSync(skillFile);
+  linkSync(externalFile, skillFile);
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'refused');
+    assert.equal(report.upstreamWrites, 0);
+    assert.equal(readFileSync(externalFile, 'utf8'), baseline);
+    assert.equal(readFileSync(externalFile, 'utf8').includes('evolved rollout'), false);
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(git(box.stub, ['status', '--porcelain']), '');
+    assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
+  } finally {
+    finish([box.root, box.stub, evolve, external]);
+  }
+});
+
+void test('a symlinked skill directory is refused before any write through the link', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const external = realpathSync(mkdtempSync(join(tmpdir(), 'b4-external-dir-')));
+  const original = 'external-dir-baseline\n';
+  writeFileSync(join(external, 'SKILL.md'), original);
+  const skillDir = join(box.stub, 'skills', SKILL);
+  rmSync(skillDir, { recursive: true, force: true });
+  symlinkSync(external, skillDir);
+  git(box.stub, ['add', '--', `skills/${SKILL}`]);
+  git(box.stub, ['commit', '-q', '-m', 'symlink skill dir']);
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  writeLock(box.lockFile, box.stub, head);
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'refused');
+    assert.equal(report.upstreamWrites, 0);
+    assert.equal(readFileSync(join(external, 'SKILL.md'), 'utf8'), original);
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(git(box.stub, ['status', '--porcelain']), '');
+    assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
+  } finally {
+    finish([box.root, box.stub, evolve, external]);
   }
 });
 
