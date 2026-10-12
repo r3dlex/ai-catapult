@@ -16,7 +16,7 @@ import { dropFileHere, enterDirectory, entryKind, readFileHere, withBoundRoot } 
 import { sha256Hex } from './digest.ts';
 import { EvolveError } from './errors.ts';
 import { EVOLVE_DIR, evolvePaths, RUN_ID_PATTERN } from './layout.ts';
-import { SKILL_NAME_PATTERN } from './proposals.ts';
+import { SKILL_NAME_PATTERN, stageOverlay } from './proposals.ts';
 import { recordTrace } from './write-once.ts';
 
 export const CYCLE_BUDGET_USD = 100;
@@ -71,6 +71,7 @@ interface Sample {
 
 interface ReadyCycle {
   readonly costUsd: number;
+  readonly overlayBytes: string;
   readonly overlaySha: string;
   readonly samples: readonly Sample[];
 }
@@ -125,18 +126,17 @@ function loadCycle(root: string, request: ValidateRequest): Loaded {
 }
 
 function judgeSamples(root: string, request: ValidateRequest, baseline: Baseline): { kind: 'cycle'; cycle: ReadyCycle } | { kind: 'report'; report: ValidateReport } {
-  const overlaySha = readOverlaySha(root, request.skill);
-  const samples = overlaySha === null ? [] : readSamples(root, request);
+  const overlay = readOverlay(root, request.skill);
+  const loaded = overlay === null ? emptySamples() : readSamples(root, request);
   const gaps = missingInvocations(root, request);
-  const binding = overlaySha === null ? 'candidate overlay missing' : unboundSample(samples, request, overlaySha);
+  const binding = bindingFailure(loaded, request, overlay);
   if (gaps.length > 0 || binding !== null) {
-    return { kind: 'report', report: refuseBound(root, request, baseline, gaps, binding ?? 'unrecorded invocation') };
+    return { kind: 'report', report: refuseBound(root, request, baseline, gaps, binding ?? 'unrecorded invocation', loaded.costUsd) };
   }
-  const costUsd = sumUsd(samples.map((sample) => sample.costUsd));
-  if (costUsd > CYCLE_BUDGET_USD) {
-    return { kind: 'report', report: refuseBudget(root, request, baseline, costUsd) };
+  if (loaded.costUsd > CYCLE_BUDGET_USD) {
+    return { kind: 'report', report: refuseBudget(root, request, baseline, loaded.costUsd) };
   }
-  return { kind: 'cycle', cycle: { costUsd, overlaySha: overlaySha ?? '', samples } };
+  return { kind: 'cycle', cycle: readyCycle(loaded, overlay) };
 }
 
 function applyEquation(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle): ValidateReport {
@@ -152,36 +152,43 @@ function finishScore(root: string, request: ValidateRequest, baseline: Baseline,
 }
 
 function finishAccept(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle, rVal: number): ValidateReport {
-  writeAccepted(root, request, baseline.nextK, cycle.overlaySha, rVal);
+  writeAccepted(root, request, baseline.nextK, cycle.overlaySha, cycle.overlayBytes, rVal);
   writeAudit(root, request, baseline, 'Accepted', rVal, `accept: R=${String(rVal)} > R_best=${String(baseline.rBest)}`);
   return decided(request, 'accept', baseline, cycle.costUsd, rVal, false);
 }
 
 function finishReject(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle, rVal: number): ValidateReport {
   writeAudit(root, request, baseline, 'Rejected', rVal, `revert: drop overlay; R=${String(rVal)} <= R_best=${String(baseline.rBest)}`);
-  dropOverlay(root, request.skill);
-  return decided(request, 'reject', baseline, cycle.costUsd, rVal, true);
+  const dropped = revertOverlay(root, request, baseline);
+  return decided(request, 'reject', baseline, cycle.costUsd, rVal, dropped);
 }
 
 function finishEarlyStop(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle): ValidateReport {
   writeAudit(root, request, baseline, 'Rejected', baseline.rBest, 'early-stop: R_best at rubric maximum');
-  dropOverlay(root, request.skill);
-  return decided(request, 'early-stop', baseline, cycle.costUsd, null, true);
+  const dropped = revertOverlay(root, request, baseline);
+  return decided(request, 'early-stop', baseline, cycle.costUsd, null, dropped);
 }
 
 function finishDispatch(request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle): ValidateReport {
   return decided(request, 'dispatch-allowed', baseline, cycle.costUsd, null, false);
 }
 
-function refuseBound(root: string, request: ValidateRequest, baseline: Baseline, gaps: readonly string[], reason: string): ValidateReport {
+function refuseBound(
+  root: string,
+  request: ValidateRequest,
+  baseline: Baseline,
+  gaps: readonly string[],
+  reason: string,
+  costUsd: number,
+): ValidateReport {
   writeAudit(root, request, baseline, 'Rejected', 0, unboundDiff(reason, gaps));
-  const dropped = request.action === 'accept' && dropOverlay(root, request.skill);
-  return refuse(request, 'judgment_unbound', dropped, 0, gaps, baseline);
+  const dropped = request.action === 'accept' && revertOverlay(root, request, baseline);
+  return refuse(request, 'judgment_unbound', dropped, costUsd, gaps, baseline);
 }
 
 function refuseBudget(root: string, request: ValidateRequest, baseline: Baseline, costUsd: number): ValidateReport {
   writeAudit(root, request, baseline, 'Rejected', 0, `cycle_budget_exhausted: recorded cost_usd ${String(costUsd)}`);
-  const dropped = request.action === 'accept' && dropOverlay(root, request.skill);
+  const dropped = request.action === 'accept' && revertOverlay(root, request, baseline);
   return refuse(request, 'cycle_budget_exhausted', dropped, costUsd, [], baseline);
 }
 
@@ -234,11 +241,22 @@ function unboundDiff(reason: string, gaps: readonly string[]): string {
 }
 
 function readSeed(root: string, request: ValidateRequest): SeedView | null {
+  if (!catalogStateMatches(root, request)) return null;
   const record = readJudgment(root, request.seedRunId, request.seedJudgmentId);
   if (record === null) return null;
   if (record.overlaySha !== request.catalogSha256) return null;
   if (!inUnitInterval(record.weightedAggregate)) return null;
   return { rubricSha256: record.rubricSha256, weightedAggregate: record.weightedAggregate };
+}
+
+function catalogStateMatches(root: string, request: ValidateRequest): boolean {
+  const text = readRegular(join(root, EVOLVE_DIR, 'raw', request.seedRunId, 'catalog-state.json'));
+  if (text === null) return false;
+  const fields = parseObject(text);
+  if (fields === null) return false;
+  return fields['baseline'] === 'current-catalog'
+    && fields['catalog_sha256'] === request.catalogSha256
+    && fields['judgment_id'] === request.seedJudgmentId;
 }
 
 function baselineOf(seed: SeedView, prior: PriorState | null): Baseline {
@@ -297,23 +315,66 @@ interface RawSample extends Sample {
   readonly taskSetVersion: number;
 }
 
-function readSamples(root: string, request: ValidateRequest): RawSample[] {
-  const dir = join(root, EVOLVE_DIR, 'raw', request.cycleRunId);
-  if (!isRealDirectory(dir)) return [];
-  const samples: RawSample[] = [];
-  for (const name of readdirSync(dir).sort((left, right) => left.localeCompare(right))) {
-    const sample = sampleFromFile(dir, name, request.seedJudgmentId);
-    if (sample !== null) samples.push(sample);
-  }
-  return samples;
+interface SampleLoad {
+  readonly costUsd: number;
+  readonly failures: readonly string[];
+  readonly samples: readonly RawSample[];
 }
 
-function sampleFromFile(dir: string, name: string, seedId: string): RawSample | null {
+function emptySamples(): SampleLoad {
+  return { costUsd: 0, failures: [], samples: [] };
+}
+
+function readSamples(root: string, request: ValidateRequest): SampleLoad {
+  const dir = join(root, EVOLVE_DIR, 'raw', request.cycleRunId);
+  if (!isRealDirectory(dir)) return emptySamples();
+  const samples: RawSample[] = [];
+  const failures: string[] = [];
+  let costUsd = 0;
+  for (const name of readdirSync(dir).sort((left, right) => left.localeCompare(right))) {
+    const classified = classifyJudgment(dir, name, request);
+    if (classified.kind === 'skip') continue;
+    if (classified.kind === 'failure') {
+      failures.push(classified.id);
+      costUsd += classified.costUsd;
+      continue;
+    }
+    samples.push(classified.sample);
+    costUsd += classified.sample.costUsd;
+  }
+  return { costUsd, failures, samples };
+}
+
+function classifyJudgment(
+  dir: string,
+  name: string,
+  request: ValidateRequest,
+): { kind: 'skip' } | { kind: 'failure'; id: string; costUsd: number } | { kind: 'sample'; sample: RawSample } {
   const id = judgmentIdFromName(name);
-  if (id === null || id === seedId) return null;
+  if (id === null) return { kind: 'skip' };
+  if (request.cycleRunId === request.seedRunId && id === request.seedJudgmentId) return { kind: 'skip' };
   const text = readRegular(join(dir, name));
-  if (text === null) return null;
-  return asSample(parseObject(text));
+  if (text === null) return { kind: 'failure', id, costUsd: 0 };
+  const fields = parseObject(text);
+  const costUsd = nonNegativeCost(fields);
+  const sample = asSample(fields);
+  if (sample === null || costUsd === null) return { kind: 'failure', id, costUsd: costUsd ?? 0 };
+  return { kind: 'sample', sample };
+}
+
+function bindingFailure(loaded: SampleLoad, request: ValidateRequest, overlay: OverlayBytes | null): string | null {
+  if (overlay === null) return 'candidate overlay missing';
+  if (loaded.failures.length > 0) return 'malformed judgment record';
+  return unboundSample(loaded.samples, request, overlay.sha);
+}
+
+function readyCycle(loaded: SampleLoad, overlay: OverlayBytes | null): ReadyCycle {
+  return {
+    costUsd: loaded.costUsd,
+    overlayBytes: overlay?.bytes ?? '',
+    overlaySha: overlay?.sha ?? '',
+    samples: loaded.samples,
+  };
 }
 
 function unboundSample(samples: readonly RawSample[], request: ValidateRequest, overlaySha: string): string | null {
@@ -354,14 +415,34 @@ function asSample(fields: Record<string, unknown> | null): RawSample | null {
   return { costUsd, judgeModel, overlaySha, rubricSha256, taskSetVersion, weightedAggregate };
 }
 
-function readOverlaySha(root: string, skill: string): string | null {
+interface OverlayBytes {
+  readonly bytes: string;
+  readonly sha: string;
+}
+
+function readOverlay(root: string, skill: string): OverlayBytes | null {
   return withBoundRoot(root, (anchor) => {
     const evolve = enterDirectory(EVOLVE_DIR, anchor);
     enterDirectory('proposals', evolve);
     const name = `${skill}.overlay`;
     if (entryKind(name) !== 'file') return null;
-    return sha256Hex(readFileHere(name));
+    const bytes = readFileHere(name).toString('utf8');
+    return { bytes, sha: sha256Hex(Buffer.from(bytes, 'utf8')) };
   });
+}
+
+function revertOverlay(root: string, request: ValidateRequest, baseline: Baseline): boolean {
+  if (baseline.state === 'S_0') return dropOverlay(root, request.skill);
+  const bytes = readAcceptedOverlay(root, request.skill, baseline.nextK - 1);
+  if (bytes === null) {
+    throw new EvolveError('layout-violation', 'accepted overlay bytes are missing; refusing to drop S_k-1');
+  }
+  stageOverlay(evolvePaths(root), request.skill, bytes);
+  return false;
+}
+
+function readAcceptedOverlay(root: string, skill: string, k: number): string | null {
+  return readRegular(join(root, EVOLVE_DIR, 'raw', 'state', `accepted-${skill}-${String(k)}.overlay`));
 }
 
 function dropOverlay(root: string, skill: string): boolean {
@@ -375,7 +456,14 @@ function dropOverlay(root: string, skill: string): boolean {
   });
 }
 
-function writeAccepted(root: string, request: ValidateRequest, k: number, overlaySha: string, rBest: number): void {
+function writeAccepted(
+  root: string,
+  request: ValidateRequest,
+  k: number,
+  overlaySha: string,
+  overlayBytes: string,
+  rBest: number,
+): void {
   const body = `${JSON.stringify({
     catalog_sha256: request.catalogSha256,
     k,
@@ -383,7 +471,9 @@ function writeAccepted(root: string, request: ValidateRequest, k: number, overla
     r_best: rBest,
     skill: request.skill,
   })}\n`;
-  recordTrace(evolvePaths(root), 'state', `accepted-${request.skill}-${String(k)}.json`, body);
+  const paths = evolvePaths(root);
+  recordTrace(paths, 'state', `accepted-${request.skill}-${String(k)}.json`, body);
+  recordTrace(paths, 'state', `accepted-${request.skill}-${String(k)}.overlay`, overlayBytes);
 }
 
 function writeAudit(
@@ -408,15 +498,16 @@ function writeAudit(
   });
 }
 
-function sumUsd(values: readonly number[]): number {
-  const cents = values.reduce((total, value) => total + Math.round(value * 100), 0);
-  return cents / 100;
-}
-
 function meanScore(values: readonly number[]): number {
   if (values.length === 0) return 0;
-  const scaled = values.reduce((total, value) => total + Math.round(value * 1_000_000), 0);
-  return Math.round(scaled / values.length) / 1_000_000;
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function nonNegativeCost(fields: Record<string, unknown> | null): number | null {
+  if (fields === null) return null;
+  const cost = fields['cost_usd'];
+  if (typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0) return null;
+  return cost;
 }
 
 function inUnitInterval(value: unknown): value is number {

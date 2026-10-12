@@ -25,6 +25,7 @@ import { appendWikiFile } from '../src/evolve/append-only.ts';
 import { evolvePaths, initEvolveLayout } from '../src/evolve/layout.ts';
 import { recordJudgment } from '../src/evolve/judgment.ts';
 import { stageOverlay } from '../src/evolve/proposals.ts';
+import { recordTrace } from '../src/evolve/write-once.ts';
 import { validateCycle, type ValidateReport, type ValidateRequest } from '../src/evolve/validate.ts';
 
 const REPO = join(fileURLToPath(new URL('.', import.meta.url)), '..');
@@ -71,6 +72,19 @@ function judgment(fields: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
+function recordCatalog(
+  root: string,
+  sha: string,
+  judgmentId = SEED_ID,
+  baseline = 'current-catalog',
+): void {
+  recordTrace(evolvePaths(root), SEED_RUN, 'catalog-state.json', `${JSON.stringify({
+    baseline,
+    catalog_sha256: sha,
+    judgment_id: judgmentId,
+  })}\n`);
+}
+
 function recordSeed(root: string, score: number, overlaySha: string, cost = 1): void {
   recordJudgment(evolvePaths(root), judgment({
     candidate_overlay_sha256: overlaySha,
@@ -113,6 +127,7 @@ function built(seedScore: number, samples: readonly number[], costs: readonly nu
   const root = makeRoot();
   const overlaySha = stage(root, 'candidate');
   recordSeed(root, seedScore, CATALOG);
+  recordCatalog(root, CATALOG);
   samples.forEach((score, index) => {
     recordSample(root, `sample-${index + 1}`, score, overlaySha, costs[index] ?? 1);
   });
@@ -220,6 +235,7 @@ void test('S_k-1 is the last accepted score and a worse overlay is dropped', () 
   try {
     const firstSha = stage(root, 'first');
     recordSeed(root, 0.5, CATALOG);
+    recordCatalog(root, CATALOG);
     recordSample(root, 'sample-1', 0.75, firstSha, 1);
     recordSample(root, 'sample-2', 0.75, firstSha, 1);
     recordSample(root, 'sample-3', 0.75, firstSha, 1);
@@ -232,8 +248,8 @@ void test('S_k-1 is the last accepted score and a worse overlay is dropped', () 
     assert.equal(report.decision, 'reject');
     assert.equal(report.state, 'S_k-1');
     assert.equal(report.rBest, 0.75);
-    assert.equal(report.overlayDropped, true);
-    assert.equal(overlayPresent(root), false);
+    assert.equal(report.overlayDropped, false);
+    assert.equal(readFileSync(join(root, 'evolve/proposals', `${SKILL}.overlay`), 'utf8'), 'overlay:first\n');
   } finally {
     finish(root);
   }
@@ -260,6 +276,7 @@ void test('a skill-disabled seed is refused and is not used as R_best', () => {
       judgment_id: 'catalog-seed',
       weighted_aggregate: 0.8,
     }));
+    recordCatalog(root, CATALOG, 'catalog-seed');
     recordSample(root, 'sample-1', 0.5, overlaySha, 1);
     const refused = validateCycle(root, request());
     assert.equal(refused.code, 'seed_not_catalog');
@@ -363,6 +380,109 @@ void test('seed cost is not counted toward the cycle ceiling', () => {
     const report = validateCycle(root, request());
     assert.equal(report.code, null);
     assert.equal(report.costUsd, 10);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('reject restores the last accepted overlay bytes', () => {
+  const root = makeRoot();
+  try {
+    const firstSha = stage(root, 'kept');
+    recordSeed(root, 0.5, CATALOG);
+    recordCatalog(root, CATALOG);
+    recordSample(root, 'sample-1', 0.75, firstSha, 1);
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+    const secondSha = stage(root, 'dropped');
+    recordSample(root, 'later-1', 0.25, secondSha, 1, 'later-run');
+    const report = validateCycle(root, request({ cycleRunId: 'later-run' }));
+    assert.equal(report.decision, 'reject');
+    assert.equal(readFileSync(join(root, 'evolve/proposals', `${SKILL}.overlay`), 'utf8'), 'overlay:kept\n');
+  } finally {
+    finish(root);
+  }
+});
+
+void test('mutation: a missing judge_model is judgment_unbound and its cost is not omitted', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    recordSample(root, 'hidden-spend', 0.75, sha256('overlay:candidate\n'), 200);
+    mutateJudgment(root, CYCLE_RUN, 'hidden-spend', { judge_model: undefined });
+    const report = validateCycle(root, request());
+    assert.equal(report.code, 'judgment_unbound');
+    assert.notEqual(report.decision, 'accept');
+    assert.ok(report.costUsd >= 200);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('mutation: fractional cents past $100 refuse accept and dispatch', () => {
+  const accepted = built(0.5, [0.75], [100.004]);
+  const dispatched = built(0.5, [0.75], [100.004]);
+  try {
+    assert.equal(validateCycle(accepted.root, request()).code, 'cycle_budget_exhausted');
+    const dispatch = validateCycle(dispatched.root, request({ action: 'dispatch' }));
+    assert.equal(dispatch.code, 'cycle_budget_exhausted');
+    assert.ok(dispatch.costUsd > 100);
+  } finally {
+    finish(accepted.root);
+    finish(dispatched.root);
+  }
+});
+
+void test('strict improvement is not rounded away, and a worse score is not rounded into a win', () => {
+  const better = built(0.5, [0.5000001], [1]);
+  const worse = makeRoot();
+  try {
+    assert.equal(validateCycle(better.root, request()).decision, 'accept');
+    const overlaySha = stage(worse, 'candidate');
+    recordSeed(worse, 0.5000006, CATALOG);
+    recordCatalog(worse, CATALOG);
+    recordSample(worse, 'sample-1', 0.50000059, overlaySha, 1);
+    assert.equal(validateCycle(worse, request()).decision, 'reject');
+  } finally {
+    finish(better.root);
+    finish(worse);
+  }
+});
+
+void test('a cycle judgment that reuses the seed id in another run still counts toward spend', () => {
+  const { root, overlaySha } = built(0.5, [0.75], [1]);
+  try {
+    recordSample(root, SEED_ID, 0.75, overlaySha, 200);
+    const report = validateCycle(root, request());
+    assert.equal(report.code, 'cycle_budget_exhausted');
+    assert.notEqual(report.decision, 'accept');
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a negative cost cannot offset recorded spend', () => {
+  const { root, overlaySha } = built(0.5, [0.75], [200]);
+  try {
+    recordSample(root, 'credit', 0.75, overlaySha, 1);
+    mutateJudgment(root, CYCLE_RUN, 'credit', { cost_usd: -200 });
+    const report = validateCycle(root, request());
+    assert.equal(report.code, 'judgment_unbound');
+    assert.notEqual(report.decision, 'accept');
+    assert.ok(report.costUsd >= 200);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a skill-disabled catalog-state is refused even when the caller passes its hash', () => {
+  const root = makeRoot();
+  try {
+    const overlaySha = stage(root, 'candidate');
+    recordSeed(root, 0.1, DISABLED);
+    recordCatalog(root, DISABLED, SEED_ID, 'skill-disabled');
+    recordSample(root, 'sample-1', 0.5, overlaySha, 1);
+    const report = validateCycle(root, request({ catalogSha256: DISABLED }));
+    assert.equal(report.code, 'seed_not_catalog');
+    assert.notEqual(report.decision, 'accept');
   } finally {
     finish(root);
   }
