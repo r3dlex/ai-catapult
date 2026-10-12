@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -211,6 +211,25 @@ void test('a path escape is refused before the judge and before any write', () =
   assert.equal(report.gates.some((item) => item.gate === 'unsafe-path'), true);
 });
 
+void test('a script name containing dotdot is refused before the judge', () => {
+  for (const name of ['foo..ts', 'a..b.ts']) {
+    const judge = countingJudge();
+    const report = reviewProposal(proposal([{ name, bytes: 'export const n = 1;\n' }]), judge.harness);
+    assertZeroDollars(report, judge.calls);
+    assert.equal(report.gates.some((item) => item.gate === 'unsafe-path'), true);
+  }
+});
+
+void test('a report does not emit okf_version even when the script name contains it', () => {
+  const judge = countingJudge();
+  const report = reviewProposal(
+    proposal([{ name: 'okf_version.ts', bytes: 'export const n: number = "no";\n' }]),
+    judge.harness,
+  );
+  assertZeroDollars(report, judge.calls);
+  assert.equal(JSON.stringify(report).includes('okf_version'), false);
+});
+
 void test('CLI pre-reject prints zero invocations and no okf_version', () => {
   const dir = mkdtempSync(join(tmpdir(), 'b5-proposal-'));
   try {
@@ -228,6 +247,29 @@ void test('CLI pre-reject prints zero invocations and no okf_version', () => {
     assert.equal(report.decision, 'pre-reject');
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+void test('a hard-linked proposal script is refused before the judge reads it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'b5-hard-'));
+  const outside = mkdtempSync(join(tmpdir(), 'b5-hard-out-'));
+  try {
+    const external = join(outside, 'secret.ts');
+    writeFileSync(external, 'export const secret = 1;\n');
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: rollout\ndescription: a skill\n---\n');
+    linkSync(external, join(dir, 'secret.ts'));
+    const result = spawnSync(process.execPath, [BIN, 'evolve', '--pre-reject', '--skill', 'rollout', '--proposal', dir], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 1);
+    const report = JSON.parse(result.stdout ?? '') as HygieneReport;
+    assert.equal(report.judgeInvocations, 0);
+    assert.equal(report.decision, 'pre-reject');
+    assert.equal(readFileSync(external, 'utf8'), 'export const secret = 1;\n');
+    assert.equal((result.stdout ?? '').includes('okf_version'), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 

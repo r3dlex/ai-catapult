@@ -102,11 +102,11 @@ let cachedRules: { readonly root: string; readonly rules: LoadedRules } | null =
 export function reviewProposal(proposal: SkillProposal, judge: JudgeHarness, options?: ReviewOptions): HygieneReport {
   const findings = okfFindings(proposal.skillMd);
   const blocked = blockBeforeGates(proposal);
-  if (blocked.length > 0) return reject(findings, blocked);
+  if (blocked.length > 0) return scrubReport(reject(findings, blocked));
   const gates = runGates(proposal, options);
-  if (gates.length > 0) return reject(findings, gates);
+  if (gates.length > 0) return scrubReport(reject(findings, gates));
   const judged = judge.invoke({ skill: proposal.skill });
-  return { costUsd: judged.costUsd, decision: 'proceed', findings, gates: [], judgeInvocations: 1 };
+  return scrubReport({ costUsd: judged.costUsd, decision: 'proceed', findings, gates: [], judgeInvocations: 1 });
 }
 
 export function runPreRejectCli(argv: readonly string[]): number {
@@ -132,6 +132,26 @@ const cliJudge: JudgeHarness = {
 
 function reject(findings: readonly AdvisoryFinding[], gates: readonly GateResult[]): HygieneReport {
   return { costUsd: 0, decision: 'pre-reject', findings, gates, judgeInvocations: 0 };
+}
+
+function scrubReport(report: HygieneReport): HygieneReport {
+  return {
+    costUsd: report.costUsd,
+    decision: report.decision,
+    findings: report.findings.map((item) => ({ ...item, detail: scrub(item.detail) })),
+    gates: report.gates.map((item) => ({
+      command: item.command.map(scrub),
+      detail: scrub(item.detail),
+      gate: item.gate,
+      script: scrub(item.script),
+      status: item.status,
+    })),
+    judgeInvocations: report.judgeInvocations,
+  };
+}
+
+function scrub(text: string): string {
+  return text.replaceAll('okf_version', 'omitted');
 }
 
 function okfFindings(skillMd: string): AdvisoryFinding[] {
@@ -187,8 +207,8 @@ function blockBeforeGates(proposal: SkillProposal): GateResult[] {
 }
 
 function safeName(name: string): boolean {
-  if (name === '' || name.startsWith('/') || name.includes('\\') || name.includes('\0')) return false;
-  return name.split('/').every((part) => part !== '' && part !== '.' && part !== '..');
+  if (name === '' || name.startsWith('/') || name.includes('\\') || name.includes('\0') || name.includes('..')) return false;
+  return name.split('/').every((part) => part !== '' && part !== '.');
 }
 
 function runGates(proposal: SkillProposal, options: ReviewOptions | undefined): GateResult[] {
@@ -427,18 +447,18 @@ function loadProposal(dir: string, skill: string): { kind: 'proposal'; proposal:
     return { kind: 'report', report: reject([], [gate('unsafe-path', dir, 'fail', 'proposal path refused', [])]) };
   }
   const walked = walkProposal(dir);
-  if (typeof walked === 'string') {
-    return { kind: 'report', report: reject(okfFindings(''), [gate('unsafe-path', walked, 'fail', 'symlink refused before read', [])]) };
+  if ('refused' in walked) {
+    return { kind: 'report', report: scrubReport(reject(okfFindings(walked.skillMd), [gate('unsafe-path', walked.refused, 'fail', 'link refused before read', [])])) };
   }
   return { kind: 'proposal', proposal: { skill, skillMd: walked.skillMd, scripts: walked.scripts } };
 }
 
-function walkProposal(dir: string): { skillMd: string; scripts: ProposedScript[] } | string {
+function walkProposal(dir: string): { skillMd: string; scripts: ProposedScript[] } | { refused: string; skillMd: string } {
   const skillMd = readRegular(dir, 'SKILL.md');
-  if (!skillMd.ok) return skillMd.path;
+  if (!skillMd.ok) return { refused: skillMd.path, skillMd: '' };
   const scripts: ProposedScript[] = [];
   const nested = walkDir(dir, '', scripts);
-  if (nested !== null) return nested;
+  if (nested !== null) return { refused: nested, skillMd: skillMd.text };
   return { skillMd: skillMd.text, scripts };
 }
 
@@ -446,7 +466,7 @@ function readRegular(dir: string, name: string): { ok: true; text: string } | { 
   const target = join(dir, name);
   if (!existsSync(target)) return { ok: true, text: '' };
   const stat = lstatSync(target);
-  if (stat.isSymbolicLink() || !stat.isFile()) return { ok: false, path: name };
+  if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink > 1) return { ok: false, path: name };
   return { ok: true, text: readFileSync(target, 'utf8') };
 }
 
@@ -462,7 +482,9 @@ function walkEntry(dir: string, prefix: string, entry: Dirent, scripts: Proposed
   const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
   if (entry.isSymbolicLink()) return rel;
   if (entry.isDirectory()) return walkDir(join(dir, entry.name), rel, scripts);
-  if (!entry.isFile() || rel === 'SKILL.md') return rel === 'SKILL.md' ? null : rel;
+  if (!entry.isFile()) return rel;
+  if (rel === 'SKILL.md') return null;
+  if (lstatSync(join(dir, entry.name)).nlink > 1) return rel;
   scripts.push({ name: rel, bytes: readFileSync(join(dir, entry.name), 'utf8') });
   return null;
 }
