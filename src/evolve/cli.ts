@@ -3,9 +3,12 @@
  * Judge calls stay out of band. The clock is not consulted.
  */
 import { realpathSync } from 'node:fs';
+import { runUpstreamCli } from './upstream.ts';
 import { validateCycle, renderReport, type ValidateRequest } from './validate.ts';
 
 const EVOLVE_HELP = `Usage: ai-catapult evolve --validate [options]
+       ai-catapult evolve --upstream --decision accept|reject --root <dir> --skill <name> --upstream <dir> --lock <file> --vendor <dir> --payload <dir>
+       ai-catapult evolve --upstream --verify-handoff --lock <file> --vendor <dir>
 
 Apply the recorded-judgment gate to one candidate overlay. Judge calls stay
 out of band; this command only reads records already on disk.
@@ -43,6 +46,7 @@ export function runEvolve(argv: string[]): number {
     process.stdout.write(`${EVOLVE_HELP}\n`);
     return 0;
   }
+  if (argv[0] === '--upstream') return runUpstreamCli(argv.slice(1));
   if (argv[0] !== '--validate') {
     process.stderr.write('Unknown argument: evolve. Run ai-catapult evolve --help for usage.\n');
     return 1;

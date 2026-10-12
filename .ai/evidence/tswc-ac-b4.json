@@ -1,0 +1,18 @@
+{
+  "disclosure": {
+    "agent_self": "no human approved this work",
+    "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
+    "base": "a29d9e3ab12ae3878392a189793e1b25746c640e",
+    "scope_note": ".ai/evidence/tswc-ac-b4.json is outside the goal scope array [src, scripts, test] and is included because AC-4 and the tdd-evidence gate require it. skills.lock.json and vendor/ are not edited. The lock bump is a runtime action against a caller-supplied fixture lock and a local stub upstream. No skills PR was opened.",
+    "tdd": "legacy-safe: coverage unknown; the flow is sprouted into src/evolve/upstream.ts and the legacy call site is one dispatch in src/evolve/cli.ts. The red leg is the missing module. The red-leg fixture inside the suite mutates the lock SHA and proves handoff_sha_mismatch before any payload rewrite."
+  },
+  "goal_id": "tswc-ac-b4",
+  "green": {
+    "command": "node --test test/evolve-upstream.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "node --test test/evolve-upstream.test.ts",
+    "exit_code": 1
+  }
+}
