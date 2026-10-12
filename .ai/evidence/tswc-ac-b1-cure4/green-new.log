@@ -1,0 +1,15 @@
+✔ append rollback does not truncate a competing suffix that merely matches ours (4.232875ms)
+✔ created-file refusal cleanup leaves a competitor append on the created inode (3.2485ms)
+✔ new-overlay refusal cleanup leaves a competitor append on the created inode (2.784167ms)
+✔ missing directory create verifies recorded ancestors before mkdir (1.32725ms)
+✔ missing-root create compares recorded ancestor identities before mkdir (1.300042ms)
+✔ missing-root refusal cleanup leaves a non-empty created directory (1.237375ms)
+✔ descended-directory refusal cleanup leaves a non-empty directory this call created (2.807209ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 150.8995

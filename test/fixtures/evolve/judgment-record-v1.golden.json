@@ -1,0 +1,19 @@
+{
+  "judgment_id": "j-20261010-0001",
+  "run_id": "run-2026-10-10-alpha",
+  "candidate_overlay_sha256": "3f79bb7b435b05321651daeba376fb1866fb8ef16e5cd3d9cbf1d9cfd6d7c0b3",
+  "skill_under_test": "evolution-rollout",
+  "task_set_id": "ts-evolution-rollout-cycle-1",
+  "task_set_version": 1,
+  "judge_model": "human-judge:claude-code",
+  "rubric_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "per_criterion_scores": [
+    { "criterion": "correctness", "score": 0.75 },
+    { "criterion": "maintainability", "score": 0.8 }
+  ],
+  "weighted_aggregate": 0.775,
+  "verdict": "Accepted",
+  "cost_usd": 3.25,
+  "recorded_at": "2026-10-10T00:00:00Z",
+  "recorder": "wiki-maintainer"
+}

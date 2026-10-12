@@ -1,0 +1,44 @@
+✖ created-file refusal cleanup leaves a competitor append on the created inode (4.610917ms)
+✖ new-overlay refusal cleanup leaves a competitor append on the created inode (2.984208ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 154.466791
+
+✖ failing tests:
+
+test at test/evolve-layout.test.ts:923:6
+✖ created-file refusal cleanup leaves a competitor append on the created inode (4.610917ms)
+  Error: ENOENT: no such file or directory, open '/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/evolve-create-cleanup-append-3xvITP/outside/moved-run/trace.json'
+      at readFileSync (node:fs:624:20)
+      at TestContext.<anonymous> (file:///Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ac-b1-20261010/test/evolve-layout.test.ts:959:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/evolve-create-cleanup-append-3xvITP/outside/moved-run/trace.json'
+  }
+
+test at test/evolve-layout.test.ts:965:6
+✖ new-overlay refusal cleanup leaves a competitor append on the created inode (2.984208ms)
+  Error: ENOENT: no such file or directory, open '/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/evolve-overlay-create-cleanup-l8Idpg/outside/moved-proposals/skill.overlay'
+      at readFileSync (node:fs:624:20)
+      at TestContext.<anonymous> (file:///Users/andresilvaburgstahler/Ws/Personal/worktrees/tswc-ac-b1-20261010/test/evolve-layout.test.ts:998:18)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    errno: -2,
+    code: 'ENOENT',
+    syscall: 'open',
+    path: '/private/var/folders/pn/wg77yf4503nb03q5f92gt0xm0000gp/T/evolve-overlay-create-cleanup-l8Idpg/outside/moved-proposals/skill.overlay'
+  }

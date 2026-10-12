@@ -59,6 +59,14 @@ void test('npm pack: package.json files includes bin/', () => {
   );
 });
 
+void test('npm pack: package.json files includes schemas/ so evolve validators can load their documents', () => {
+  const files = getPackageFiles();
+  assert.ok(
+    files.includes('schemas/'),
+    `package.json "files" must include "schemas/" (loadSchemaDoc resolves schemas/evolve from the package root)\nActual files: ${JSON.stringify(files)}`,
+  );
+});
+
 void test('npm pack: package.json files includes src/', () => {
   const files = getPackageFiles();
   assert.ok(
