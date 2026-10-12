@@ -428,8 +428,10 @@ function removeDirectoryHere(name: string): void {
   try {
     rmdirSync(name);
   } catch {
-    // Best-effort cleanup of a directory this call created; the failure mode
-    // is an empty directory, never a changed byte.
+    // Best-effort cleanup of a directory this call created. A removal failure,
+    // including a non-empty directory, is swallowed and the directory is left
+    // in place. This is not a claim that the directory is absent, and cleanup
+    // does not delete a competitor's contents.
   }
 }
 
