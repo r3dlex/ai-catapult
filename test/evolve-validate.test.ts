@@ -160,6 +160,15 @@ function overlayPresent(root: string): boolean {
   }
 }
 
+function acceptedPersisted(root: string): boolean {
+  try {
+    readFileSync(join(root, 'evolve/raw/state', `accepted-${SKILL}-1.json`));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function skillImpact(root: string): string {
   return readFileSync(evolvePaths(root).wikiSkillImpactFile, 'utf8');
 }
@@ -483,6 +492,90 @@ void test('a skill-disabled catalog-state is refused even when the caller passes
     const report = validateCycle(root, request({ catalogSha256: DISABLED }));
     assert.equal(report.code, 'seed_not_catalog');
     assert.notEqual(report.decision, 'accept');
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a score of 2 does not persist accepted state, and a later valid accept can', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    mutateJudgment(root, CYCLE_RUN, 'sample-1', { weighted_aggregate: 2 });
+    const failed = validateCycle(root, request());
+    assert.equal(failed.code, 'judgment_unbound');
+    assert.notEqual(failed.decision, 'accept');
+    assert.equal(failed.overlayDropped, false);
+    assert.equal(acceptedPersisted(root), false);
+    assert.equal(overlayPresent(root), true);
+    mutateJudgment(root, CYCLE_RUN, 'sample-1', { weighted_aggregate: 0.8 });
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+  } finally {
+    finish(root);
+  }
+});
+
+void test('scores of 2 and -0.5 are refused instead of averaged into an accept', () => {
+  const { root } = built(0.5, [0.75, 0.75], [1, 1]);
+  try {
+    mutateJudgment(root, CYCLE_RUN, 'sample-1', { weighted_aggregate: 2 });
+    mutateJudgment(root, CYCLE_RUN, 'sample-2', { weighted_aggregate: -0.5 });
+    const report = validateCycle(root, request());
+    assert.equal(report.code, 'judgment_unbound');
+    assert.notEqual(report.decision, 'accept');
+    assert.notEqual(report.rVal, 0.75);
+    assert.equal(acceptedPersisted(root), false);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('rubric endpoints 0 and 1 stay inside the range', () => {
+  const low = built(0.5, [0], [1]);
+  const high = built(0.5, [1], [1]);
+  try {
+    const lowReport = validateCycle(low.root, request());
+    assert.equal(lowReport.decision, 'reject');
+    assert.equal(lowReport.code, null);
+    assert.equal(validateCycle(high.root, request()).decision, 'accept');
+  } finally {
+    finish(low.root);
+    finish(high.root);
+  }
+});
+
+void test('mutation: seed judge_model drift is refused', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    mutateJudgment(root, SEED_RUN, SEED_ID, { judge_model: 'other-model' });
+    const report = validateCycle(root, request());
+    assert.equal(report.code, 'judgment_unbound');
+    assert.notEqual(report.decision, 'accept');
+    assert.equal(acceptedPersisted(root), false);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('mutation: seed task_set_version drift is refused', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    mutateJudgment(root, SEED_RUN, SEED_ID, { task_set_version: 2 });
+    const report = validateCycle(root, request());
+    assert.equal(report.code, 'judgment_unbound');
+    assert.notEqual(report.decision, 'accept');
+    assert.equal(acceptedPersisted(root), false);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a failed accept validates the audit entry before any accepted-state write', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    assert.throws(() => validateCycle(root, request({ recordedAt: 'not-a-date' })));
+    assert.equal(acceptedPersisted(root), false);
+    assert.equal(overlayPresent(root), true);
+    assert.equal(validateCycle(root, request()).decision, 'accept');
   } finally {
     finish(root);
   }

@@ -11,7 +11,7 @@
  */
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { appendAuditEntry } from './audit.ts';
+import { appendAuditEntry, validateAuditEntry } from './audit.ts';
 import { dropFileHere, enterDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
 import { sha256Hex } from './digest.ts';
 import { EvolveError } from './errors.ts';
@@ -118,8 +118,8 @@ function assertRunId(runId: string): void {
 
 function loadCycle(root: string, request: ValidateRequest): Loaded {
   const seed = readSeed(root, request);
-  if (seed === null) return { kind: 'report', report: refuse(request, 'seed_not_catalog', false, 0, []) };
-  const baseline = baselineOf(seed, readPrior(root, request));
+  if (seed.kind === 'report') return seed;
+  const baseline = baselineOf(seed.seed, readPrior(root, request));
   const judged = judgeSamples(root, request, baseline);
   if (judged.kind === 'report') return judged;
   return { kind: 'ready', baseline, cycle: judged.cycle };
@@ -135,6 +135,9 @@ function judgeSamples(root: string, request: ValidateRequest, baseline: Baseline
   }
   if (loaded.costUsd > CYCLE_BUDGET_USD) {
     return { kind: 'report', report: refuseBudget(root, request, baseline, loaded.costUsd) };
+  }
+  if (scoreOutsideRubric(loaded.samples)) {
+    return { kind: 'report', report: refuseRange(root, request, baseline, loaded.costUsd) };
   }
   return { kind: 'cycle', cycle: readyCycle(loaded, overlay) };
 }
@@ -152,8 +155,10 @@ function finishScore(root: string, request: ValidateRequest, baseline: Baseline,
 }
 
 function finishAccept(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle, rVal: number): ValidateReport {
+  const diff = `accept: R=${String(rVal)} > R_best=${String(baseline.rBest)}`;
+  validateAuditEntry(auditEntry(request, baseline, 'Accepted', rVal, diff));
   writeAccepted(root, request, baseline.nextK, cycle.overlaySha, cycle.overlayBytes, rVal);
-  writeAudit(root, request, baseline, 'Accepted', rVal, `accept: R=${String(rVal)} > R_best=${String(baseline.rBest)}`);
+  writeAudit(root, request, baseline, 'Accepted', rVal, diff);
   return decided(request, 'accept', baseline, cycle.costUsd, rVal, false);
 }
 
@@ -190,6 +195,11 @@ function refuseBudget(root: string, request: ValidateRequest, baseline: Baseline
   writeAudit(root, request, baseline, 'Rejected', 0, `cycle_budget_exhausted: recorded cost_usd ${String(costUsd)}`);
   const dropped = request.action === 'accept' && revertOverlay(root, request, baseline);
   return refuse(request, 'cycle_budget_exhausted', dropped, costUsd, [], baseline);
+}
+
+function refuseRange(root: string, request: ValidateRequest, baseline: Baseline, costUsd: number): ValidateReport {
+  writeAudit(root, request, baseline, 'Rejected', 0, 'judgment_unbound: weighted_aggregate outside rubric range');
+  return refuse(request, 'judgment_unbound', false, costUsd, [], baseline);
 }
 
 function decided(
@@ -240,13 +250,26 @@ function unboundDiff(reason: string, gaps: readonly string[]): string {
   return lines.join('\n');
 }
 
-function readSeed(root: string, request: ValidateRequest): SeedView | null {
+type SeedRead = { readonly kind: 'ok'; readonly seed: SeedView } | { readonly kind: 'report'; readonly report: ValidateReport };
+
+function readSeed(root: string, request: ValidateRequest): SeedRead {
+  const record = catalogSeed(root, request);
+  if (record === null) return { kind: 'report', report: refuse(request, 'seed_not_catalog', false, 0, []) };
+  if (seedUnbound(record, request)) return { kind: 'report', report: refuse(request, 'judgment_unbound', false, 0, []) };
+  return { kind: 'ok', seed: { rubricSha256: record.rubricSha256, weightedAggregate: record.weightedAggregate } };
+}
+
+function catalogSeed(root: string, request: ValidateRequest): RawSample | null {
   if (!catalogStateMatches(root, request)) return null;
   const record = readJudgment(root, request.seedRunId, request.seedJudgmentId);
   if (record === null) return null;
   if (record.overlaySha !== request.catalogSha256) return null;
   if (!inUnitInterval(record.weightedAggregate)) return null;
-  return { rubricSha256: record.rubricSha256, weightedAggregate: record.weightedAggregate };
+  return record;
+}
+
+function seedUnbound(record: RawSample, request: ValidateRequest): boolean {
+  return record.taskSetVersion !== request.taskSetVersion || record.judgeModel !== request.judgeModel;
 }
 
 function catalogStateMatches(root: string, request: ValidateRequest): boolean {
@@ -484,7 +507,17 @@ function writeAudit(
   score: number,
   diff: string,
 ): void {
-  appendAuditEntry(evolvePaths(root), {
+  appendAuditEntry(evolvePaths(root), auditEntry(request, baseline, verdict, score, diff));
+}
+
+function auditEntry(
+  request: ValidateRequest,
+  baseline: Baseline,
+  verdict: 'Accepted' | 'Rejected',
+  score: number,
+  diff: string,
+): Record<string, unknown> {
+  return {
     metadata: {
       cycle: baseline.nextK,
       recorded_at: request.recordedAt,
@@ -495,7 +528,11 @@ function writeAudit(
     target_skill: request.skill,
     unified_diff: diff,
     verdict,
-  });
+  };
+}
+
+function scoreOutsideRubric(samples: readonly Sample[]): boolean {
+  return samples.some((sample) => !inUnitInterval(sample.weightedAggregate));
 }
 
 function meanScore(values: readonly number[]): number {

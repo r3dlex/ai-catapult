@@ -3,8 +3,33 @@
     "agent_self": "no human approved this work",
     "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
     "base": "3fa658b2142c8874aa3fd78986cff487be3b521d",
+    "cure3": "Pair-2 REQUEST_CHANGES, one final cure. Accept validates the audit entry before any accepted-state write, so a failed accept does not persist r_best. Seed judge_model and task_set_version must match or the gate refuses judgment_unbound. Scores outside the rubric range are refused and are not averaged into an accept. Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
     "scope_note": ".ai/evidence/tswc-ac-b3.json is outside the goal scope array [bin, src/evolve, test] and is included because AC-5 and the tdd-evidence gate require it. No pinned source in .ai/ci/local-ci.json changed.",
     "tdd": "legacy-safe: bin/ai-catapult.ts is a high-coupling call site; the gate is sprouted into src/evolve and the bin edit is one dispatch plus lazy template resolution so evolve does not require the skills vendor checkout."
+  },
+  "cure3": {
+    "green": {
+      "command": "node --test test/evolve-validate.test.ts",
+      "exit_code": 0,
+      "fail": 0,
+      "log_sha256": "cba150825d2b55f99c1c57919660f5bac761bb0dc290ee4105277fbb1d055b25",
+      "pass": 34
+    },
+    "green_suite": {
+      "command": "npm test",
+      "exit_code": 0,
+      "fail": 0,
+      "log_sha256": "aa640cbeb054f02ffd1bc04f205daf938bc06c20fc1fa84f3965579a4c291f22",
+      "pass": 554,
+      "todo": 2
+    },
+    "red": {
+      "command": "node --test test/evolve-validate.test.ts",
+      "exit_code": 1,
+      "fail": 5,
+      "log_sha256": "6aa1556550de4db682d9995bb8a8da9b1967225a2e23e3c06c5d6f393b91256d",
+      "pass": 29
+    }
   },
   "goal_id": "tswc-ac-b3",
   "green": {
