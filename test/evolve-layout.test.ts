@@ -920,6 +920,87 @@ void test('append rollback does not truncate a competing suffix that merely matc
   }
 });
 
+void test('created-file refusal cleanup leaves a competitor append on the created inode', () => {
+  const { paths, root } = initTmpLayout('evolve-create-cleanup-append-');
+  const outside = join(root, 'outside');
+  const runDir = join(paths.rawDir, 'run-a');
+  const moved = join(outside, 'moved-run');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    mkdirSync(runDir);
+    withPatchedFs(
+      {
+        // After this call's O_EXCL create has accepted OURS\n, a competitor
+        // appends to that same inode. Relocation is then observed. Unlink by
+        // inode identity would delete the competitor's bytes.
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            const written = originalWriteSync(...args);
+            appendFileSync(join(runDir, 'trace.json'), 'RACER\n');
+            renameSync(runDir, moved);
+            symlinkSync(moved, runDir);
+            return written;
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => recordTrace(paths, 'run-a', 'trace.json', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'trace.json'), 'utf8'), 'OURS\nRACER\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+void test('new-overlay refusal cleanup leaves a competitor append on the created inode', () => {
+  const { paths, root } = initTmpLayout('evolve-overlay-create-cleanup-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-proposals');
+  const originalWriteSync = Reflect.get(fs, 'writeSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    withPatchedFs(
+      {
+        // Newly-created replaceFileHere branch: the file did not exist. A
+        // competitor append on that inode must survive the refusal cleanup.
+        writeSync: (...args: unknown[]) => {
+          const data = args[1];
+          if (!fired && Buffer.isBuffer(data) && data.toString('utf8') === 'OURS\n') {
+            fired = true;
+            const written = originalWriteSync(...args);
+            appendFileSync(join(paths.proposalsDir, 'skill.overlay'), 'RACER\n');
+            renameSync(paths.proposalsDir, moved);
+            symlinkSync(moved, paths.proposalsDir);
+            return written;
+          }
+          return originalWriteSync(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => stageOverlay(paths, 'skill', 'OURS\n'),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'skill.overlay'), 'utf8'), 'OURS\nRACER\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 void test('missing directory create verifies recorded ancestors before mkdir', () => {
   const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-mkdir-before-verify-')));
   const parent = join(base, 'parent');
@@ -1008,6 +1089,84 @@ void test('missing-root create compares recorded ancestor identities before mkdi
     assert.equal(existsSync(join(outside, 'parent', 'new-root')), false);
   } finally {
     rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('missing-root refusal cleanup leaves a non-empty created directory', () => {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), 'evolve-missing-root-nonempty-')));
+  const parent = join(base, 'parent');
+  const outside = join(base, 'outside');
+  const root = join(parent, 'new-root');
+  const originalMkdir = Reflect.get(fs, 'mkdirSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(parent);
+    mkdirSync(outside);
+    withPatchedFs(
+      {
+        // Substitute the parent, let mkdir land outside, then plant a file.
+        // rmdir of that non-empty directory must fail closed without deleting
+        // the competitor's contents.
+        mkdirSync: (...args: unknown[]) => {
+          if (!fired && args[0] === root) {
+            fired = true;
+            renameSync(parent, `${parent}-saved`);
+            symlinkSync(outside, parent);
+            const made = originalMkdir(...args);
+            writeFileSync(join(outside, 'new-root', 'racer.txt'), 'RACER\n');
+            return made;
+          }
+          return originalMkdir(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => initEvolveLayout(root),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(outside, 'new-root', 'racer.txt'), 'utf8'), 'RACER\n');
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+void test('descended-directory refusal cleanup leaves a non-empty directory this call created', () => {
+  const { paths, root } = initTmpLayout('evolve-dir-cleanup-nonempty-');
+  const outside = join(root, 'outside');
+  const moved = join(outside, 'moved-evolve');
+  const originalMkdir = Reflect.get(fs, 'mkdirSync') as PatchedFsFunction;
+  let fired = false;
+  try {
+    mkdirSync(outside);
+    rmSync(paths.proposalsDir, { recursive: true });
+    withPatchedFs(
+      {
+        mkdirSync: (...args: unknown[]) => {
+          if (!fired && args[0] === 'proposals') {
+            fired = true;
+            const made = originalMkdir(...args);
+            writeFileSync(join(paths.proposalsDir, 'racer.txt'), 'RACER\n');
+            renameSync(paths.evolveDir, moved);
+            symlinkSync(moved, paths.evolveDir);
+            return made;
+          }
+          return originalMkdir(...args);
+        },
+      },
+      () => {
+        assert.throws(
+          () => initEvolveLayout(root),
+          (err: unknown) => err instanceof EvolveError && err.kind === 'unsafe-path',
+        );
+      },
+    );
+    assert.equal(fired, true);
+    assert.equal(readFileSync(join(moved, 'proposals', 'racer.txt'), 'utf8'), 'RACER\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

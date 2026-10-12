@@ -30,6 +30,10 @@
     "successor_r3_cure3_green_log_sha256": "4e866d560c2b3c7f8e72b570c21ea32dbeaf6c4397e300cb71281f69b5825ca7",
     "successor_r3_cure3_green_suite_log_sha256": "566cf477d9c102718f18c11540ceb3b2a1f7dff0ed18beefec50558471469e22",
     "successor_r3_cure3_red_log_sha256": "946611bbe392c7d5942e92efd8f91ad07d3c4d8ae76f85b989995e52becacb88",
+    "successor_r3_cure4": "b1-R3 cure4. removeFileHere no longer unlinks on device+inode equality. A created file is unlinked only while the directory entry is still that inode and the file still holds exactly the bytes this call wrote. A competitor append already present on that inode is left in place (OURS\\nRACER\\n survives both createFileHere and the newly-created replaceFileHere branch). Directory-removal claims now match best-effort rmdir: a non-empty directory is left, and a removal failure is not a claim that the directory is gone. Clause (c) is not claimed closed. no human approved this work.",
+    "successor_r3_cure4_green_log_sha256": "026c11eaba7bda410cd78267ab1152ffb38e96b37e1aefe6cd3eccbab7f5bb44",
+    "successor_r3_cure4_green_suite_log_sha256": "0360ccdf175979787197b551247af9e9985aa0270dffbadffbfed4a9e4382f5b",
+    "successor_r3_cure4_red_log_sha256": "4cbbafe7c9fff3ee92b229069e22fb90310845508f6ad46524bf20edfb8bf6e0",
     "successor_r3_cure": "b1-R3 after the human asked to fix PR #63 on 2026-10-11. Merged origin/main 12162383f6d6923b866e8da562bbb226faf8e62c (no rebase); package.json pin is the union of main 0.4.4 and this branch's schemas/ entry. (F1) missing-root bind walks the caller path before create, mkdir one level at a time, and removes a create that followed a substituted ancestor by device+inode before returning unsafe-path. Architect repro: outsideNewRootExists false. (F2) append rollback removes the tail only when it equals our suffix and the preceding window is not that same suffix. Architect repro content is ORIGINAL\\nRACER\\n, not ORIGINAL\\n. A later different suffix is not truncated. An identical suffix appended after ours is left in place (ORIGINAL\\nOURS\\nOURS\\n). (F3) openRootDirectory maps Darwin ENOTDIR, alongside ELOOP, to EvolveError kind unsafe-path. Hard-linked leaves: linkSync of a wiki or overlay file succeeds on this volume (nlink 2); create/replace/append refuse nlink > 1 before any write, alias bytes unchanged. ensureDirectoryHere relative mkdir was probed (ancestor swapped inside mkdir of evolve): already unsafe-path with an empty outside directory; regression locks that, no new refusal invented. Caller-component battery 30/30, 0 sentinel escapes; the two former ENOTDIR cases are now unsafe-path (unsafe 21, layout-violation 5, ENOENT 4). Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
     "successor_r3_dead_refs_log_sha256": "cdc85c011a25b0dd5fb552107aede72a1d453071d9dc4db257c0ee777975d4af",
     "successor_r3_green_log_sha256": "e5708b7bac30b81719b8f4264aaaac3fe3a2c318e8de6140732d5fe222c56254",
@@ -66,6 +70,26 @@
       "exit_code": 1,
       "log": ".ai/evidence/tswc-ac-b1-cure3/red.log",
       "log_sha256": "946611bbe392c7d5942e92efd8f91ad07d3c4d8ae76f85b989995e52becacb88"
+    }
+  },
+  "cure4": {
+    "green": {
+      "command": "node --test --test-name-pattern 'competitor append on the created inode|append rollback does not truncate a competing suffix|missing directory create verifies recorded ancestors|missing-root create compares recorded ancestor|leaves a non-empty' test/evolve-layout.test.ts",
+      "exit_code": 0,
+      "log": ".ai/evidence/tswc-ac-b1-cure4/green-new.log",
+      "log_sha256": "026c11eaba7bda410cd78267ab1152ffb38e96b37e1aefe6cd3eccbab7f5bb44"
+    },
+    "green_suite": {
+      "command": "node --test test/evolve-layout.test.ts test/evolve-schemas.test.ts test/evolve-flow.test.ts",
+      "exit_code": 0,
+      "log": ".ai/evidence/tswc-ac-b1-cure4/green-evolve.log",
+      "log_sha256": "0360ccdf175979787197b551247af9e9985aa0270dffbadffbfed4a9e4382f5b"
+    },
+    "red": {
+      "command": "node --test --test-name-pattern 'competitor append on the created inode' test/evolve-layout.test.ts",
+      "exit_code": 1,
+      "log": ".ai/evidence/tswc-ac-b1-cure4/red.log",
+      "log_sha256": "4cbbafe7c9fff3ee92b229069e22fb90310845508f6ad46524bf20edfb8bf6e0"
     }
   },
   "goal_id": "tswc-ac-b1",

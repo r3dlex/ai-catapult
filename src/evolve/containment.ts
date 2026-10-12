@@ -38,24 +38,34 @@
  *     error naming the level — before any byte is written. File opens stay
  *     relative to the bound inode. A relocation first detected only after a
  *     kernel mutation is compensated only for bytes this call can still
- *     identify as its own: a created file is unlinked by inode identity; an
- *     appended suffix is removed only when this descriptor's append placement
+ *     identify as its own. A created file is unlinked only when the directory
+ *     entry is still that inode and the file still holds exactly the bytes
+ *     this call wrote (empty, if this call has not written). Inode identity is
+ *     not exclusive ownership of the current bytes: a competitor append already
+ *     present at that check is left in place, and the file is not unlinked.
+ *     An appended suffix is removed only when this descriptor's append placement
  *     is still the end of the file and those bytes are still the bytes this
  *     call wrote. A matching tail is not ownership. If that placement is not
  *     the end of the file, or cannot be identified, the file is left
  *     untouched. A replaced file is restored from its captured original bytes
  *     only while the file still equals the bytes this call wrote. Otherwise
  *     the call refuses and does not truncate or rewrite. This is not a claim
- *     that net external change is zero.
+ *     that net external change is zero, and it is not a claim that the check
+ *     and the unlink are one kernel operation.
  *   - Missing-root creation: the caller path is walked before any create and
  *     each existing component's device+inode is recorded. Missing components
  *     are created one level at a time only after every recorded ancestor still
- *     has that identity. A create observed to have followed a substituted
- *     ancestor is removed by device+inode (empty directory only) before the
- *     refusal is returned.
+ *     has that identity. Revert then rmdirs a created directory only while
+ *     lstat still shows that directory inode. A non-empty directory, or any other rmdir
+ *     failure, is left in place. The refusal is returned either way. This is
+ *     not a claim that the directory is absent when the refusal is returned,
+ *     and cleanup does not delete a competitor's contents.
  *   - A missing descended directory is created only after the recorded chain
  *     is re-verified. A create that followed a substitution observed after
- *     mkdir is removed before the refusal is returned.
+ *     mkdir is removed with rmdir by name, best-effort. A removal failure,
+ *     including a non-empty directory, is swallowed and the directory is left
+ *     in place. The refusal is still returned. This is not a claim that the
+ *     directory is absent, and cleanup does not delete a competitor's contents.
  *   - Hard-linked leaves: a regular file with nlink > 1 is refused before any
  *     write, so an outside hard link is not mutated.
  *   - Known residual, declared: darwin has no openat2/RESOLVE_BENEATH and Node
@@ -137,8 +147,9 @@ interface CreatedDir {
 
 /**
  * Create only the missing suffix, after every recorded ancestor still has the
- * identity captured on the pre-create walk. A mkdir that followed a substituted
- * ancestor is removed by identity before the refusal propagates.
+ * identity captured on the pre-create walk. Revert rmdirs each directory this
+ * call created only while it is still that inode. A non-empty directory or a
+ * failed rmdir is left in place; the refusal still propagates.
  */
 function createMissingRoot(anchor: string, recorded: readonly BoundLevel[]): BoundLevel[] {
   const created: CreatedDir[] = [];
@@ -474,20 +485,23 @@ function movedRefusal(path: string): EvolveError {
 /** Create a new file atomically; an existing file — even a symlink — is refused. */
 export function createFileHere(name: string, contents: string): void {
   verifyBoundChain();
-  const fd = openHere(name, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL);
+  // O_RDWR so refusal cleanup can read this inode. A write-only descriptor
+  // cannot tell a competitor append from the bytes this call wrote.
+  const fd = openHere(name, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL);
+  const ownBytes = Buffer.from(contents, 'utf8');
   try {
     try {
       verifyBoundChain();
       refuseMultiplyLinked(fd, name);
     } catch (error) {
-      removeFileHere(fd, name);
+      removeFileHere(fd, name, Buffer.alloc(0));
       throw error;
     }
-    writeAll(fd, contents);
+    writeAll(fd, ownBytes);
     try {
       verifyBoundChain();
     } catch (error) {
-      removeFileHere(fd, name);
+      removeFileHere(fd, name, ownBytes);
       throw error;
     }
   } finally {
@@ -499,21 +513,22 @@ export function createFileHere(name: string, contents: string): void {
 export function replaceFileHere(name: string, contents: string): void {
   verifyBoundChain();
   const { fd, created } = openReplacement(name);
+  const ownBytes = Buffer.from(contents, 'utf8');
   try {
     refuseMultiplyLinked(fd, name);
     const original = created ? Buffer.alloc(0) : readAll(fd);
     try {
       verifyBoundChain();
     } catch (error) {
-      if (created) removeFileHere(fd, name);
+      if (created) removeFileHere(fd, name, Buffer.alloc(0));
       throw error;
     }
     ftruncateSync(fd, 0);
-    writeAll(fd, contents);
+    writeAll(fd, ownBytes);
     try {
       verifyBoundChain();
     } catch (error) {
-      if (created) removeFileHere(fd, name);
+      if (created) removeFileHere(fd, name, ownBytes);
       else restoreReplacement(fd, original, contents);
       throw error;
     }
@@ -662,16 +677,35 @@ function openReplacement(name: string): { fd: number; created: boolean } {
   }
 }
 
-/** Unlink the file this call created, identified by its fd's device+inode. */
-function removeFileHere(fd: number, name: string): void {
+/**
+ * Unlink a file this call created only while the directory entry is still that
+ * inode and the file still holds exactly `ownBytes`. A competitor append
+ * already present fails that check and is left in place. Inode identity is
+ * not exclusive ownership of the current bytes.
+ */
+function removeFileHere(fd: number, name: string, ownBytes: Buffer): void {
   try {
-    const created = fstatSync(fd);
-    const at = lstatSync(name);
-    if (at.dev === created.dev && at.ino === created.ino) unlinkSync(name);
+    if (!entryIsThisFile(fd, name)) return;
+    if (!fileStillExactly(fd, ownBytes)) return;
+    if (!entryIsThisFile(fd, name)) return;
+    if (!fileStillExactly(fd, ownBytes)) return;
+    unlinkSync(name);
   } catch {
-    // Best-effort revert of the file this call created, in the window where a
-    // relocation was only observed after the kernel created it.
+    // Best-effort revert. A file that is not exactly the bytes this call
+    // wrote — including a competitor append on this inode — is left in place.
   }
+}
+
+function entryIsThisFile(fd: number, name: string): boolean {
+  const created = fstatSync(fd);
+  const at = lstatSync(name);
+  return at.isFile() && !at.isSymbolicLink() && at.dev === created.dev && at.ino === created.ino;
+}
+
+function fileStillExactly(fd: number, ownBytes: Buffer): boolean {
+  if (fstatSync(fd).size !== ownBytes.length) return false;
+  if (!readAll(fd).equals(ownBytes)) return false;
+  return fstatSync(fd).size === ownBytes.length;
 }
 
 function openHere(name: string, flags: number): number {
