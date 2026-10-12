@@ -19,6 +19,7 @@ import {
   reviewedReadmeSha,
 } from '../src/readme-contract.ts';
 import { moduleDir, packageRoot } from '../src/paths.ts';
+import { runEvolve } from '../src/evolve/cli.ts';
 
 // Resolve the templates directory.
 //   1. catalog-resolved vendored skill templates — present in dev checkouts (after setup.sh)
@@ -28,7 +29,6 @@ import { moduleDir, packageRoot } from '../src/paths.ts';
 const VENDOR_SKILLS = process.env.AI_CATAPULT_VENDOR_SKILLS || join(packageRoot(moduleDir(import.meta.url)), 'vendor/skills');
 const DIST_TEMPLATES = join(packageRoot(moduleDir(import.meta.url)), 'dist/skill-templates');
 const DIST_DIR = join(packageRoot(moduleDir(import.meta.url)), 'dist');
-const TEMPLATES_DIR = resolveTemplatesDir();
 
 function resolveTemplatesDir(): string {
   if (existsSync(VENDOR_SKILLS)) {
@@ -64,6 +64,7 @@ Commands:
   backfill --policy-v2         Write the baseline readiness-policy/2 into an existing repo (ledgered)
   knowledge <verb>             Read the .ai/knowledge registry (list|find|show|verify|rebuild|serialize)
   adopt [target]               Dry-run knowledge inventory and migration map
+  evolve --validate            Accept, revert, or refuse a recorded candidate overlay
 
 Options:
   -v, --version  Print version
@@ -230,7 +231,7 @@ function runInit(argv: string[]): void {
 
   const { emittedPaths, judgmentLadenPaths } = scaffold({
     targetDir,
-    templatesDir: TEMPLATES_DIR,
+    templatesDir: resolveTemplatesDir(),
     skillsDir: scaffoldSkillsDir(),
     repoId, date, upstreamUrl, upstreamRef, force,
   });
@@ -281,12 +282,12 @@ function dispatchVerb(verb: string, rest: string[]): void {
     process.exit(0);
   }
   if (verb === 'graph-hooks') {
-    runGraphHooks(rest, TEMPLATES_DIR);
+    runGraphHooks(rest, resolveTemplatesDir());
     process.exit(0);
   }
   if (verb === 'backfill') {
     const vendorSkillsDir = existsSync(VENDOR_SKILLS) ? VENDOR_SKILLS : undefined;
-    process.exit(runBackfill(rest, { templatesDir: TEMPLATES_DIR, vendorSkillsDir }));
+    process.exit(runBackfill(rest, { templatesDir: resolveTemplatesDir(), vendorSkillsDir }));
   }
   if (verb === 'matrix') process.exit(runMatrixRuntime(rest));
   if (verb === 'ci-adapters') process.exit(runCiAdaptersRuntime(rest));
@@ -322,6 +323,7 @@ function run(): void {
     process.exit(0);
   }
 
+  if (verb === 'evolve') process.exit(runEvolve(rawArgv.slice(firstPositionalIdx + 1)));
   dispatchVerb(verb, rawArgv.slice(firstPositionalIdx + 1));
 }
 

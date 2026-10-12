@@ -657,6 +657,27 @@ function refuseMultiplyLinked(fd: number, name: string): void {
   }
 }
 
+/**
+ * Remove a regular-file directory entry in the bound directory. A symlink is
+ * refused. This drops the name; it does not claim any other hard link is gone.
+ */
+export function dropFileHere(name: string): void {
+  verifyBoundChain();
+  const fd = openHere(name, constants.O_RDONLY);
+  try {
+    if (!fstatSync(fd).isFile()) {
+      throw new EvolveError('unsafe-path', `${name} is not a regular file; refusing to drop it`);
+    }
+    verifyBoundChain();
+    if (!entryIsThisFile(fd, name)) {
+      throw new EvolveError('unsafe-path', `${name} changed identity before drop; refusing`);
+    }
+    unlinkSync(name);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 /** Read a regular file; a symlink final component is refused. */
 export function readFileHere(name: string): Buffer {
   verifyBoundChain();

@@ -1,0 +1,18 @@
+{
+  "disclosure": {
+    "agent_self": "no human approved this work",
+    "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
+    "base": "3fa658b2142c8874aa3fd78986cff487be3b521d",
+    "scope_note": ".ai/evidence/tswc-ac-b3.json is outside the goal scope array [bin, src/evolve, test] and is included because AC-5 and the tdd-evidence gate require it. No pinned source in .ai/ci/local-ci.json changed.",
+    "tdd": "legacy-safe: bin/ai-catapult.ts is a high-coupling call site; the gate is sprouted into src/evolve and the bin edit is one dispatch plus lazy template resolution so evolve does not require the skills vendor checkout."
+  },
+  "goal_id": "tswc-ac-b3",
+  "green": {
+    "command": "node --test test/evolve-validate.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "node --test test/evolve-validate.test.ts",
+    "exit_code": 1
+  }
+}
