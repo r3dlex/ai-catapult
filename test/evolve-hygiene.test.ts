@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { linkSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -270,6 +270,116 @@ void test('a hard-linked proposal script is refused before the judge reads it', 
   } finally {
     rmSync(dir, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+void test('an ignore-path name does not skip the complexity pre-reject', () => {
+  const max = configNumber(/complexity:\s*\['error',\s*(\d+)\]/);
+  for (const name of ['node_modules/evil.ts', '.git/evil.ts', 'pkg/node_modules/evil.ts']) {
+    const judge = countingJudge();
+    const report = reviewProposal(proposal([{ name, bytes: ifs(max + 4) }]), judge.harness);
+    assertZeroDollars(report, judge.calls);
+    const gate = report.gates.find((item) => item.gate === 'eslint' && item.script === name);
+    assert.ok(gate, name);
+    assert.equal(gate.status, 'fail');
+    assert.equal(gate.detail.includes(`Maximum allowed is ${String(max)}`), true);
+  }
+});
+
+void test('an ignore-path name does not skip the cognitive-complexity pre-reject', () => {
+  const max = configNumber(/'sonarjs\/cognitive-complexity':\s*\['error',\s*(\d+)\]/);
+  const judge = countingJudge();
+  const report = reviewProposal(proposal([{ name: 'node_modules/nest.ts', bytes: nested() }]), judge.harness);
+  assertZeroDollars(report, judge.calls);
+  const gate = report.gates.find((item) => item.gate === 'eslint');
+  assert.ok(gate);
+  assert.equal(gate.detail.includes(`the ${String(max)} allowed`), true);
+});
+
+void test('a missing proposal path containing okf_version is a clean refusal', () => {
+  const parent = mkdtempSync(join(tmpdir(), 'b5-missing-'));
+  const missing = join(parent, 'okf_version-nonexistent');
+  try {
+    const result = spawnSync(process.execPath, [BIN, 'evolve', '--pre-reject', '--skill', 'rollout', '--proposal', missing], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 1);
+    assert.equal(`${result.stdout ?? ''}${result.stderr ?? ''}`.includes('okf_version'), false);
+    const report = JSON.parse(result.stdout ?? '') as HygieneReport;
+    assert.equal(report.decision, 'pre-reject');
+    assert.equal(report.judgeInvocations, 0);
+    assert.equal(report.costUsd, 0);
+    assert.equal(report.gates.some((item) => item.gate === 'unsafe-path' && item.detail === 'proposal path refused'), true);
+    assert.equal(JSON.stringify(report).includes(missing), false);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+void test('a non-directory proposal path containing okf_version is a clean refusal', () => {
+  const parent = mkdtempSync(join(tmpdir(), 'b5-notdir-'));
+  const file = join(parent, 'okf_version-not-a-directory');
+  writeFileSync(file, 'not a proposal directory\n');
+  try {
+    const result = spawnSync(process.execPath, [BIN, 'evolve', '--pre-reject', '--skill', 'rollout', '--proposal', file], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 1);
+    assert.equal(`${result.stdout ?? ''}${result.stderr ?? ''}`.includes('okf_version'), false);
+    const report = JSON.parse(result.stdout ?? '') as HygieneReport;
+    assert.equal(report.decision, 'pre-reject');
+    assert.equal(report.judgeInvocations, 0);
+    assert.equal(report.gates.some((item) => item.gate === 'unsafe-path' && item.detail === 'proposal path refused'), true);
+    assert.equal(JSON.stringify(report).includes(file), false);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+void test('a symlinked proposal path containing okf_version is a clean refusal', () => {
+  const parent = mkdtempSync(join(tmpdir(), 'b5-dirlink-'));
+  const target = join(parent, 'real');
+  const link = join(parent, 'okf_version-link');
+  mkdirSync(target);
+  writeFileSync(join(target, 'SKILL.md'), '---\nokf_version: "0.3"\nname: rollout\ndescription: a skill\n---\n');
+  writeFileSync(join(target, 'clean.ts'), 'export function clean(n: number): number {\n  return n + 1;\n}\n');
+  symlinkSync(target, link);
+  try {
+    const result = spawnSync(process.execPath, [BIN, 'evolve', '--pre-reject', '--skill', 'rollout', '--proposal', link], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 1);
+    assert.equal(`${result.stdout ?? ''}${result.stderr ?? ''}`.includes('okf_version'), false);
+    const report = JSON.parse(result.stdout ?? '') as HygieneReport;
+    assert.equal(report.decision, 'pre-reject');
+    assert.equal(report.judgeInvocations, 0);
+    assert.equal(report.gates.some((item) => item.gate === 'unsafe-path' && item.detail === 'proposal path refused'), true);
+    assert.equal(JSON.stringify(report).includes(link), false);
+    assert.equal(readFileSync(join(target, 'clean.ts'), 'utf8'), 'export function clean(n: number): number {\n  return n + 1;\n}\n');
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+void test('advisory frontmatter does not leak okf_version from a proposal path and does not block', () => {
+  const parent = mkdtempSync(join(tmpdir(), 'b5-front-'));
+  const dir = join(parent, 'okf_version');
+  mkdirSync(dir);
+  writeFileSync(join(dir, 'SKILL.md'), '---\nname: rollout\nokf_version: "0.3"\n---\n# body\n');
+  writeFileSync(join(dir, 'clean.ts'), 'export function clean(n: number): number {\n  return n + 1;\n}\n');
+  try {
+    const result = spawnSync(process.execPath, [BIN, 'evolve', '--pre-reject', '--skill', 'rollout', '--proposal', dir], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0);
+    assert.equal(`${result.stdout ?? ''}${result.stderr ?? ''}`.includes('okf_version'), false);
+    const report = JSON.parse(result.stdout ?? '') as HygieneReport;
+    assert.equal(report.decision, 'proceed');
+    assert.equal(report.judgeInvocations, 1);
+    assert.equal(report.findings.some((item) => item.code === 'okf_frontmatter' && item.detail.includes('description')), true);
+    assert.equal(report.findings.every((item) => item.path === 'SKILL.md'), true);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
   }
 });
 

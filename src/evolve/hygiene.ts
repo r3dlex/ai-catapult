@@ -2,8 +2,9 @@
  * Proposal hygiene (tswc-ac-b5). Structural pre-reject runs before the judge
  * seam. A failing gate, a missing gate tool, an unrecognized script, or an
  * unsafe path returns without invoking the harness, so a gnarly proposal costs
- * zero judge dollars. OKF frontmatter findings are advisory: they never block
- * and the report never carries okf_version.
+ * zero judge dollars. An ESLint ignore path does not skip those rules. OKF
+ * frontmatter findings are advisory: they never block and the report never
+ * carries okf_version, including when a missing path contains that substring.
  *
  * A2 thresholds are loaded from eslint.config.js and strict tsc is the repo
  * tsconfig via extends. A4 commands are the delivered ruff/xenon/shellcheck/shfmt
@@ -328,11 +329,28 @@ function eslintGates(scripts: readonly ProposedScript[], root: string): GateResu
 }
 
 function eslintOne(linter: TextLinter, config: unknown, script: ProposedScript): GateResult[] {
-  const messages = linter.verify(script.bytes, config, { filename: script.name });
+  const messages = appliedMessages(linter, config, script);
   const errors = messages.filter((message) => message.severity === 2);
   if (errors.length === 0) return [];
   const detail = errors.map((message) => message.message).join('; ');
   return [gate('eslint', script.name, 'fail', detail, ['eslint', '--config', 'eslint.config.js'])];
+}
+
+function appliedMessages(linter: TextLinter, config: unknown, script: ProposedScript): Array<{ message: string; severity: number }> {
+  const direct = linter.verify(script.bytes, config, { filename: script.name });
+  if (!unapplied(direct)) return direct;
+  const alias = linter.verify(script.bytes, config, { filename: lintAlias(script.name) });
+  if (!unapplied(alias)) return alias;
+  return [{ message: 'consumed eslint rules were not applied', severity: 2 }];
+}
+
+function unapplied(messages: Array<{ message: string; severity: number }>): boolean {
+  return messages.length > 0 && messages.every((message) => message.severity < 2 && /no matching configuration|ignored/i.test(message.message));
+}
+
+function lintAlias(name: string): string {
+  const found = SCRIPT_KIND.find(([suffix]) => name.endsWith(suffix));
+  return `evolve-proposal${found?.[0] ?? '.ts'}`;
 }
 
 function loadA2Rules(root: string): LoadedRules {
@@ -439,18 +457,19 @@ function loadProposal(dir: string, skill: string): { kind: 'proposal'; proposal:
   let stat;
   try {
     stat = lstatSync(dir);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'proposal missing';
-    return { kind: 'report', report: reject([], [gate('unsafe-path', dir, 'fail', message, [])]) };
+  } catch {
+    return pathRefusal();
   }
-  if (stat.isSymbolicLink() || !stat.isDirectory()) {
-    return { kind: 'report', report: reject([], [gate('unsafe-path', dir, 'fail', 'proposal path refused', [])]) };
-  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) return pathRefusal();
   const walked = walkProposal(dir);
   if ('refused' in walked) {
     return { kind: 'report', report: scrubReport(reject(okfFindings(walked.skillMd), [gate('unsafe-path', walked.refused, 'fail', 'link refused before read', [])])) };
   }
   return { kind: 'proposal', proposal: { skill, skillMd: walked.skillMd, scripts: walked.scripts } };
+}
+
+function pathRefusal(): { kind: 'report'; report: HygieneReport } {
+  return { kind: 'report', report: scrubReport(reject([], [gate('unsafe-path', 'proposal', 'fail', 'proposal path refused', [])])) };
 }
 
 function walkProposal(dir: string): { skillMd: string; scripts: ProposedScript[] } | { refused: string; skillMd: string } {
