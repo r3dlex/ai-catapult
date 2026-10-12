@@ -425,6 +425,36 @@ void test('a case-variant skills remote is refused and creates no commit', () =>
   }
 });
 
+void test('assume-unchanged hides an edited vendored SKILL.md from status but not from handoff', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const injected = 'assume-unchanged-injected\n';
+  const relative = `skills/${SKILL}/SKILL.md`;
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'accept');
+    git(box.vendor, ['update-index', '--assume-unchanged', '--', relative]);
+    writeFileSync(join(box.vendor, relative), injected);
+    const hidden = git(box.vendor, ['status', '--porcelain', '--untracked-files=all']);
+    assert.equal(hidden.includes(relative), false);
+    const codexSkill = join(box.payload, 'codex-plugin', 'skills', SKILL, 'SKILL.md');
+    assert.equal(readFileSync(codexSkill, 'utf8'), OVERLAY);
+    writeFileSync(join(box.payload, 'MARKER'), 'before\n');
+    assert.throws(() => verifyHandoff(box.lockFile, box.vendor), /handoff_sha_mismatch/);
+    assert.throws(() => rebuildPayloads({
+      lockFile: box.lockFile,
+      payloadRoot: box.payload,
+      repoRoot: REPO,
+      vendorDir: box.vendor,
+    }), /handoff_sha_mismatch/);
+    assert.equal(readFileSync(join(box.payload, 'MARKER'), 'utf8'), 'before\n');
+    assert.equal(readFileSync(codexSkill, 'utf8'), OVERLAY);
+    assert.equal(readFileSync(codexSkill, 'utf8').includes(injected.trim()), false);
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
 void test('vendored bytes that differ from the locked commit are refused before payload rewrite', () => {
   const box = fixture();
   const evolve = acceptWorkspace();

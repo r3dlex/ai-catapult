@@ -7,9 +7,12 @@
  * package lock and vendor/ are not this module's files. Reject drops the
  * overlay, leaves the wiki untouched, and does not write upstream. A lock SHA
  * that does not match the vendored checkout is refused before any payload
- * rewrite. This module never pushes and never calls gh.
+ * rewrite. Consumed worktree bytes are compared to the locked Git object;
+ * an index flag that hides an edit is not trusted. This module never pushes
+ * and never calls gh.
  */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, sep } from 'node:path';
@@ -430,7 +433,55 @@ function sourceCount(catalog: readonly CatalogSkill[], source: string): number {
 function vendorBytesMatch(vendorDir: string): boolean {
   const status = gitText(vendorDir, ['status', '--porcelain', '--untracked-files=all']);
   if (status === '') return false;
-  return status.split('\n').every((line) => line === '?? HEAD_SHA');
+  if (!status.split('\n').every((line) => line === '?? HEAD_SHA')) return false;
+  // status hides assume-unchanged and skip-worktree edits. Consumed bytes must
+  // still equal the locked Git object, and a hiding index flag is itself a refusal.
+  return trackedBytesMatchHead(vendorDir) && !indexHidesWorktree(vendorDir);
+}
+
+function trackedBytesMatchHead(vendorDir: string): boolean {
+  const format = gitResult(vendorDir, ['rev-parse', '--show-object-format']);
+  const algorithm = format.status === 0 ? format.stdout.trim() : '';
+  if (algorithm !== 'sha1' && algorithm !== 'sha256') return false;
+  const tree = gitResult(vendorDir, ['ls-tree', '-r', '-z', 'HEAD']);
+  if (tree.status !== 0) return false;
+  const entries = tree.stdout.split('\0').filter((entry) => entry.length > 0);
+  if (entries.length === 0) return false;
+  for (const entry of entries) {
+    const parsed = treeEntry(entry);
+    if (parsed === null) return false;
+    if (worktreeBlobSha(vendorDir, parsed.path, algorithm) !== parsed.sha) return false;
+  }
+  return true;
+}
+
+function treeEntry(entry: string): { path: string; sha: string } | null {
+  const tab = entry.indexOf('\t');
+  if (tab < 0) return null;
+  const meta = entry.slice(0, tab).split(' ');
+  const path = entry.slice(tab + 1);
+  const sha = meta[2];
+  if (meta[1] !== 'blob' || sha === undefined || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(sha) || path.length === 0) return null;
+  return { path, sha };
+}
+
+function worktreeBlobSha(vendorDir: string, relative: string, algorithm: 'sha1' | 'sha256'): string | null {
+  const file = join(vendorDir, relative);
+  try {
+    if (!lstatSync(file).isFile()) return null;
+    const bytes = readFileSync(file);
+    return createHash(algorithm).update(`blob ${String(bytes.length)}\0`).update(bytes).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
+function indexHidesWorktree(vendorDir: string): boolean {
+  const listed = gitResult(vendorDir, ['ls-files', '-v', '-z']);
+  if (listed.status !== 0) return true;
+  const entries = listed.stdout.split('\0').filter((entry) => entry.length > 0);
+  if (entries.length === 0) return true;
+  return entries.some((entry) => !entry.startsWith('H '));
 }
 
 function takeAside(path: string): string | null {
