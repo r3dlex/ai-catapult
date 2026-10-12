@@ -1,0 +1,8 @@
+# Legacy Python stack for not-yet-converted files. C901 maximum 10 is the
+# labeled project decision. Only C901 is selected: the ledger baselines the
+# measured violations and does not invent a broader ruff ruleset.
+[lint]
+select = ["C901"]
+
+[lint.mccabe]
+max-complexity = 10

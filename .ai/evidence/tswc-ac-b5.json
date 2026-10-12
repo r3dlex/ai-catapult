@@ -1,0 +1,18 @@
+{
+  "disclosure": {
+    "agent_self": "no human approved this work",
+    "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
+    "base": "58f6aed97ae764fa7bf8eda0f49e51cb9d339fd6",
+    "scope_note": ".ai/evidence/tswc-ac-b5.json is outside the goal scope array [src/evolve, test] and is included because AC-3 and the tdd-evidence gate require it. No skills PR was opened. skills.lock.json and vendor/ are not edited.",
+    "tdd": "legacy-safe: coverage unknown. The hygiene layer is sprouted into src/evolve/hygiene.ts. The legacy call site is one dispatch in src/evolve/cli.ts. The red leg is the missing module. A gnarly proposal is refused by the consumed A-gates before the judge seam."
+  },
+  "goal_id": "tswc-ac-b5",
+  "green": {
+    "command": "node --test test/evolve-hygiene.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "node --test test/evolve-hygiene.test.ts",
+    "exit_code": 1
+  }
+}

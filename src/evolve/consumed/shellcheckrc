@@ -1,0 +1,3 @@
+# Repository-owned shellcheck config. shellcheck -S error is the gate.
+# This file enables no disable directive.
+external-sources=false
