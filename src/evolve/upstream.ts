@@ -146,9 +146,13 @@ function publishAccepted(request: UpstreamFlowRequest, source: string, bytes: st
     return refusedReport('upstream_refused');
   }
   if (published.code !== null) return refusedReport(published.code);
-  const vendorAside = takeAside(request.vendorDir);
-  const payloadAside = takeAside(request.payloadRoot);
+  // undefined means that move did not finish. A later rename can throw EACCES
+  // after an earlier move; only a completed move is put back.
+  let vendorAside: string | null | undefined;
+  let payloadAside: string | null | undefined;
   try {
+    vendorAside = takeAside(request.vendorDir);
+    payloadAside = takeAside(request.payloadRoot);
     const sha = mergeSkill(request.upstreamDir, published.branch);
     bumpLock(request.lockFile, sha);
     revendor(request.upstreamDir, request.vendorDir, sha);
@@ -163,8 +167,8 @@ function publishAccepted(request: UpstreamFlowRequest, source: string, bytes: st
   } catch (error) {
     restore(request.lockFile, previous);
     resetUpstream(request.upstreamDir, beforeSha, published.branch);
-    putBack(request.vendorDir, vendorAside);
-    putBack(request.payloadRoot, payloadAside);
+    if (vendorAside !== undefined) putBack(request.vendorDir, vendorAside);
+    if (payloadAside !== undefined) putBack(request.payloadRoot, payloadAside);
     return refusedReport(codeOf(error));
   }
   return {

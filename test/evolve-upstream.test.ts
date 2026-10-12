@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -621,6 +621,54 @@ void test('a symlinked skill directory is refused before any write through the l
     assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
   } finally {
     finish([box.root, box.stub, evolve, external]);
+  }
+});
+
+void test('a payload parent at mode 0555 rolls back the skill commit and the vendor move', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const extra = realpathSync(mkdtempSync(join(tmpdir(), 'b4-payload-parent-')));
+  const parent = join(extra, 'readonly');
+  const payload = join(parent, 'payload');
+  mkdirSync(payload, { recursive: true });
+  chmodSync(parent, 0o555);
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  const lock = readFileSync(box.lockFile, 'utf8');
+  const baseline = readFileSync(join(box.stub, 'skills', SKILL, 'SKILL.md'), 'utf8');
+  const branch = `evolve/${SKILL}/${createHash('sha256').update(OVERLAY).digest('hex').slice(0, 12)}`;
+  let report: UpstreamFlowReport | null;
+  try {
+    assert.equal(statSync(parent).mode & 0o777, 0o555);
+    try {
+      report = flowUpstream({
+        decision: 'accept',
+        lockFile: box.lockFile,
+        payloadRoot: payload,
+        repoRoot: REPO,
+        root: evolve,
+        skill: SKILL,
+        upstreamDir: box.stub,
+        vendorDir: box.vendor,
+      });
+    } catch {
+      report = null;
+    }
+    assert.equal(report?.decision, 'refused');
+    assert.equal(report?.code, 'payload_unresolved');
+    assert.equal(report?.upstreamWrites, 0);
+    assert.equal(git(box.stub, ['branch', '--show-current']), 'main');
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(git(box.stub, ['status', '--porcelain']), '');
+    assert.equal(git(box.stub, ['diff', '--cached', '--name-only']), '');
+    assert.equal(git(box.stub, ['branch', '--list', branch]), '');
+    assert.equal(readFileSync(join(box.stub, 'skills', SKILL, 'SKILL.md'), 'utf8'), baseline);
+    assert.equal(exists(box.vendor), true);
+    assert.equal(readFileSync(join(box.vendor, 'IN_PLACE_SENTINEL'), 'utf8'), 'do-not-keep\n');
+    assert.equal(readFileSync(box.lockFile, 'utf8'), lock);
+    assert.equal(exists(payload), true);
+  } finally {
+    chmodSync(parent, 0o755);
+    finish([box.root, box.stub, evolve, extra]);
   }
 });
 
