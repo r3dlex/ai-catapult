@@ -78,7 +78,7 @@ export function verifyHandoff(lockFile: string, vendorDir: string): void {
   const locked = lockSha(lockFile);
   const sentinel = sentinelSha(vendorDir);
   const head = gitSha(vendorDir);
-  if (locked !== sentinel || locked !== head) {
+  if (locked !== sentinel || locked !== head || !vendorBytesMatch(vendorDir)) {
     throw new EvolveError('schema-violation', 'handoff_sha_mismatch');
   }
 }
@@ -122,6 +122,7 @@ function refuseBeforeWrite(request: UpstreamFlowRequest): UpstreamFlowReport | n
   if (realSkillsRemote(request.upstreamDir)) return refusedReport('upstream_refused');
   if (!cleanMain(request.upstreamDir)) return refusedReport('upstream_refused');
   if (isSymlink(request.lockFile) || isSymlink(request.vendorDir)) return refusedReport('upstream_refused');
+  if (!lockPinsUpstream(request.lockFile, request.upstreamDir)) return refusedReport('handoff_sha_mismatch');
   return null;
 }
 
@@ -131,6 +132,8 @@ function publishAccepted(request: UpstreamFlowRequest, source: string, bytes: st
   const previous = readFileSync(request.lockFile, 'utf8');
   const published = commitSkill(request.upstreamDir, request.skill, source, bytes);
   if (published.code !== null) return refusedReport(published.code);
+  const vendorAside = takeAside(request.vendorDir);
+  const payloadAside = takeAside(request.payloadRoot);
   try {
     const sha = mergeSkill(request.upstreamDir, published.branch);
     bumpLock(request.lockFile, sha);
@@ -141,9 +144,13 @@ function publishAccepted(request: UpstreamFlowRequest, source: string, bytes: st
       repoRoot: request.repoRoot,
       vendorDir: request.vendorDir,
     });
+    discard(vendorAside);
+    discard(payloadAside);
   } catch (error) {
     restore(request.lockFile, previous);
     resetUpstream(request.upstreamDir, beforeSha, published.branch);
+    putBack(request.vendorDir, vendorAside);
+    putBack(request.payloadRoot, payloadAside);
     return refusedReport(codeOf(error));
   }
   return {
@@ -236,6 +243,7 @@ function singleSkillPath(upstreamDir: string, skill: string): string | { code: s
   if (matches.length !== 1) return { code: 'not_single_skill' };
   const source = safeSource(matches[0]?.source_path);
   if (source === null) return { code: 'not_single_skill' };
+  if (sourceCount(catalog, source) !== 1) return { code: 'not_single_skill' };
   const others = catalog
     .map((entry) => safeSource(entry.source_path))
     .filter((path): path is string => path !== null && path !== source);
@@ -403,8 +411,43 @@ function missing(name: string): null {
 }
 
 function realSkillsRemote(dir: string): boolean {
-  const listed = gitText(dir, ['remote', '-v']);
+  const listed = gitText(dir, ['remote', '-v']).toLowerCase();
   return REAL_SKILLS.some((needle) => listed.includes(needle));
+}
+
+function lockPinsUpstream(lockFile: string, upstreamDir: string): boolean {
+  try {
+    return lockSha(lockFile) === gitSha(upstreamDir);
+  } catch {
+    return false;
+  }
+}
+
+function sourceCount(catalog: readonly CatalogSkill[], source: string): number {
+  return catalog.filter((entry) => safeSource(entry.source_path) === source).length;
+}
+
+function vendorBytesMatch(vendorDir: string): boolean {
+  const status = gitText(vendorDir, ['status', '--porcelain', '--untracked-files=all']);
+  if (status === '') return false;
+  return status.split('\n').every((line) => line === '?? HEAD_SHA');
+}
+
+function takeAside(path: string): string | null {
+  if (!existsSync(path)) return null;
+  const dest = mkdtempSync(join(tmpdir(), 'b4-aside-'));
+  rmSync(dest, { recursive: true, force: true });
+  renameSync(path, dest);
+  return dest;
+}
+
+function putBack(path: string, aside: string | null): void {
+  rmSync(path, { recursive: true, force: true });
+  if (aside !== null) renameSync(aside, path);
+}
+
+function discard(aside: string | null): void {
+  if (aside !== null) rmSync(aside, { recursive: true, force: true });
 }
 
 function readCatalog(dir: string): CatalogSkill[] | null {

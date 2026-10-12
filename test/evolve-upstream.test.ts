@@ -358,6 +358,112 @@ void test('a real skills remote is refused and no commit is created', () => {
   }
 });
 
+function flow(box: { lockFile: string; payload: string; stub: string; vendor: string }, evolve: string, repoRoot = REPO) {
+  return flowUpstream({
+    decision: 'accept',
+    lockFile: box.lockFile,
+    payloadRoot: box.payload,
+    repoRoot,
+    root: evolve,
+    skill: SKILL,
+    upstreamDir: box.stub,
+    vendorDir: box.vendor,
+  });
+}
+
+void test('a catalog alias sharing the skill path is not a single-skill publish', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const catalog = JSON.parse(readFileSync(join(box.stub, 'catalog.json'), 'utf8')) as { skills: Array<Record<string, unknown>> };
+  catalog.skills.push({ name: 'omc-alias', source_path: `skills/${SKILL}`, supported_hosts: ['omc'] });
+  writeFileSync(join(box.stub, 'catalog.json'), `${JSON.stringify(catalog, null, 2)}\n`);
+  git(box.stub, ['add', 'catalog.json']);
+  git(box.stub, ['commit', '-q', '-m', 'alias']);
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  writeLock(box.lockFile, box.stub, head);
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'refused');
+    assert.equal(report.code, 'not_single_skill');
+    assert.equal(report.upstreamWrites, 0);
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
+void test('a lock SHA that is not the upstream HEAD is refused before any commit', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  const lock = JSON.parse(readFileSync(box.lockFile, 'utf8')) as { ref: string; repo: string; sha: string };
+  lock.sha = 'f'.repeat(40);
+  writeFileSync(box.lockFile, `${JSON.stringify(lock, null, 2)}\n`);
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'refused');
+    assert.equal(report.code, 'handoff_sha_mismatch');
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(readSha(box.lockFile), 'f'.repeat(40));
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
+void test('a case-variant skills remote is refused and creates no commit', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  git(box.stub, ['remote', 'add', 'origin', 'https://github.com/R3DLEX/skills.git']);
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'refused');
+    assert.equal(report.code, 'upstream_refused');
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
+void test('vendored bytes that differ from the locked commit are refused before payload rewrite', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  try {
+    const report = flow(box, evolve);
+    assert.equal(report.decision, 'accept');
+    writeFileSync(join(box.vendor, 'skills', SKILL, 'SKILL.md'), 'mutated-in-place\n');
+    writeFileSync(join(box.payload, 'MARKER'), 'before\n');
+    assert.throws(() => verifyHandoff(box.lockFile, box.vendor), /handoff_sha_mismatch/);
+    assert.throws(() => rebuildPayloads({
+      lockFile: box.lockFile,
+      payloadRoot: box.payload,
+      repoRoot: REPO,
+      vendorDir: box.vendor,
+    }), /handoff_sha_mismatch/);
+    assert.equal(readFileSync(join(box.payload, 'MARKER'), 'utf8'), 'before\n');
+  } finally {
+    finish([box.root, box.stub, evolve]);
+  }
+});
+
+void test('a failed payload rebuild restores the vendor tree and does not keep the stub commit', () => {
+  const box = fixture();
+  const evolve = acceptWorkspace();
+  const empty = realpathSync(mkdtempSync(join(tmpdir(), 'b4-empty-repo-')));
+  const head = git(box.stub, ['rev-parse', 'HEAD']);
+  const lock = readFileSync(box.lockFile, 'utf8');
+  try {
+    const report = flow(box, evolve, empty);
+    assert.equal(report.decision, 'refused');
+    assert.equal(git(box.stub, ['rev-parse', 'HEAD']), head);
+    assert.equal(readFileSync(join(box.vendor, 'IN_PLACE_SENTINEL'), 'utf8'), 'do-not-keep\n');
+    assert.equal(readFileSync(box.lockFile, 'utf8'), lock);
+    assert.equal(exists(join(box.payload, 'claude-plugin')), false);
+  } finally {
+    finish([box.root, box.stub, evolve, empty]);
+  }
+});
+
 function exists(path: string): boolean {
   return existsSync(path);
 }

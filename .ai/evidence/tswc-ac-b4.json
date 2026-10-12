@@ -4,6 +4,7 @@
     "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
     "base": "a29d9e3ab12ae3878392a189793e1b25746c640e",
     "scope_note": ".ai/evidence/tswc-ac-b4.json is outside the goal scope array [src, scripts, test] and is included because AC-4 and the tdd-evidence gate require it. skills.lock.json and vendor/ are not edited. The lock bump is a runtime action against a caller-supplied fixture lock and a local stub upstream. No skills PR was opened.",
+    "cure": "One bounded cure after REQUEST_CHANGES x2. A shared source_path is not a single-skill publish. A lock SHA that is not the upstream HEAD is refused before any commit. A case-variant skills remote is refused. Vendored bytes that differ from the locked commit are refused before payload rewrite. A failed payload rebuild restores the vendor tree and the stub HEAD. Approval tag was not re-minted. no human approved this work.",
     "tdd": "legacy-safe: coverage unknown; the flow is sprouted into src/evolve/upstream.ts and the legacy call site is one dispatch in src/evolve/cli.ts. The red leg is the missing module. The red-leg fixture inside the suite mutates the lock SHA and proves handoff_sha_mismatch before any payload rewrite."
   },
   "goal_id": "tswc-ac-b4",
