@@ -11,10 +11,12 @@
  * state: the accept path appends the audit entry before it writes r_best.
  * Accepted-state records carry the judge_model and task_set_version the gate
  * already requires, and a prior that does not match those bindings is not
- * S_{k-1}. An out-of-range score is refused and, on the accept path, restored
- * to S_0 or S_{k-1}.
+ * S_{k-1}. The accepted overlay is snapshotted before its JSON. A snapshot
+ * that cannot be stored does not leave r_best, and a prior JSON without
+ * matching readable overlay bytes is not S_{k-1}. An out-of-range score is
+ * refused and, on the accept path, restored to S_0 or S_{k-1}.
  */
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { appendAuditEntry } from './audit.ts';
 import { dropFileHere, enterDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
@@ -161,6 +163,8 @@ function finishScore(root: string, request: ValidateRequest, baseline: Baseline,
 
 function finishAccept(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle, rVal: number): ValidateReport {
   const slot = storageK(root, request.skill, baseline.nextK);
+  // An occupied snapshot slot must fail before the audit claims Accepted.
+  assertAcceptSlotFree(root, request.skill, slot);
   const diff = `accept: R=${String(rVal)} > R_best=${String(baseline.rBest)}`;
   // Append first. A failed append must not leave r_best behind for a retry.
   writeAudit(root, request, { ...baseline, nextK: slot }, 'Accepted', rVal, diff);
@@ -317,7 +321,10 @@ function priorFromFile(dir: string, name: string, request: ValidateRequest): Pri
   if (k === null) return null;
   const text = readRegular(join(dir, name));
   if (text === null) return null;
-  return parsePrior(text, request, k);
+  const parsed = parsePrior(text, request, k);
+  if (parsed === null) return null;
+  if (!acceptedOverlayMatches(dir, request.skill, k, text)) return null;
+  return parsed;
 }
 
 function kFromName(skill: string, name: string): number | null {
@@ -502,6 +509,37 @@ function stateSlotTaken(root: string, skill: string, k: number): boolean {
   return readRegular(join(dir, `${stem}.json`)) !== null || readRegular(join(dir, `${stem}.overlay`)) !== null;
 }
 
+function acceptedOverlayMatches(dir: string, skill: string, k: number, jsonText: string): boolean {
+  const bytes = readRegular(join(dir, `accepted-${skill}-${String(k)}.overlay`));
+  if (bytes === null) return false;
+  const fields = parseObject(jsonText);
+  if (fields === null) return false;
+  const recorded = fields['overlay_sha256'];
+  if (typeof recorded !== 'string') return false;
+  return sha256Hex(Buffer.from(bytes, 'utf8')) === recorded;
+}
+
+function assertAcceptSlotFree(root: string, skill: string, k: number): void {
+  const dir = join(root, EVOLVE_DIR, 'raw', 'state');
+  for (const suffix of ['.overlay', '.json']) {
+    const name = `accepted-${skill}-${String(k)}${suffix}`;
+    if (!entryExists(join(dir, name))) continue;
+    throw new EvolveError(
+      'write-once-violation',
+      `raw trace state/${name} already exists; write-once records are never overwritten, even with identical bytes`,
+    );
+  }
+}
+
+function entryExists(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function writeAccepted(
   root: string,
   request: ValidateRequest,
@@ -520,8 +558,25 @@ function writeAccepted(
     task_set_version: request.taskSetVersion,
   })}\n`;
   const paths = evolvePaths(root);
-  recordTrace(paths, 'state', `accepted-${request.skill}-${String(k)}.json`, body);
-  recordTrace(paths, 'state', `accepted-${request.skill}-${String(k)}.overlay`, overlayBytes);
+  const overlayName = `accepted-${request.skill}-${String(k)}.overlay`;
+  // Snapshot first. A failed snapshot must not leave r_best for a later reject.
+  recordTrace(paths, 'state', overlayName, overlayBytes);
+  try {
+    recordTrace(paths, 'state', `accepted-${request.skill}-${String(k)}.json`, body);
+  } catch (error) {
+    rollbackSnapshot(root, overlayName, overlayBytes);
+    throw error;
+  }
+}
+
+function rollbackSnapshot(root: string, name: string, bytes: string): void {
+  const path = join(root, EVOLVE_DIR, 'raw', 'state', name);
+  if (readRegular(path) !== bytes) return;
+  try {
+    unlinkSync(path);
+  } catch {
+    // The refusal still propagates. Without its JSON this snapshot is not S_{k-1}.
+  }
 }
 
 function writeAudit(

@@ -5,8 +5,33 @@
     "base": "3fa658b2142c8874aa3fd78986cff487be3b521d",
     "cure3": "Pair-2 REQUEST_CHANGES, one final cure. Accept validates the audit entry before any accepted-state write, so a failed accept does not persist r_best. Seed judge_model and task_set_version must match or the gate refuses judgment_unbound. Scores outside the rubric range are refused and are not averaged into an accept. Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
     "cure4": "Pair-3 REQUEST_CHANGES, one final cure. A failed audit append does not leave accepted state. Accepted-state records persist judge_model and task_set_version, and a changed binding is not scored against a stale baseline. An out-of-range accept refusal restores S_0 or S_k-1 and does not persist r_best outside the rubric. Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
+    "cure5": "Pair-4 REQUEST_CHANGES, one final cure. A directory at accepted-<skill>-1.overlay does not persist r_best. The overlay is snapshotted before the accepted JSON, and a prior without matching readable overlay bytes is not S_{k-1}. A failed accept leaves prior state restorable. Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
     "scope_note": ".ai/evidence/tswc-ac-b3.json is outside the goal scope array [bin, src/evolve, test] and is included because AC-5 and the tdd-evidence gate require it. No pinned source in .ai/ci/local-ci.json changed.",
     "tdd": "legacy-safe: bin/ai-catapult.ts is a high-coupling call site; the gate is sprouted into src/evolve and the bin edit is one dispatch plus lazy template resolution so evolve does not require the skills vendor checkout."
+  },
+  "cure5": {
+    "green": {
+      "command": "node --test test/evolve-validate.test.ts",
+      "exit_code": 0,
+      "fail": 0,
+      "log_sha256": "62ca4d7f91ef7e2574a91db7b8c82a09e7415ea921d5fa28cd403d4738c58d0e",
+      "pass": 42
+    },
+    "green_suite": {
+      "command": "npm test",
+      "exit_code": 0,
+      "fail": 0,
+      "log_sha256": "5b4385cad3d9082d8a3742c1d6ef9e1bea14cadd58d68741cbd70fa5019c8a8b",
+      "pass": 562,
+      "todo": 2
+    },
+    "red": {
+      "command": "node --test test/evolve-validate.test.ts",
+      "exit_code": 1,
+      "fail": 1,
+      "log_sha256": "07de5c79834e7fffdb02d9ebb25e1e3e0f70e3b1fd3998d7c4769d932a74bd02",
+      "pass": 41
+    }
   },
   "cure4": {
     "green": {

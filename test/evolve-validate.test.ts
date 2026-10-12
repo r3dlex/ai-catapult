@@ -22,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appendWikiFile } from '../src/evolve/append-only.ts';
+import { EvolveError } from '../src/evolve/errors.ts';
 import { evolvePaths, initEvolveLayout } from '../src/evolve/layout.ts';
 import { recordJudgment } from '../src/evolve/judgment.ts';
 import { stageOverlay } from '../src/evolve/proposals.ts';
@@ -614,6 +615,42 @@ void test('a failed audit append does not leave accepted state behind', () => {
   } finally {
     finish(directory.root);
     finish(missing.root);
+  }
+});
+
+void test('a directory at the accepted overlay slot does not persist r_best', () => {
+  const { root } = built(0.5, [0.8], [1]);
+  try {
+    const slot = join(root, 'evolve/raw/state', `accepted-${SKILL}-1.overlay`);
+    mkdirSync(join(root, 'evolve/raw/state'), { recursive: true });
+    mkdirSync(slot);
+    const beforeWiki = skillImpact(root);
+    assert.throws(
+      () => validateCycle(root, request()),
+      (error: unknown) => error instanceof EvolveError && error.kind === 'write-once-violation',
+    );
+    assert.equal(acceptedPersisted(root), false);
+    assert.equal(skillImpact(root), beforeWiki);
+    const worseSha = stage(root, 'worse');
+    recordSample(root, 'later-1', 0.4, worseSha, 1, 'later-run');
+    const restored = validateCycle(root, request({ cycleRunId: 'later-run' }));
+    assert.equal(restored.decision, 'reject');
+    assert.equal(restored.state, 'S_0');
+    assert.equal(restored.rBest, 0.5);
+    assert.equal(restored.overlayDropped, true);
+    assert.equal(overlayPresent(root), false);
+    rmSync(slot, { recursive: true, force: true });
+    const againSha = stage(root, 'again');
+    recordSample(root, 'again-1', 0.8, againSha, 1, 'again-run');
+    const accepted = validateCycle(root, request({ cycleRunId: 'again-run' }));
+    assert.equal(accepted.decision, 'accept');
+    assert.equal(accepted.state, 'S_0');
+    assert.equal(accepted.rBest, 0.5);
+    const saved = acceptedRecord(root, `accepted-${SKILL}-1.json`);
+    assert.equal(saved.r_best, 0.8);
+    assert.equal(readFileSync(join(root, 'evolve/raw/state', `accepted-${SKILL}-1.overlay`), 'utf8'), 'overlay:again\n');
+  } finally {
+    finish(root);
   }
 });
 
