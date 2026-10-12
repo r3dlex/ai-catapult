@@ -4,8 +4,33 @@
     "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
     "base": "3fa658b2142c8874aa3fd78986cff487be3b521d",
     "cure3": "Pair-2 REQUEST_CHANGES, one final cure. Accept validates the audit entry before any accepted-state write, so a failed accept does not persist r_best. Seed judge_model and task_set_version must match or the gate refuses judgment_unbound. Scores outside the rubric range are refused and are not averaged into an accept. Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
+    "cure4": "Pair-3 REQUEST_CHANGES, one final cure. A failed audit append does not leave accepted state. Accepted-state records persist judge_model and task_set_version, and a changed binding is not scored against a stale baseline. An out-of-range accept refusal restores S_0 or S_k-1 and does not persist r_best outside the rubric. Approval tag approval/tswc-ai-catapult/ac3b276da285 was not re-minted. no human approved this work.",
     "scope_note": ".ai/evidence/tswc-ac-b3.json is outside the goal scope array [bin, src/evolve, test] and is included because AC-5 and the tdd-evidence gate require it. No pinned source in .ai/ci/local-ci.json changed.",
     "tdd": "legacy-safe: bin/ai-catapult.ts is a high-coupling call site; the gate is sprouted into src/evolve and the bin edit is one dispatch plus lazy template resolution so evolve does not require the skills vendor checkout."
+  },
+  "cure4": {
+    "green": {
+      "command": "node --test test/evolve-validate.test.ts",
+      "exit_code": 0,
+      "fail": 0,
+      "log_sha256": "835d733d601369bee19e949446148ecab22a6a654df011cae88613085236fa62",
+      "pass": 41
+    },
+    "green_suite": {
+      "command": "npm test",
+      "exit_code": 0,
+      "fail": 0,
+      "log_sha256": "618254173c4fe1893cf55fd8b0a396c33226fde9943c95e5b1ffc2b73ac7839a",
+      "pass": 561,
+      "todo": 2
+    },
+    "red": {
+      "command": "node --test test/evolve-validate.test.ts",
+      "exit_code": 1,
+      "fail": 7,
+      "log_sha256": "f5b006b16660e48041a8aef6ed34db529b35a6ddd6e0f8a70ed1274b6cd60742",
+      "pass": 34
+    }
   },
   "cure3": {
     "green": {

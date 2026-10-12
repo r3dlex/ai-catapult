@@ -7,11 +7,16 @@
  * that — never a skill-disabled baseline. The 1.0 stop and the $100 cycle
  * ceiling come from the master intake; neither number is taken from an
  * external paper. Judge calls stay out of band: this module only reads
- * records already on disk.
+ * records already on disk. A failed audit append does not leave accepted
+ * state: the accept path appends the audit entry before it writes r_best.
+ * Accepted-state records carry the judge_model and task_set_version the gate
+ * already requires, and a prior that does not match those bindings is not
+ * S_{k-1}. An out-of-range score is refused and, on the accept path, restored
+ * to S_0 or S_{k-1}.
  */
 import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { appendAuditEntry, validateAuditEntry } from './audit.ts';
+import { appendAuditEntry } from './audit.ts';
 import { dropFileHere, enterDirectory, entryKind, readFileHere, withBoundRoot } from './containment.ts';
 import { sha256Hex } from './digest.ts';
 import { EvolveError } from './errors.ts';
@@ -155,10 +160,11 @@ function finishScore(root: string, request: ValidateRequest, baseline: Baseline,
 }
 
 function finishAccept(root: string, request: ValidateRequest, baseline: Baseline, cycle: ReadyCycle, rVal: number): ValidateReport {
+  const slot = storageK(root, request.skill, baseline.nextK);
   const diff = `accept: R=${String(rVal)} > R_best=${String(baseline.rBest)}`;
-  validateAuditEntry(auditEntry(request, baseline, 'Accepted', rVal, diff));
-  writeAccepted(root, request, baseline.nextK, cycle.overlaySha, cycle.overlayBytes, rVal);
-  writeAudit(root, request, baseline, 'Accepted', rVal, diff);
+  // Append first. A failed append must not leave r_best behind for a retry.
+  writeAudit(root, request, { ...baseline, nextK: slot }, 'Accepted', rVal, diff);
+  writeAccepted(root, request, slot, cycle.overlaySha, cycle.overlayBytes, rVal);
   return decided(request, 'accept', baseline, cycle.costUsd, rVal, false);
 }
 
@@ -199,7 +205,8 @@ function refuseBudget(root: string, request: ValidateRequest, baseline: Baseline
 
 function refuseRange(root: string, request: ValidateRequest, baseline: Baseline, costUsd: number): ValidateReport {
   writeAudit(root, request, baseline, 'Rejected', 0, 'judgment_unbound: weighted_aggregate outside rubric range');
-  return refuse(request, 'judgment_unbound', false, costUsd, [], baseline);
+  const dropped = request.action === 'accept' && revertOverlay(root, request, baseline);
+  return refuse(request, 'judgment_unbound', dropped, costUsd, [], baseline);
 }
 
 function decided(
@@ -310,7 +317,7 @@ function priorFromFile(dir: string, name: string, request: ValidateRequest): Pri
   if (k === null) return null;
   const text = readRegular(join(dir, name));
   if (text === null) return null;
-  return parsePrior(text, request.catalogSha256, k);
+  return parsePrior(text, request, k);
 }
 
 function kFromName(skill: string, name: string): number | null {
@@ -321,10 +328,12 @@ function kFromName(skill: string, name: string): number | null {
   return Number(digits);
 }
 
-function parsePrior(text: string, catalogSha256: string, k: number): PriorState | null {
+function parsePrior(text: string, request: ValidateRequest, k: number): PriorState | null {
   const fields = parseObject(text);
   if (fields === null) return null;
-  if (fields['catalog_sha256'] !== catalogSha256) return null;
+  if (fields['catalog_sha256'] !== request.catalogSha256) return null;
+  if (fields['judge_model'] !== request.judgeModel) return null;
+  if (fields['task_set_version'] !== request.taskSetVersion) return null;
   if (fields['k'] !== k) return null;
   const score = fields['r_best'];
   if (!inUnitInterval(score)) return null;
@@ -479,6 +488,20 @@ function dropOverlay(root: string, skill: string): boolean {
   });
 }
 
+function storageK(root: string, skill: string, preferred: number): number {
+  // Another binding may already occupy the preferred slot. Skip taken names;
+  // readPrior selects by binding, and revert uses that record's own k.
+  let k = preferred;
+  while (stateSlotTaken(root, skill, k)) k += 1;
+  return k;
+}
+
+function stateSlotTaken(root: string, skill: string, k: number): boolean {
+  const dir = join(root, EVOLVE_DIR, 'raw', 'state');
+  const stem = `accepted-${skill}-${String(k)}`;
+  return readRegular(join(dir, `${stem}.json`)) !== null || readRegular(join(dir, `${stem}.overlay`)) !== null;
+}
+
 function writeAccepted(
   root: string,
   request: ValidateRequest,
@@ -489,10 +512,12 @@ function writeAccepted(
 ): void {
   const body = `${JSON.stringify({
     catalog_sha256: request.catalogSha256,
+    judge_model: request.judgeModel,
     k,
     overlay_sha256: overlaySha,
     r_best: rBest,
     skill: request.skill,
+    task_set_version: request.taskSetVersion,
   })}\n`;
   const paths = evolvePaths(root);
   recordTrace(paths, 'state', `accepted-${request.skill}-${String(k)}.json`, body);

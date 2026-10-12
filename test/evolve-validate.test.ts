@@ -17,7 +17,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -160,13 +160,22 @@ function overlayPresent(root: string): boolean {
   }
 }
 
-function acceptedPersisted(root: string): boolean {
+function acceptedNames(root: string): string[] {
   try {
-    readFileSync(join(root, 'evolve/raw/state', `accepted-${SKILL}-1.json`));
-    return true;
+    return readdirSync(join(root, 'evolve/raw/state'))
+      .filter((name) => name.startsWith(`accepted-${SKILL}-`) && name.endsWith('.json'))
+      .sort((left, right) => left.localeCompare(right));
   } catch {
-    return false;
+    return [];
   }
+}
+
+function acceptedPersisted(root: string): boolean {
+  return acceptedNames(root).length > 0;
+}
+
+function acceptedRecord(root: string, name: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(root, 'evolve/raw/state', name), 'utf8')) as Record<string, unknown>;
 }
 
 function skillImpact(root: string): string {
@@ -504,9 +513,10 @@ void test('a score of 2 does not persist accepted state, and a later valid accep
     const failed = validateCycle(root, request());
     assert.equal(failed.code, 'judgment_unbound');
     assert.notEqual(failed.decision, 'accept');
-    assert.equal(failed.overlayDropped, false);
+    assert.equal(failed.overlayDropped, true);
     assert.equal(acceptedPersisted(root), false);
-    assert.equal(overlayPresent(root), true);
+    assert.equal(overlayPresent(root), false);
+    stage(root, 'candidate');
     mutateJudgment(root, CYCLE_RUN, 'sample-1', { weighted_aggregate: 0.8 });
     assert.equal(validateCycle(root, request()).decision, 'accept');
   } finally {
@@ -576,6 +586,185 @@ void test('a failed accept validates the audit entry before any accepted-state w
     assert.equal(acceptedPersisted(root), false);
     assert.equal(overlayPresent(root), true);
     assert.equal(validateCycle(root, request()).decision, 'accept');
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a failed audit append does not leave accepted state behind', () => {
+  const directory = built(0.5, [0.75], [1]);
+  const missing = built(0.5, [0.75], [1]);
+  try {
+    const asDirectory = evolvePaths(directory.root).wikiSkillImpactFile;
+    const before = readFileSync(asDirectory, 'utf8');
+    rmSync(asDirectory);
+    mkdirSync(asDirectory);
+    assert.throws(() => validateCycle(directory.root, request()));
+    assert.equal(acceptedPersisted(directory.root), false);
+    rmSync(asDirectory, { recursive: true, force: true });
+    writeFileSync(asDirectory, before);
+    assert.equal(validateCycle(directory.root, request()).decision, 'accept');
+
+    const gone = evolvePaths(missing.root).wikiSkillImpactFile;
+    rmSync(gone);
+    assert.throws(() => validateCycle(missing.root, request()));
+    assert.equal(acceptedPersisted(missing.root), false);
+    writeFileSync(gone, '');
+    assert.equal(validateCycle(missing.root, request()).decision, 'accept');
+  } finally {
+    finish(directory.root);
+    finish(missing.root);
+  }
+});
+
+void test('accepted state persists judge_model and task_set_version', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+    const saved = acceptedNames(root).map((name) => acceptedRecord(root, name));
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0]?.judge_model, MODEL);
+    assert.equal(saved[0]?.task_set_version, TASK_VERSION);
+    assert.equal(saved[0]?.r_best, 0.75);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a changed binding does not accept against the stale accepted score', () => {
+  const root = makeRoot();
+  try {
+    const firstSha = stage(root, 'first');
+    recordSeed(root, 0.5, CATALOG);
+    recordCatalog(root, CATALOG);
+    recordSample(root, 'sample-1', 0.75, firstSha, 1);
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+    mutateJudgment(root, SEED_RUN, SEED_ID, {
+      judge_model: 'other-model',
+      task_set_version: 2,
+      weighted_aggregate: 1,
+    });
+    const secondSha = stage(root, 'second');
+    recordSample(root, 'later-1', 0.9, secondSha, 1, 'later-run');
+    mutateJudgment(root, 'later-run', 'later-1', { judge_model: 'other-model', task_set_version: 2 });
+    const report = validateCycle(root, request({
+      cycleRunId: 'later-run',
+      judgeModel: 'other-model',
+      taskSetVersion: 2,
+    }));
+    assert.notEqual(report.decision, 'accept');
+    assert.equal(report.rBest, 1);
+    assert.equal(report.decision, 'early-stop');
+    const stale = acceptedNames(root).map((name) => acceptedRecord(root, name));
+    assert.equal(stale.length, 1);
+    assert.equal(stale[0]?.r_best, 0.75);
+    assert.equal(stale[0]?.judge_model, MODEL);
+    assert.equal(stale[0]?.task_set_version, TASK_VERSION);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a judge_model change accepts against its own seed, not the stale score', () => {
+  const root = makeRoot();
+  try {
+    const firstSha = stage(root, 'first');
+    recordSeed(root, 0.5, CATALOG);
+    recordCatalog(root, CATALOG);
+    recordSample(root, 'sample-1', 0.75, firstSha, 1);
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+    mutateJudgment(root, SEED_RUN, SEED_ID, { judge_model: 'other-model', weighted_aggregate: 0.4 });
+    const secondSha = stage(root, 'second');
+    recordSample(root, 'later-1', 0.6, secondSha, 1, 'later-run');
+    mutateJudgment(root, 'later-run', 'later-1', { judge_model: 'other-model' });
+    const accepted = validateCycle(root, request({ cycleRunId: 'later-run', judgeModel: 'other-model' }));
+    assert.equal(accepted.decision, 'accept');
+    assert.equal(accepted.rBest, 0.4);
+    assert.equal(accepted.state, 'S_0');
+    const records = acceptedNames(root).map((name) => acceptedRecord(root, name));
+    const stale = records.find((record) => record.judge_model === MODEL);
+    const fresh = records.find((record) => record.judge_model === 'other-model');
+    assert.equal(stale?.r_best, 0.75);
+    assert.equal(fresh?.r_best, 0.6);
+    assert.equal(fresh?.task_set_version, TASK_VERSION);
+    const worseSha = stage(root, 'worse-new');
+    recordSample(root, 'drop-1', 0.5, worseSha, 1, 'drop-run');
+    mutateJudgment(root, 'drop-run', 'drop-1', { judge_model: 'other-model' });
+    const dropped = validateCycle(root, request({ cycleRunId: 'drop-run', judgeModel: 'other-model' }));
+    assert.equal(dropped.decision, 'reject');
+    assert.equal(dropped.state, 'S_k-1');
+    assert.equal(dropped.rBest, 0.6);
+    assert.equal(readFileSync(join(root, 'evolve/proposals', `${SKILL}.overlay`), 'utf8'), 'overlay:second\n');
+    mutateJudgment(root, SEED_RUN, SEED_ID, { judge_model: MODEL, weighted_aggregate: 0.5 });
+    const thirdSha = stage(root, 'third');
+    recordSample(root, 'old-1', 0.2, thirdSha, 1, 'old-run');
+    const restored = validateCycle(root, request({ cycleRunId: 'old-run' }));
+    assert.equal(restored.state, 'S_k-1');
+    assert.equal(restored.rBest, 0.75);
+    assert.equal(restored.decision, 'reject');
+    assert.equal(readFileSync(join(root, 'evolve/proposals', `${SKILL}.overlay`), 'utf8'), 'overlay:first\n');
+  } finally {
+    finish(root);
+  }
+});
+
+void test('a task_set_version change does not keep the stale accepted score', () => {
+  const root = makeRoot();
+  try {
+    const firstSha = stage(root, 'first');
+    recordSeed(root, 0.5, CATALOG);
+    recordCatalog(root, CATALOG);
+    recordSample(root, 'sample-1', 0.75, firstSha, 1);
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+    mutateJudgment(root, SEED_RUN, SEED_ID, { task_set_version: 2, weighted_aggregate: 0.4 });
+    const secondSha = stage(root, 'second');
+    recordSample(root, 'later-1', 0.55, secondSha, 1, 'later-run');
+    mutateJudgment(root, 'later-run', 'later-1', { task_set_version: 2 });
+    const report = validateCycle(root, request({ cycleRunId: 'later-run', taskSetVersion: 2 }));
+    assert.equal(report.decision, 'accept');
+    assert.equal(report.rBest, 0.4);
+    assert.notEqual(report.rBest, 0.75);
+    const fresh = acceptedNames(root).map((name) => acceptedRecord(root, name))
+      .find((record) => record.task_set_version === 2);
+    assert.equal(fresh?.judge_model, MODEL);
+    assert.equal(fresh?.r_best, 0.55);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('an out-of-range score restores the last accepted overlay', () => {
+  const root = makeRoot();
+  try {
+    const firstSha = stage(root, 'kept');
+    recordSeed(root, 0.5, CATALOG);
+    recordCatalog(root, CATALOG);
+    recordSample(root, 'sample-1', 0.75, firstSha, 1);
+    assert.equal(validateCycle(root, request()).decision, 'accept');
+    const before = acceptedNames(root).map((name) => acceptedRecord(root, name));
+    const secondSha = stage(root, 'candidate');
+    recordSample(root, 'later-1', 0.9, secondSha, 1, 'later-run');
+    mutateJudgment(root, 'later-run', 'later-1', { weighted_aggregate: 2 });
+    const report = validateCycle(root, request({ cycleRunId: 'later-run' }));
+    assert.equal(report.code, 'judgment_unbound');
+    assert.notEqual(report.decision, 'accept');
+    assert.equal(readFileSync(join(root, 'evolve/proposals', `${SKILL}.overlay`), 'utf8'), 'overlay:kept\n');
+    assert.deepEqual(acceptedNames(root).map((name) => acceptedRecord(root, name)), before);
+    assert.equal(before[0]?.r_best, 0.75);
+  } finally {
+    finish(root);
+  }
+});
+
+void test('dispatch of an out-of-range score refuses without dropping the overlay', () => {
+  const { root } = built(0.5, [0.75], [1]);
+  try {
+    mutateJudgment(root, CYCLE_RUN, 'sample-1', { weighted_aggregate: 2 });
+    const report = validateCycle(root, request({ action: 'dispatch' }));
+    assert.equal(report.code, 'judgment_unbound');
+    assert.equal(report.overlayDropped, false);
+    assert.equal(overlayPresent(root), true);
+    assert.equal(acceptedPersisted(root), false);
   } finally {
     finish(root);
   }
