@@ -1,0 +1,59 @@
+{
+  "disclosure": {
+    "agent_self": "no human approved this work",
+    "approval_tag": "approval/tswc-ai-catapult/ac3b276da285",
+    "base": "58f6aed97ae764fa7bf8eda0f49e51cb9d339fd6",
+    "cure": "One bounded cure after REQUEST_CHANGES x2. Script names containing .. are refused before the judge. A hard link is refused before read. Report strings scrub okf_version so a script name cannot emit it. Prior red/green pair is preserved. no human approved this work.",
+    "cure_final": "Final cure after pair-2 REQUEST_CHANGES x2. An ESLint ignore path (node_modules, .git) no longer skips the consumed complexity rules. A missing, non-directory, or symlinked proposal path is a scrubbed refusal and does not echo the path, so okf_version in that path cannot reach the report. Frontmatter stays findings-only. Prior red/green pair is preserved. no human approved this work.",
+    "cure2": "Second bounded cure after architect REQUEST_CHANGES. Proposal eslint-disable comments and inline rule config do not suppress the consumed complexity rules. A complexity-over-threshold script carrying those comments is pre-rejected before any judge call. Prior red/green pairs are preserved. no human approved this work.",
+    "scope_note": ".ai/evidence/tswc-ac-b5.json is outside the goal scope array [src/evolve, test] and is included because AC-3 and the tdd-evidence gate require it. No skills PR was opened. skills.lock.json and vendor/ are not edited.",
+    "tdd": "legacy-safe: coverage unknown. The hygiene layer is sprouted into src/evolve/hygiene.ts. The legacy call site is one dispatch in src/evolve/cli.ts. The red leg is the missing module. A gnarly proposal is refused by the consumed A-gates before the judge seam."
+  },
+  "goal_id": "tswc-ac-b5",
+  "green": {
+    "command": "node --test test/evolve-hygiene.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "node --test test/evolve-hygiene.test.ts",
+    "exit_code": 1
+  },
+  "pairs": [
+    {
+      "round": "initial",
+      "note": "preserved top-level red/green pair. red exit 1 was the missing module; green exit 0 after the hygiene layer landed. no human approved this work.",
+      "red": {
+        "command": "node --test test/evolve-hygiene.test.ts",
+        "exit_code": 1
+      },
+      "green": {
+        "command": "node --test test/evolve-hygiene.test.ts",
+        "exit_code": 0
+      }
+    },
+    {
+      "round": "cure-final",
+      "note": "ignore-path complexity and missing-path scrub. red exit 1 observed before the product change (node_modules/evil.ts and .git/evil.ts proceeded to the judge; a missing path and a non-directory path emitted okf_version). green exit 0 after. no human approved this work.",
+      "red": {
+        "command": "node --test test/evolve-hygiene.test.ts",
+        "exit_code": 1
+      },
+      "green": {
+        "command": "node --test test/evolve-hygiene.test.ts",
+        "exit_code": 0
+      }
+    },
+    {
+      "round": "cure2",
+      "note": "eslint-disable must not bypass pre-reject. red exit 1 observed before the product change (an eslint-disable for complexity and cognitive-complexity let a complexity-over-threshold script proceed to the judge). green exit 0 after. no human approved this work.",
+      "red": {
+        "command": "node --test test/evolve-hygiene.test.ts",
+        "exit_code": 1
+      },
+      "green": {
+        "command": "node --test test/evolve-hygiene.test.ts",
+        "exit_code": 0
+      }
+    }
+  ]
+}
