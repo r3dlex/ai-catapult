@@ -2,7 +2,8 @@
  * Proposal hygiene (tswc-ac-b5). Structural pre-reject runs before the judge
  * seam. A failing gate, a missing gate tool, an unrecognized script, or an
  * unsafe path returns without invoking the harness, so a gnarly proposal costs
- * zero judge dollars. An ESLint ignore path does not skip those rules. OKF
+ * zero judge dollars. An ESLint ignore path does not skip those rules. A
+ * proposal eslint-disable comment or inline rule config does not either. OKF
  * frontmatter findings are advisory: they never block and the report never
  * carries okf_version, including when a missing path contains that substring.
  *
@@ -304,8 +305,13 @@ function typecheck(dir: string, scripts: readonly ProposedScript[], root: string
   return targets.map((name) => gate('tsc', name, 'fail', firstLine(output), command));
 }
 
+interface LintOptions {
+  readonly allowInlineConfig: false;
+  readonly filename: string;
+}
+
 interface TextLinter {
-  verify(code: string, config: unknown, options: { filename: string }): Array<{ message: string; severity: number }>;
+  verify(code: string, config: unknown, options: LintOptions): Array<{ message: string; severity: number }>;
 }
 
 function eslintGates(scripts: readonly ProposedScript[], root: string): GateResult[] {
@@ -323,6 +329,7 @@ function eslintGates(scripts: readonly ProposedScript[], root: string): GateResu
       parserOptions: { ecmaVersion: 'latest', sourceType: 'module' },
     },
     plugins: { sonarjs: require('eslint-plugin-sonarjs') as unknown },
+    linterOptions: { noInlineConfig: true },
     rules: { complexity: rules.complexity, 'sonarjs/cognitive-complexity': rules.cognitive },
   }];
   return scripts.flatMap((script) => eslintOne(linter, config, script));
@@ -337,11 +344,15 @@ function eslintOne(linter: TextLinter, config: unknown, script: ProposedScript):
 }
 
 function appliedMessages(linter: TextLinter, config: unknown, script: ProposedScript): Array<{ message: string; severity: number }> {
-  const direct = linter.verify(script.bytes, config, { filename: script.name });
+  const direct = linter.verify(script.bytes, config, lintOptions(script.name));
   if (!unapplied(direct)) return direct;
-  const alias = linter.verify(script.bytes, config, { filename: lintAlias(script.name) });
+  const alias = linter.verify(script.bytes, config, lintOptions(lintAlias(script.name)));
   if (!unapplied(alias)) return alias;
   return [{ message: 'consumed eslint rules were not applied', severity: 2 }];
+}
+
+function lintOptions(filename: string): LintOptions {
+  return { allowInlineConfig: false, filename };
 }
 
 function unapplied(messages: Array<{ message: string; severity: number }>): boolean {

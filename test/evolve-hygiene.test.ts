@@ -296,6 +296,54 @@ void test('an ignore-path name does not skip the cognitive-complexity pre-reject
   assert.equal(gate.detail.includes(`the ${String(max)} allowed`), true);
 });
 
+function withDisable(body: string, directive: string): string {
+  return `${directive}\n${body}`;
+}
+
+void test('an eslint-disable comment does not skip the complexity pre-reject', () => {
+  const max = configNumber(/complexity:\s*\['error',\s*(\d+)\]/);
+  const body = ifs(max + 4);
+  const directives = [
+    '/* eslint-disable complexity, sonarjs/cognitive-complexity */',
+    '/* eslint-disable */',
+    '// eslint-disable-next-line complexity, sonarjs/cognitive-complexity',
+    '/* eslint complexity: "off", sonarjs/cognitive-complexity: "off" */',
+  ];
+  for (const directive of directives) {
+    const judge = countingJudge();
+    const report = reviewProposal(proposal([{ name: 'disabled.ts', bytes: withDisable(body, directive) }]), judge.harness);
+    assertZeroDollars(report, judge.calls);
+    const gate = report.gates.find((item) => item.gate === 'eslint' && item.script === 'disabled.ts');
+    assert.ok(gate, directive);
+    assert.equal(gate.status, 'fail');
+    assert.equal(gate.detail.includes(`Maximum allowed is ${String(max)}`), true, directive);
+  }
+});
+
+void test('an eslint-disable comment does not skip the cognitive-complexity pre-reject', () => {
+  const max = configNumber(/'sonarjs\/cognitive-complexity':\s*\['error',\s*(\d+)\]/);
+  const judge = countingJudge();
+  const bytes = withDisable(nested(), '/* eslint-disable complexity, sonarjs/cognitive-complexity */');
+  const report = reviewProposal(proposal([{ name: 'disabled-nest.ts', bytes }]), judge.harness);
+  assertZeroDollars(report, judge.calls);
+  const gate = report.gates.find((item) => item.gate === 'eslint' && item.script === 'disabled-nest.ts');
+  assert.ok(gate);
+  assert.equal(gate.status, 'fail');
+  assert.equal(gate.detail.includes(`the ${String(max)} allowed`), true);
+});
+
+void test('an eslint-disable comment on an ignore-path name does not skip the complexity pre-reject', () => {
+  const max = configNumber(/complexity:\s*\['error',\s*(\d+)\]/);
+  const bytes = withDisable(ifs(max + 4), '/* eslint-disable complexity, sonarjs/cognitive-complexity */');
+  const judge = countingJudge();
+  const report = reviewProposal(proposal([{ name: 'node_modules/evil.ts', bytes }]), judge.harness);
+  assertZeroDollars(report, judge.calls);
+  const gate = report.gates.find((item) => item.gate === 'eslint' && item.script === 'node_modules/evil.ts');
+  assert.ok(gate);
+  assert.equal(gate.status, 'fail');
+  assert.equal(gate.detail.includes(`Maximum allowed is ${String(max)}`), true);
+});
+
 void test('a missing proposal path containing okf_version is a clean refusal', () => {
   const parent = mkdtempSync(join(tmpdir(), 'b5-missing-'));
   const missing = join(parent, 'okf_version-nonexistent');
