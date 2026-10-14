@@ -1,0 +1,16 @@
+{
+  "goals": {
+    "AF06-C-01": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (no goal-scoped measurement exists; the suite is 607 node --test cases at base 5d0c5bd5). Legacy-safe is chosen for blast radius, not low coverage: the slice moves the vendored skills pin for every lane (vendor, packaged CLI, three plugin payloads), changes what the packaged CLI stages for README generation, and moves hosted CI and the declared engine range to node 26. Characterize first: the naive-bump probe (13 failing tests, packed init exit 127) is the characterization; the README contract test with the three pinned digests is the red leg that must fail at lock 28f813bf before any staging or pin change is made.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "af-06-catapult-local-ci",
+  "schema": "readiness-sidecar/1"
+}
