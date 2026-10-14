@@ -1,0 +1,31 @@
+{
+  "contract": "readiness-contract/2",
+  "edges": [
+    {
+      "source": "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "target": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "type": "plans"
+    }
+  ],
+  "generation": "9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+  "goal_ids": [
+    "AF06-C-01"
+  ],
+  "nodes": [
+    {
+      "id": "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/handoff.md",
+      "repo_id": "ai-catapult",
+      "type": "handoff"
+    },
+    {
+      "goal_revision": "d9e7f9bb5162ecdca87b68ddb89b330edbc90db114e9bbd12c9294ea2da185cf",
+      "id": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    }
+  ],
+  "plan_id": "af-06-catapult-local-ci",
+  "schema_version": "1.1"
+}

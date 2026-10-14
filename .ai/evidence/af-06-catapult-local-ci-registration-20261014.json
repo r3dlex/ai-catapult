@@ -1,14 +1,14 @@
 {
-  "generation": "f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+  "generation": "9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
   "goal_id": "AF06-C-01",
   "goals": [
     "AF06-C-01"
   ],
   "limits": [
-    "Planning publication only: no approval was requested, minted or implied; execution needs this generation's own future tag approval/af-06-catapult-local-ci/f4e81d5b7587 (the live policy accepts agent-self; an agent-self approval must carry the verbatim disclosure AGENT-SELF - no human approved it).",
+    "Planning publication only: no approval was requested, minted or implied; execution needs this generation's own future tag approval/af-06-catapult-local-ci/9d8d141338a0 (the live policy accepts agent-self; an agent-self approval must carry the verbatim disclosure AGENT-SELF \u2014 no human approved it).",
     "Local suite results, digests and classifications are lane evidence, not hosted CI, readiness-context admission, merge certification or live authority.",
     "No existing generation, registry entry, approval tag or spec copy is modified: this is a fresh-plan ADD (precedents PR #62 ach-catapult-delivery-ts, PR #65 xskp-p4-adopt-engine-ts).",
-    "No version, tag, release or npm fact is produced or inferred; the goal's node-floor change is a consequence of the pinned vendored shim and is recorded for human supersession (root workspace .omc/plans/receipts-af06-pr2-catapult-20261014/stop-questions.md SQ-1).",
+    "No version, tag, release or npm fact is produced or inferred. Two planning decisions are lane defaults taken on the recommended path without human confirmation and are disclosed with their supersession paths in the spec copy (decisions 4 and 5), in goals.json attachments.decisions and in the PR body: SQ-1 (node floor: hosted CI node 26, engines.node >=26.0.0 <27.0.0, a consequence of the pinned vendored shim) and SQ-2 (single goal; the parent record's validator/docs/scaffold lines recorded as satisfied by the vendored payload). The lane's local stop-questions record (root workspace .omc/plans/receipts-af06-pr2-catapult-20261014/stop-questions.md) is a gitignored, non-authoritative copy of that disclosure.",
     "No root-workspace file, no vendor/skills file and no child repository other than ai-catapult was touched by this registration.",
     "The parent af-06 record's remaining ai-catapult scope lines (scaffold/template, validator, docs) are recorded as satisfied by the vendored payload at the current pin (skills #105 is an ancestor of 28f813bf); the recon that establishes this is in the spec copy and in the root receipts, not re-derived by any test here."
   ],
@@ -23,34 +23,34 @@
   "plan_id": "af-06-catapult-local-ci",
   "publication": {
     "artifact_sha256": {
-      "goals.json": "d1c727730fe0553eb7e224cb220f3d21331692e15c2ab9a1d60698b00cc7f765",
-      "graph.json": "6c57a23b50c55ff25459b77b3bc72f8f6eefd9e76d03131b3056d7a37c38b462",
-      "handoff.md": "37cbf4fbd7129fde42c6a1178319f748b955b95cef5e254714249fca43980cb2",
+      "goals.json": "36c8e71a3b2fd6a7dc7df6be563b1ecfee1aa21f983e7f793fb84f80f176f19d",
+      "graph.json": "a875afe4a8b20542b8b65b71a2c489f46307eb136c200f95d2db4040b92d693c",
+      "handoff.md": "ee669c18b1307dccbcef45b94308bbf2f6951bb109df9747ae5ce51b3654ae23",
       "sidecar.json": "587fa14afa0521200c164c0395b772978996dff07be9167adf71fb7a51868f2b"
     },
     "base": "5d0c5bd5609d4ae2d3cb65d66c72256cea3ec5ae",
-    "command": "bash vendor/skills/02-govern-plan/northstar/handoff-write.sh --root . --bundle <authored goals.json> --sidecar <authored sidecar.json> --target main (publish-v2 --admit-planning, pinned vendor 28f813bf9fd767960b96e9d54857964de8181a53)",
+    "command": "bash vendor/skills/02-govern-plan/northstar/handoff-write.sh --root . --bundle <authored goals.json, round-1 cure> --sidecar <authored sidecar.json, unchanged> --target main (publish-v2 --admit-planning, pinned vendor 28f813bf9fd767960b96e9d54857964de8181a53)",
     "entry": {
       "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
       "artifacts": {
         "bundle": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/goals.json",
-          "sha256": "d1c727730fe0553eb7e224cb220f3d21331692e15c2ab9a1d60698b00cc7f765"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/goals.json",
+          "sha256": "36c8e71a3b2fd6a7dc7df6be563b1ecfee1aa21f983e7f793fb84f80f176f19d"
         },
         "graph": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/graph.json",
-          "sha256": "6c57a23b50c55ff25459b77b3bc72f8f6eefd9e76d03131b3056d7a37c38b462"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/graph.json",
+          "sha256": "a875afe4a8b20542b8b65b71a2c489f46307eb136c200f95d2db4040b92d693c"
         },
         "handoff": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
-          "sha256": "37cbf4fbd7129fde42c6a1178319f748b955b95cef5e254714249fca43980cb2"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/handoff.md",
+          "sha256": "ee669c18b1307dccbcef45b94308bbf2f6951bb109df9747ae5ce51b3654ae23"
         },
         "sidecar": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/sidecar.json"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/sidecar.json"
         }
       },
-      "generation": "f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
-      "handoff_path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
+      "generation": "9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "handoff_path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/handoff.md",
       "id": "northstar-plan-af-06-catapult-local-ci",
       "mode": "live",
       "plan_id": "af-06-catapult-local-ci",
@@ -58,7 +58,7 @@
       "schema": "readiness-contract/2",
       "spec": {
         "path": "docs/specifications/ACTIVE/local-ci-declaration-af-06-catapult-local-ci.md",
-        "sha256": "771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16"
+        "sha256": "94e77418ab8897049e21e73a9a9237882cb65ddaca6ba272d74032a888969ad4"
       },
       "status": "active"
     },
@@ -68,8 +68,8 @@
       "deferred": 5
     },
     "log": {
-      "receipt": "root workspace .omc/plans/receipts-af06-pr2-catapult-20261014/evidence/publication.log",
-      "sha256": "8005fc2c0f23e9f06c260cece06b57e85918a64ba98c23f9179e59f6353e7bcd"
+      "receipt": "root workspace .omc/plans/receipts-af06-pr2-catapult-20261014/cure-r1/publication.log",
+      "sha256": "16c88c49c8afd5b51c2b9f8b68f581699bfc3ae3001a0fe3a35d9859ec15c6e5"
     },
     "planning_complete": true
   },
@@ -77,24 +77,29 @@
   "reserved_path_disposition": {
     "paths_touched": {
       ".ai/evidence/af-06-catapult-local-ci-registration-20261014.json": "no active scope match (this record)",
-      ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/{goals.json,graph.json,handoff.md,sidecar.json}": "fixed reserved; added by the pinned publisher",
+      ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/{goals.json,graph.json,handoff.md,sidecar.json}": "fixed reserved; added by the pinned publisher",
       ".ai/traceability/graph.json": "free planning path; additive nodes/edges only (issue + spec seed before publication; handoff + plan nodes and spec backlink after, in the #62/#65 shape); generated_at unchanged",
       ".ai/work-intake/af-06-catapult-local-ci.md": "new local-first work item; no active scope names it (ACH-C-01 names only .ai/work-intake/autobahn-startup-delivery.md)",
       ".ai/workflows/northstar-readiness-v2.json": "fixed reserved; exact publish-v2 replay (one generation appended, five prior entries byte-unchanged)",
       "docs/specifications/ACTIVE/local-ci-declaration-af-06-catapult-local-ci.md": "free planning path; new plan-scoped spec copy bound by this generation only"
     }
   },
+  "revision": {
+    "reason": "Independent review round 1 of the registration PR (#73, head 3551f17f9830711139cf79abc95c93aef22e0297): Architect and blind Critic both REQUEST_CHANGES on two findings - (1) lane defaults SQ-1/SQ-2 not disclosed in the committed artifacts as human-unconfirmed defaults with their supersession paths; (2) AC[7] and this record carried the ASCII-hyphen form of the verbatim AGENT-SELF disclosure while the spec and PR body carry the em-dash form. The cure edits goals.json (AC[7], attachments.decisions) and the spec copy (decisions 4-5, table row), so the generation digest changes; the unmerged generation was withdrawn from the planning branch and the pinned publisher re-run at the same base 5d0c5bd5. Nothing of the withdrawn generation ever reached main; no predecessor generation, registry entry, approval tag or spec copy is touched; no force-push.",
+    "sidecar": "byte-identical to the withdrawn generation (sha256 587fa14afa0521200c164c0395b772978996dff07be9167adf71fb7a51868f2b)",
+    "withdrawn_generation": "f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+  },
   "seed": {
+    "edge": "issue -> spec specified-by; spec -> handoff plans; handoff -> plan plans",
     "issue_node": "issue:ai-catapult:af-06-catapult-local-ci (status needs-triage, owner unassigned)",
-    "spec_node": "spec:ai-catapult:af-06-catapult-local-ci (sha256 771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16)",
-    "edge": "issue -> spec specified-by; spec -> handoff plans; handoff -> plan plans"
+    "spec_node": "spec:ai-catapult:af-06-catapult-local-ci (sha256 94e77418ab8897049e21e73a9a9237882cb65ddaca6ba272d74032a888969ad4)"
   },
   "verification": {
     "diff_check": {
       "command": "git diff --check",
       "exit_code": 0
     },
-    "generation_recomputed": "generation_v2(bundle_sha256 c3cf03daaaf31b7665ff285179a5081e157948fabb06f35f25a556f2f6153a87, spec_sha256 771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16, policy_sha256 f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f, anchor_sha256 8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1) == f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9 (pinned readiness_contract_v2, recomputed independently of the publisher); goal_revision_v2(AF06-C-01) == 4a5696786e1ecd85f3dd72afce7bacc82f07543c45346f83945f051e17147bd1 == graph.json",
+    "generation_recomputed": "generation_v2(bundle_sha256 509f88527b3c2619368344f82e9252d3e2b0fe28f8adbd1df14ababea405afb6, spec_sha256 94e77418ab8897049e21e73a9a9237882cb65ddaca6ba272d74032a888969ad4, policy_sha256 f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f, anchor_sha256 8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1) == 9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4 (pinned readiness_contract_v2, recomputed independently of the publisher); goal_revision_v2(AF06-C-01) == d9e7f9bb5162ecdca87b68ddb89b330edbc90db114e9bbd12c9294ea2da185cf == graph.json",
     "live_policy": "sha256 of .ai/policies/readiness-policy.json f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f equals the registry policy_sha256 (mode live)",
     "probe": {
       "baseline": "lock 28f813bf at base 5d0c5bd5: npm test 607 tests / 605 pass / 0 fail / 2 todo, exit 0 (log sha256 0cb82b7824d2485eb4e364075183019156010e6a57684eecb3f5622ff4dec1af)",
@@ -102,12 +107,12 @@
       "note": "lane characterization of the goal, not goal evidence; the goal's own red/green legs are recorded by its execution lane in .ai/evidence/AF06-C-01.json"
     },
     "suite": {
-      "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot npm test",
+      "command": "npm test",
       "log": {
-        "receipt": "root workspace .omc/plans/receipts-af06-pr2-catapult-20261014/evidence/registration-npm-test.log",
-        "sha256": "9e8bbaaf87b814b77a24ed3c725dad5bfa8f12d82c01aa3f5dce3e3c8224c4c9"
+        "receipt": "root workspace .omc/plans/receipts-af06-pr2-catapult-20261014/cure-r1/cure-npm-test.log",
+        "sha256": "90a2659be0e32fd30743b2397746c9702e2c9d09edb563d6f6a9ca5574b91992"
       },
-      "result": "exit 0 - 607 tests / 605 pass / 0 fail / 2 todo (the two pre-existing deferred-to-ADR-0013 backfill legs) at the published registration state"
+      "result": "exit 0 - 607 tests / 605 pass / 0 fail / 2 todo (the two pre-existing deferred-to-ADR-0013 backfill legs) at the cured publication state (generation 9d8d1413... published, traceability appended, spec cured), run before this record's suite fields were filled; an earlier run was invalidated by a concurrent write of this very record during the run and is kept as cure-npm-test-INVALID-concurrent-write.log"
     }
   }
 }

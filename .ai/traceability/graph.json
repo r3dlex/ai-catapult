@@ -274,12 +274,12 @@
     },
     {
       "source": "spec:ai-catapult:af-06-catapult-local-ci",
-      "target": "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "target": "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
       "type": "plans"
     },
     {
-      "source": "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
-      "target": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "source": "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "target": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
       "type": "plans"
     }
   ],
@@ -965,12 +965,12 @@
     {
       "backlinks": [
         "issue:ai-catapult:af-06-catapult-local-ci",
-        "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+        "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4"
       ],
       "id": "spec:ai-catapult:af-06-catapult-local-ci",
       "path": "docs/specifications/ACTIVE/local-ci-declaration-af-06-catapult-local-ci.md",
       "repo_id": "ai-catapult",
-      "sha256": "771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16",
+      "sha256": "94e77418ab8897049e21e73a9a9237882cb65ddaca6ba272d74032a888969ad4",
       "status": "active",
       "title": "af-06 `local_ci` declaration \u2014 ai-catapult plan-scoped planning specification (plan `af-06-catapult-local-ci`)",
       "type": "spec"
@@ -990,10 +990,10 @@
     {
       "backlinks": [
         "spec:ai-catapult:af-06-catapult-local-ci",
-        "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+        "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4"
       ],
-      "id": "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
-      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
+      "id": "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/handoff.md",
       "repo_id": "ai-catapult",
       "status": "active",
       "title": "af-06-catapult-local-ci",
@@ -1001,10 +1001,10 @@
     },
     {
       "backlinks": [
-        "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+        "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4"
       ],
-      "id": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
-      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/goals.json",
+      "id": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/goals.json",
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "AF06-C-01",

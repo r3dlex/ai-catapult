@@ -168,23 +168,23 @@
       "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
       "artifacts": {
         "bundle": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/goals.json",
-          "sha256": "d1c727730fe0553eb7e224cb220f3d21331692e15c2ab9a1d60698b00cc7f765"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/goals.json",
+          "sha256": "36c8e71a3b2fd6a7dc7df6be563b1ecfee1aa21f983e7f793fb84f80f176f19d"
         },
         "graph": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/graph.json",
-          "sha256": "6c57a23b50c55ff25459b77b3bc72f8f6eefd9e76d03131b3056d7a37c38b462"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/graph.json",
+          "sha256": "a875afe4a8b20542b8b65b71a2c489f46307eb136c200f95d2db4040b92d693c"
         },
         "handoff": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
-          "sha256": "37cbf4fbd7129fde42c6a1178319f748b955b95cef5e254714249fca43980cb2"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/handoff.md",
+          "sha256": "ee669c18b1307dccbcef45b94308bbf2f6951bb109df9747ae5ce51b3654ae23"
         },
         "sidecar": {
-          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/sidecar.json"
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/sidecar.json"
         }
       },
-      "generation": "f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
-      "handoff_path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
+      "generation": "9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+      "handoff_path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4/handoff.md",
       "id": "northstar-plan-af-06-catapult-local-ci",
       "mode": "live",
       "plan_id": "af-06-catapult-local-ci",
@@ -192,7 +192,7 @@
       "schema": "readiness-contract/2",
       "spec": {
         "path": "docs/specifications/ACTIVE/local-ci-declaration-af-06-catapult-local-ci.md",
-        "sha256": "771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16"
+        "sha256": "94e77418ab8897049e21e73a9a9237882cb65ddaca6ba272d74032a888969ad4"
       },
       "status": "active"
     }
