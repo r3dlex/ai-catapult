@@ -163,6 +163,38 @@
         "sha256": "8bd078a7ac9dd4cc615db896e2e572645f3736b2dc5b899cccd1b9df6f20b579"
       },
       "status": "active"
+    },
+    {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/goals.json",
+          "sha256": "d1c727730fe0553eb7e224cb220f3d21331692e15c2ab9a1d60698b00cc7f765"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/graph.json",
+          "sha256": "6c57a23b50c55ff25459b77b3bc72f8f6eefd9e76d03131b3056d7a37c38b462"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
+          "sha256": "37cbf4fbd7129fde42c6a1178319f748b955b95cef5e254714249fca43980cb2"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/sidecar.json"
+        }
+      },
+      "generation": "f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "handoff_path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
+      "id": "northstar-plan-af-06-catapult-local-ci",
+      "mode": "live",
+      "plan_id": "af-06-catapult-local-ci",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/local-ci-declaration-af-06-catapult-local-ci.md",
+        "sha256": "771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16"
+      },
+      "status": "active"
     }
   ],
   "schema": "readiness-contract/2"

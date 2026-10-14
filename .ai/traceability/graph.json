@@ -266,6 +266,21 @@
       "source": "handoff:ai-catapult:xskp-p4-adopt-engine-ts:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
       "target": "plan:ai-catapult:xskp-p4-adopt-engine-ts:XSKP-P4-05:0baa7a7267dd26a546fcd614ff841e3d5c86ab42bf16150b28233e5ee3f76eb7",
       "type": "plans"
+    },
+    {
+      "source": "issue:ai-catapult:af-06-catapult-local-ci",
+      "target": "spec:ai-catapult:af-06-catapult-local-ci",
+      "type": "specified-by"
+    },
+    {
+      "source": "spec:ai-catapult:af-06-catapult-local-ci",
+      "target": "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "target": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "type": "plans"
     }
   ],
   "generated_at": "2026-08-22T00:00:00Z",
@@ -945,6 +960,54 @@
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "XSKP-P4-05",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "issue:ai-catapult:af-06-catapult-local-ci",
+        "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+      ],
+      "id": "spec:ai-catapult:af-06-catapult-local-ci",
+      "path": "docs/specifications/ACTIVE/local-ci-declaration-af-06-catapult-local-ci.md",
+      "repo_id": "ai-catapult",
+      "sha256": "771fc5a9a70c36027f171177e86c5e3212e34fb369a82b6d56aae89c40002f16",
+      "status": "active",
+      "title": "af-06 `local_ci` declaration \u2014 ai-catapult plan-scoped planning specification (plan `af-06-catapult-local-ci`)",
+      "type": "spec"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:af-06-catapult-local-ci"
+      ],
+      "id": "issue:ai-catapult:af-06-catapult-local-ci",
+      "owner": "unassigned",
+      "path": ".ai/work-intake/af-06-catapult-local-ci.md",
+      "repo_id": "ai-catapult",
+      "status": "needs-triage",
+      "title": "af-06 PR 2 \u2014 ai-catapult lane (`ai-catapult`, plan `af-06-catapult-local-ci`) \u2014 local work item",
+      "type": "issue"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:af-06-catapult-local-ci",
+        "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+      ],
+      "id": "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/handoff.md",
+      "repo_id": "ai-catapult",
+      "status": "active",
+      "title": "af-06-catapult-local-ci",
+      "type": "handoff"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:af-06-catapult-local-ci:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9"
+      ],
+      "id": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9",
+      "path": ".ai/handoff/readiness-v2/af-06-catapult-local-ci/f4e81d5b7587685c0914f449104ef3fab1d14b894d83f13b360c0e4accac42f9/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "AF06-C-01",
       "type": "plan"
     }
   ],
