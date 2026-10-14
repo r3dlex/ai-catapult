@@ -1,11 +1,11 @@
 {
   "schema": "local-ci/2",
   "workflows": {
-    ".github/workflows/ci.yml": "49fac58f7be6e4d924036ba77f74f8564e4b8ab52560b2214991392d8f30c0b8",
-    ".github/workflows/release.yml": "3b04f9243715a3405ae47d1b70935a5332665cad172929fe4af97baf967425e1"
+    ".github/workflows/ci.yml": "800c3aaddcb27e1f442dceb0e4d10dce2200539966959394a633b825c7eddc10",
+    ".github/workflows/release.yml": "8a2c6795133badc8a8fc3371ce950553493e14a24fcf56c13064cc5a6ff9709f"
   },
   "sources": {
-    "package.json": "a45b9a2f7dd726ffa7ffc71134f7491b446dc15fb6ec02e11cd2f75bce4db7c9",
+    "package.json": "9a71e2e174373f8a53166b2cc08adda6de35351a6279d31b1fbe528b3dabd599",
     "package-lock.json": "a88be3ff3e96a1c972e4078b6bda186a052c0033be0f9749d229c43f00fa83df",
     "scripts/build-claude-plugin.ts": "d7ea0fffed8495258cc8d20d433886b4c85164e29c7fb7a7303f62e86f3c0ac9",
     "scripts/build-codex-plugin.ts": "3e61182f16831b07ef7b3a5a4ab7056981cecdee47ea73c8b1b036b11ab3fe1d",
@@ -16,10 +16,10 @@
     "scripts/snapshot-dist.ts": "39f0d66e37641898a6c1677c1d6484389641e82bec4dbcac0180d9551c6ef522",
     "scripts/stage-ci-adapters-runtime.ts": "a4e6c6d277da91ec97939c52c055114d720da81a74bba57f604f3d145a81113d",
     "scripts/stage-matrix-runtime.ts": "0641043cfe566c4ad291cf8ff872d0c1cedce1d3878be522ecd9901a181edcb3",
-    "scripts/stage-readme-contract.ts": "637179e42c1a4c56776bd1ccaa92f96420a58c5a92285dc449d5167089305fc2",
+    "scripts/stage-readme-contract.ts": "c6a31bc03acff33659844bd54e7c65413367bd86ec0c231909ead03c46b3aa31",
     "scripts/stage-skill-templates.ts": "666e62ed977c2e2f876cafc4c6a72b164c8f81a164bafe8fa3972ce172f8f2c6",
     "scripts/verify-vendor.ts": "bad7df47566e9d37a06f371172f9168feea8f6a6f664908b6b21469c7613fbe4",
-    "skills.lock.json": "96a85c64436bec8ddc5e90be2f9f58eb19d534f76288fb87bca2c057a09daacb",
+    "skills.lock.json": "303c6ca4bed5c422a45008c3bf20f883b380bea52bae0a91ade3191e9201c07a",
     "src/skill-resolver.ts": "84c4ad817cffabdd08d744d18a604a1e9bbea1ade866e5ceaef9c099923da9eb",
     "test/fixtures/readiness-delivery.ts": "f2924098fe33379e47a5e4d7b3921ee68075924159e95f1304b7e0ab2ee56e94",
     "test/autobahn-startup.test.ts": "a7f17be3ff77d4ccba6ae1b2643c62b8c67ca22dec7df7a428d551757049332d",
@@ -28,7 +28,7 @@
     "test/readiness-delivery.test.ts": "932f1030e4578bc78c27fa45b3aa9ced0edfe4c073dac7fa49715aa63c4334f0",
     "test/release-0.4.3.test.ts": "9469cfcef01da35a2545d2a5fb8575848bbe85f24244cbad31544124a17443b8",
     "test/release-0.4.4.test.ts": "1d1603f0b23a6a741a1fecd1265292f7a386db50e49b3d184433b308bf8739af",
-    "test/release-dispatch.test.ts": "028bc939bfac3d8856f93dd5bb4da5b902ef0ed8f68e4b3abb2209ba5ca637b4"
+    "test/release-dispatch.test.ts": "169c8c64dd851ba1f9a91b2394b973d0b02ef9eeda22d92e0d62040c7a3793b4"
   },
   "verification": [
     "npm test"

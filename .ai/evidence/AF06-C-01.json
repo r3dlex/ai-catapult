@@ -1,0 +1,37 @@
+{
+  "disclosure": {
+    "agent_self": "AGENT-SELF \u2014 no human approved it",
+    "approval_tag": "approval/af-06-catapult-local-ci/9d8d141338a0 (fresh tag at the publication commit fcdc6f66e4bd67b8ccc624bdeb3603e11594df71; plan-approval/1 digest 4fb5dacdf0d0cdb55ad9a77f5356156295dded27d41b11b53400575ae9a39f48, assurance agent-self)",
+    "base": "fcdc6f66e4bd67b8ccc624bdeb3603e11594df71",
+    "blast_radius": "skills 28f813bf..848a3dd6 = 9 commits; the only consumer-visible change is #137 (10a650db): 03-configure-generate/ai-catapult-init/scripts/readme-generate.sh became an E6 compat shim over scripts/lib/readme-generate.mjs (+ invoked.mjs, node-version.mjs, repo-root.mjs and .d.mts/.map siblings). Untouched upstream: ai-catapult-init/templates/**, modules/**, catalog.json, northstar/**, autobahn/**, matrix-contract.py, render-ci-adapters.py, validate-rules.sh - hence the no-op fixture regen.",
+    "fixture_regen": {
+      "command": "npm run regen:fixture (twice, consecutively, at lock 848a3dd6)",
+      "committed": "3b3cdb094a0102208208e26868f374c16833c3b2e43b3111d43c46fb1f5baaaf",
+      "git_status_delta": "zero lines after each run",
+      "local_ci_block": "{\"surfaces\": [], \"sole_source_of_truth\": false} (unchanged parked starter)",
+      "run1": "3b3cdb094a0102208208e26868f374c16833c3b2e43b3111d43c46fb1f5baaaf",
+      "run2": "3b3cdb094a0102208208e26868f374c16833c3b2e43b3111d43c46fb1f5baaaf",
+      "tree_digest_method": "sha256 over the LC_ALL=C-sorted list of \"<sha256>  <relative path>\" lines of every file under test/fixtures/init-standalone/"
+    },
+    "generation": "9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
+    "pins": {
+      "assets/readme/template.md": "449a0d74f7150e8558a3884d5bd09c031f00dd4885d8690fef53c00a2ae9a358 (unchanged)",
+      "local-ci.json": "re-pinned only the digests of the declared sources/workflows this goal edits: package.json, scripts/stage-readme-contract.ts, skills.lock.json, test/release-dispatch.test.ts, .github/workflows/ci.yml, .github/workflows/release.yml; workspace object and verification list byte-identical; bash vendor/skills/04-validate-handoff/autobahn/local-ci.sh --root . exit 0 (npm test 607 / 605 pass / 0 fail / 2 todo)",
+      "node": "hosted CI ci.yml (4 jobs) and release.yml node-version '22' -> '26'; package.json engines.node >=22.18 -> >=26.0.0 <27.0.0 (the range the vendored E6 shim enforces, skills ADR-0018); lane default SQ-1, no human confirmed it",
+      "scripts/lib/readme-generate.mjs": "50a726e752d76097867b6ba81ca0610dfb7ad20fad8bb9d3929014cf745e65ac",
+      "scripts/readme-generate.sh": "eea644047f02d392284d2900b1baa4b2a77b68215d7cf1a5586fa834feb59a4d",
+      "skills.lock.json": "28f813bf9fd767960b96e9d54857964de8181a53 -> 848a3dd6375d3552ea118914d4584d39aaa351ba (repo and ref unchanged)"
+    },
+    "scope_note": "All edits are inside the goal scope array; .ai/evidence/AF06-C-01.json is the eleventh scope entry. Nothing under vendor/skills/ is edited (re-vendored from the pinned sha by scripts/setup.ts; gitignored). No skills PR. No tag, release or publish.",
+    "tdd": "legacy-safe (published sidecar: coverage unknown, legacy_safe_tdd true; no percentage invented). Characterization: the naive-bump probe at base 5d0c5bd5 (lock 848a3dd6 alone) fails 13 tests, packaged init exits 127 node_unavailable. Red leg: test/readme-contract.test.ts re-pinned to the three skills-848a3dd6 digests and run while the vendor was still at 28f813bf and dist/readme-contract/ staged only the shim and the template - 10 tests / 8 pass / 2 fail (plugin payloads and CLI payload missing scripts/lib/readme-generate.mjs and carrying generator aa2a51dc), exit 1. Green leg: same command after the lock bump to 848a3dd6, re-vendoring (node scripts/setup.ts; node scripts/verify-vendor.ts OK) and staging scripts/lib/ beside the shim - 10 / 10 pass, exit 0."
+  },
+  "goal_id": "AF06-C-01",
+  "green": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/readme-contract.test.ts",
+    "exit_code": 0
+  },
+  "red": {
+    "command": "AI_CATAPULT_DIST_ROOT=dist-snapshot node --test test/readme-contract.test.ts",
+    "exit_code": 1
+  }
+}

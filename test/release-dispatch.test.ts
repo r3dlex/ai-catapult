@@ -76,7 +76,7 @@ void test('release workflow shares ref concurrency and retains tests, OIDC and g
   assert.match(text, /group: release-\$\{\{ github.ref \}\}/);
   assert.match(text, /cancel-in-progress: false/);
   assert.match(text, /id-token: write/);
-  assert.match(text, /node-version: '22'/);
+  assert.match(text, /node-version: '26'/);
   assert.match(text, /npm install -g npm@11\.5\.1/);
   assert.match(text, /run: node scripts\/release-context.ts/);
   assert.ok(text.indexOf('run: node scripts/release-context.ts') < text.indexOf('npm install -g'));

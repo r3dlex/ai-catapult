@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Stage the pinned README generator and template for the published CLI.
 // (Replaces the former scripts/stage-readme-contract.sh; the generator itself
-// is vendored content and stays a byte-pinned .sh.)
+// is vendored content and stays a byte-pinned .sh. Since skills 848a3dd6 that
+// .sh is an E6 compat shim that execs scripts/lib/readme-generate.mjs beside
+// itself, so the vendored scripts/lib/ directory is staged in the same layout.)
 import { chmodSync, cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,11 +23,14 @@ export function run(): void {
   }
   const dest = join(REPO_ROOT, 'dist/readme-contract');
   const generator = join(skillSrc, 'scripts/readme-generate.sh');
+  const generatorLib = join(skillSrc, 'scripts/lib');
+  const generatorModule = join(generatorLib, 'readme-generate.mjs');
   const template = join(skillSrc, 'assets/readme/template.md');
 
-  if (!existsSync(generator) || !existsSync(template)) {
+  if (!existsSync(generator) || !existsSync(generatorModule) || !existsSync(template)) {
     process.stderr.write('ERROR: pinned canonical README contract is incomplete\n');
     process.stderr.write(`       expected ${generator}\n`);
+    process.stderr.write(`       expected ${generatorModule}\n`);
     process.stderr.write(`       expected ${template}\n`);
     process.exit(1);
   }
@@ -34,6 +39,7 @@ export function run(): void {
   mkdirSync(join(dest, 'scripts'), { recursive: true });
   mkdirSync(join(dest, 'assets/readme'), { recursive: true });
   cpSync(generator, join(dest, 'scripts/readme-generate.sh'));
+  cpSync(generatorLib, join(dest, 'scripts/lib'), { recursive: true });
   cpSync(template, join(dest, 'assets/readme/template.md'));
   chmodSync(join(dest, 'scripts/readme-generate.sh'), 0o755);
 

@@ -47,7 +47,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '26'
           # NOTE: no registry-url here. setup-node's registry-url writes an
           # .npmrc _authToken=${NODE_AUTH_TOKEN} line with a placeholder value,
           # which can shadow the OIDC trusted-publishing exchange. Trusted

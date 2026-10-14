@@ -187,7 +187,7 @@ function finish(paths: readonly string[]): void {
 
 void test('package skills.lock.json is not the runtime bump target', () => {
   assert.equal(readFileSync(join(REPO, 'skills.lock.json'), 'utf8'), PACKAGE_LOCK);
-  assert.match(PACKAGE_LOCK, /28f813bf9fd767960b96e9d54857964de8181a53/);
+  assert.match(PACKAGE_LOCK, /848a3dd6375d3552ea118914d4584d39aaa351ba/);
 });
 
 void test('accept publishes one skill, bumps the lock, revendors, and rebuilds payloads', () => {

@@ -9,7 +9,10 @@ import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
-const canonicalGeneratorSha256 = 'aa2a51dc5227ff0f35852b0028ebee69d479573c67bc32a931d34c7332e6447e';
+// Pinned at skills 848a3dd6375d3552ea118914d4584d39aaa351ba: the generator is an E6 compat shim
+// over scripts/lib/readme-generate.mjs, so the contract is three byte-pinned files.
+const canonicalGeneratorSha256 = 'eea644047f02d392284d2900b1baa4b2a77b68215d7cf1a5586fa834feb59a4d';
+const canonicalGeneratorModuleSha256 = '50a726e752d76097867b6ba81ca0610dfb7ad20fad8bb9d3929014cf745e65ac';
 const canonicalTemplateSha256 = '449a0d74f7150e8558a3884d5bd09c031f00dd4885d8690fef53c00a2ae9a358';
 const stableDist = process.env.AI_CATAPULT_DIST_ROOT || join(root, 'dist');
 let pluginDist: string;
@@ -18,10 +21,15 @@ function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-function assertCanonicalContract(generatorPath: string, templatePath: string, surface: string): void {
+function assertCanonicalContract(skillRoot: string, surface: string): void {
+  const generatorPath = join(skillRoot, 'scripts', 'readme-generate.sh');
+  const modulePath = join(skillRoot, 'scripts', 'lib', 'readme-generate.mjs');
+  const templatePath = join(skillRoot, 'assets', 'readme', 'template.md');
   assert.ok(existsSync(generatorPath), `${surface} is missing the canonical README generator: ${generatorPath}`);
+  assert.ok(existsSync(modulePath), `${surface} is missing the canonical README generator module: ${modulePath}`);
   assert.ok(existsSync(templatePath), `${surface} is missing the canonical README template: ${templatePath}`);
   assert.equal(sha256(generatorPath), canonicalGeneratorSha256, `${surface} has a stale or modified README generator`);
+  assert.equal(sha256(modulePath), canonicalGeneratorModuleSha256, `${surface} has a stale or modified README generator module`);
   assert.equal(sha256(templatePath), canonicalTemplateSha256, `${surface} has a stale or modified README template`);
 }
 
@@ -51,21 +59,12 @@ void test('skills lock pins the exact canonical README contract from the pinned 
 
 void test('Claude and Codex plugin builds contain byte-identical canonical README contracts', () => {
   for (const plugin of ['claude-plugin', 'codex-plugin']) {
-    const skill = join(pluginDist, plugin, 'skills', 'ai-catapult-init');
-    assertCanonicalContract(
-      join(skill, 'scripts', 'readme-generate.sh'),
-      join(skill, 'assets', 'readme', 'template.md'),
-      plugin,
-    );
+    assertCanonicalContract(join(pluginDist, plugin, 'skills', 'ai-catapult-init'), plugin);
   }
 });
 
 void test('packaged CLI payload contains the byte-identical canonical README contract', () => {
-  assertCanonicalContract(
-    join(stableDist, 'readme-contract', 'scripts', 'readme-generate.sh'),
-    join(stableDist, 'readme-contract', 'assets', 'readme', 'template.md'),
-    'CLI payload',
-  );
+  assertCanonicalContract(join(stableDist, 'readme-contract'), 'CLI payload');
 });
 
 void test('CLI scaffold preserves the first-success command containing && byte-for-byte', () => {
