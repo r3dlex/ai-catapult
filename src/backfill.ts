@@ -48,7 +48,12 @@
  * never deleted or rewritten — the file is left as it is and the refusal is
  * still reported; the relocated directory itself is the relocator's and is not
  * claimed removed. These removals and restorations are best-effort controls,
- * not guarantees, and not single kernel operations.
+ * not guarantees, and not single kernel operations. The policy write and the
+ * ledger append run under one bind: the ledger directory is reached from
+ * `.ai/policies` through `..` with the parent's recorded identity verified,
+ * and a relocation of a shared ancestor (the root or `.ai`) observed at the
+ * ledger step walks back to the policy by identity alone to remove or restore
+ * it under the same two conditions; the result is then `refused`.
  *
  * Declared residual (ADR-0013 (c)): a relocation of a write directory that
  * takes effect only inside the interval between the run's final verification
@@ -84,15 +89,19 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, realpathSync, type Stats } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import {
   appendFileHere,
+  ascendHere,
+  boundIdentityHere,
   createFileHere,
   enterOrCreateDirectory,
   entryKind,
   replaceFileAtomicallyHere,
+  revertWrittenFile,
   withBoundRoot,
-  type DirectoryIdentity,
+  type InodeIdentity,
+  type WrittenFile,
 } from './evolve/containment.ts';
 import { EvolveError, type EvolveRefusalReason } from './evolve/errors.ts';
 import { resolveVendorSkill } from './skill-resolver.ts';
@@ -101,6 +110,9 @@ const POLICY_REL = '.ai/policies/readiness-policy.json';
 const LEDGER_REL = '.ai/drift/backfill-ledger.jsonl';
 const POLICY_NAME = basename(POLICY_REL);
 const LEDGER_NAME = basename(LEDGER_REL);
+const AI_DIR = '.ai';
+const POLICY_DIR = basename(dirname(POLICY_REL));
+const LEDGER_DIR = basename(dirname(LEDGER_REL));
 const POLICY_SCHEMA = 'readiness-policy/2';
 const V1_POLICY_SCHEMA = 'readiness-policy/1';
 const INVENTORY_SCHEMA = 'v1-inventory/1';
@@ -189,7 +201,7 @@ type Refusal = { code: string; detail: string };
 type Migration = { id: string; plan_id: string | null; fate: string; goals: string[] };
 
 /** The root as validated once per run: its canonical path and its directory identity. */
-type VerifiedRoot = { path: string; identity: DirectoryIdentity };
+type VerifiedRoot = { path: string; identity: InodeIdentity };
 
 type ParsedArgs =
   | { kind: 'run'; root: string; dryRun: boolean }
@@ -529,30 +541,40 @@ function boundRefusal(error: unknown, rel: string, root: string): Refusal | null
   return leafRefusalFor(error.reason, rel);
 }
 
-/**
- * Bind the verified root (its recorded identity must match; a root observed
- * gone is never recreated), descend into the target's directory creating
- * missing levels under the verified chain, and run `mutate` there. Every
- * tagged containment refusal comes back as a structured backfill refusal;
- * anything else propagates to the caller.
- */
-function mutateBound(root: VerifiedRoot, rel: string, mutate: () => Refusal | null): Refusal | null {
-  const directories = rel.split('/').slice(0, -1);
+/** The outcome of the mutation phase; `refused`/`failed` follow the AC-1 result rule. */
+type Commit =
+  | { kind: 'done' }
+  | { kind: 'refused'; refusal: Refusal }
+  | { kind: 'failed'; refusal: Refusal };
+
+/** lstat identity of a real (non-symlink) directory or file at an absolute path; null otherwise. */
+function identityAt(path: string): InodeIdentity | null {
   try {
-    return withBoundRoot(
-      root.path,
-      (anchor) => {
-        let from = anchor;
-        for (const name of directories) from = enterOrCreateDirectory(name, from);
-        return mutate();
-      },
-      { create: false, identity: root.identity },
-    );
-  } catch (error) {
-    const refusal = boundRefusal(error, rel, root.path);
-    if (refusal === null) throw error;
-    return refusal;
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink()) return null;
+    return { dev: stat.dev, ino: stat.ino };
+  } catch {
+    return null;
   }
+}
+
+function sameIdentity(a: InodeIdentity | null, b: InodeIdentity): boolean {
+  return a !== null && a.dev === b.dev && a.ino === b.ino;
+}
+
+/**
+ * Does this run's policy write still stand at the verified path? True only
+ * while the root, `.ai` and `.ai/policies` are the recorded directories and the
+ * entry at the policy path is the inode this run wrote (observed by lstat, no
+ * symlink followed).
+ */
+function policyStands(root: VerifiedRoot, ai: InodeIdentity, written: WrittenFile): boolean {
+  return (
+    sameIdentity(identityAt(root.path), root.identity) &&
+    sameIdentity(identityAt(join(root.path, AI_DIR)), ai) &&
+    sameIdentity(identityAt(dirname(join(root.path, POLICY_REL))), written.directory) &&
+    sameIdentity(identityAt(join(root.path, POLICY_REL)), written.identity)
+  );
 }
 
 /**
@@ -564,16 +586,27 @@ function mutateBound(root: VerifiedRoot, rel: string, mutate: () => Refusal | nu
  * followed or read. A relocation observed before the rename removes the temp
  * file; one observed after it removes the written policy, or restores the
  * decision-time bytes this run replaced, only while the entry is still this
- * run's inode holding exactly this run's bytes.
+ * run's inode holding exactly this run's bytes. On success the bind is back in
+ * `.ai` (verified by identity) and the write is described for a later revert.
  */
-function writePolicy(run: Run, bytes: string): Refusal | null {
+function writePolicyHere(run: Run, ai: string, aiIdentity: InodeIdentity, bytes: string): { written: WrittenFile } | { refusal: Refusal } {
   const unsafe = containment(run.root.path, POLICY_REL);
-  if (unsafe) return unsafe;
+  if (unsafe) return { refusal: unsafe };
   const original = run.policy.kind === 'present' ? Buffer.from(run.policy.bytes, 'utf8') : null;
-  return mutateBound(run.root, POLICY_REL, () => {
-    replaceFileAtomicallyHere(POLICY_NAME, bytes, { original, beforeRename: run.faults?.beforePolicyWrite });
-    return null;
-  });
+  let written: WrittenFile | null = null;
+  try {
+    enterOrCreateDirectory(POLICY_DIR, ai);
+    const directory = boundIdentityHere();
+    const identity = replaceFileAtomicallyHere(POLICY_NAME, bytes, { original, beforeRename: run.faults?.beforePolicyWrite });
+    written = { name: POLICY_NAME, identity, bytes: Buffer.from(bytes, 'utf8'), original, directory, parent: aiIdentity, entry: POLICY_DIR };
+    ascendHere();
+    return { written };
+  } catch (error) {
+    const refusal = boundRefusal(error, POLICY_REL, run.root.path);
+    if (refusal === null) throw error;
+    if (written !== null) revertWrittenFile(written);
+    return { refusal };
+  }
 }
 
 /** Create the ledger with this line, or append to the existing regular file; any other entry refuses. */
@@ -590,25 +623,90 @@ function appendLineHere(line: string): Refusal | null {
 }
 
 /**
- * Append one ledger line inside the bound `.ai/drift` directory. A missing
- * ledger is created O_CREAT|O_EXCL|O_NOFOLLOW; an existing one is opened
- * O_NOFOLLOW and must be a singly linked regular file whose entry still names
- * the opened descriptor. A relocation observed after the create removes the
- * created ledger, and one observed after an append removes this run's own
- * suffix, each only while still identifiably this run's bytes. Any failure is
- * a structured refusal — never a silent exit.
+ * Append one ledger line inside the bound `.ai/drift` directory, entered from
+ * the bound `.ai`. A missing ledger is created O_CREAT|O_EXCL|O_NOFOLLOW; an
+ * existing one is opened O_NOFOLLOW and must be a singly linked regular file
+ * whose entry still names the opened descriptor. A relocation observed after
+ * the create removes the created ledger, and one observed after an append
+ * removes this run's own suffix, each only while still identifiably this run's
+ * bytes. Any failure is a structured refusal — never a silent exit.
  */
-function appendLedger(root: VerifiedRoot, entry: Record<string, unknown>, beforeAppend?: () => void): Refusal | null {
+function appendLedgerHere(root: VerifiedRoot, ai: string, line: string, beforeAppend: (() => void) | undefined): Refusal | null {
   const unsafe = containment(root.path, LEDGER_REL);
   if (unsafe) return unsafe;
+  try {
+    enterOrCreateDirectory(LEDGER_DIR, ai);
+    beforeAppend?.();
+    return appendLineHere(line);
+  } catch (error) {
+    return boundRefusal(error, LEDGER_REL, root.path) ?? ledgerFailure(error);
+  }
+}
+
+function ledgerLine(state: RunState, after: string | null, result: string): string {
+  return `${JSON.stringify({
+    schema: LEDGER_SCHEMA,
+    command: COMMAND,
+    repository_id: state.repositoryId,
+    before_sha256: state.before,
+    after_sha256: after,
+    at: state.at,
+    result,
+  })}\n`;
+}
+
+/**
+ * Bind the verified root once for the whole mutation phase (its recorded
+ * identity must match; a root observed gone is never recreated), enter `.ai`,
+ * write the policy when the decision says so, leave `.ai/policies` for `.ai`
+ * by identity, and append the ledger line from there. A ledger-step refusal
+ * is `failed` only while this run's policy write stands at the verified path;
+ * otherwise this run's write, if any, is reverted while still identifiably its
+ * own and the outcome is `refused`.
+ */
+function mutateDecision(run: Run, anchor: string, candidateBytes: string, decision: 'write' | 'no-op', line: string): Commit {
+  const ai = enterOrCreateDirectory(AI_DIR, anchor);
+  const aiIdentity = boundIdentityHere();
+  let written: WrittenFile | null = null;
+  if (decision === 'write') {
+    const policy = writePolicyHere(run, ai, aiIdentity, candidateBytes);
+    if ('refusal' in policy) return { kind: 'refused', refusal: policy.refusal };
+    written = policy.written;
+  }
+  const ledger = appendLedgerHere(run.root, ai, line, run.faults?.beforeLedgerAppend);
+  if (ledger === null) return { kind: 'done' };
+  if (written !== null && policyStands(run.root, aiIdentity, written)) return { kind: 'failed', refusal: ledger };
+  if (written !== null) revertWrittenFile(written);
+  return { kind: 'refused', refusal: ledger };
+}
+
+/** The mutation phase under one bind; a refusal raised by the bind or the `.ai` descent is `refused` with nothing written. */
+function commitDecision(run: Run, candidateBytes: string, decision: 'write' | 'no-op', after: string | null): Commit {
+  const line = ledgerLine(run.state, after, decision === 'write' ? 'written' : 'no-op');
+  try {
+    return withBoundRoot(
+      run.root.path,
+      (anchor) => mutateDecision(run, anchor, candidateBytes, decision, line),
+      { create: false, identity: run.root.identity },
+    );
+  } catch (error) {
+    const refusal = boundRefusal(error, decision === 'write' ? POLICY_REL : LEDGER_REL, run.root.path);
+    if (refusal === null) throw error;
+    return { kind: 'refused', refusal };
+  }
+}
+
+/** Ledger a refusal that reached the decision stage: one bind, `.ai` then `.ai/drift`; any failure is structured. */
+function appendLedger(root: VerifiedRoot, entry: Record<string, unknown>): Refusal | null {
   const line = `${JSON.stringify(entry)}\n`;
   try {
-    return mutateBound(root, LEDGER_REL, () => {
-      beforeAppend?.();
-      return appendLineHere(line);
-    });
+    return withBoundRoot(
+      root.path,
+      (anchor) => appendLedgerHere(root, enterOrCreateDirectory(AI_DIR, anchor), line, undefined),
+      { create: false, identity: root.identity },
+    );
   } catch (error) {
-    return ledgerFailure(error);
+    return boundRefusal(error, LEDGER_REL, root.path) ?? ledgerFailure(error);
   }
 }
 
@@ -799,7 +897,11 @@ function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean):
   return 1;
 }
 
-/** A mutation that cannot be audited is reported as failed, never silently. */
+/**
+ * This run's policy write stands at the verified path and the ledger step
+ * refused: reported as failed, never silently (the AC-1 result rule; a ledger
+ * refusal with no policy written by this run standing there is `refused`).
+ */
 function ledgerFailed(run: Run, after: string | null, ledger: Refusal): number {
   printReport(run.io, {
     root: run.state.root,
@@ -824,29 +926,14 @@ function dryRun(run: Run, decision: 'write' | 'no-op', candidateBytes: string): 
   return 0;
 }
 
-/** The policy write step: nothing on a no-op or dry-run, atomic replace on a write. */
-function writeStep(run: Run, candidateBytes: string, decision: 'write' | 'no-op'): Refusal | null {
-  if (decision !== 'write' || run.parsed.dryRun) return null;
-  return writePolicy(run, candidateBytes);
-}
-
-/** Apply the decision: write, ledger, report, or print the dry-run diff. */
+/** Apply the decision: print the dry-run diff, or write and ledger under one bind and report the outcome. */
 function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no-op'): number {
   const { io, parsed, state } = run;
-  const unsafe = writeStep(run, candidateBytes, decision);
-  if (unsafe) return refusal(io, state, [unsafe], parsed.dryRun);
   const after = decision === 'no-op' ? state.before : sha256(candidateBytes);
   if (parsed.dryRun) return dryRun(run, decision, candidateBytes);
-  const ledger = appendLedger(run.root, {
-    schema: LEDGER_SCHEMA,
-    command: COMMAND,
-    repository_id: state.repositoryId,
-    before_sha256: state.before,
-    after_sha256: after,
-    at: state.at,
-    result: decision === 'write' ? 'written' : 'no-op',
-  }, run.faults?.beforeLedgerAppend);
-  if (ledger !== null) return ledgerFailed(run, after, ledger);
+  const commit = commitDecision(run, candidateBytes, decision, after);
+  if (commit.kind === 'refused') return refusal(io, state, [commit.refusal], parsed.dryRun);
+  if (commit.kind === 'failed') return ledgerFailed(run, after, commit.refusal);
   printReport(io, {
     root: state.root,
     repositoryId: state.repositoryId,

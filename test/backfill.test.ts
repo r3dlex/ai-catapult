@@ -878,6 +878,166 @@ void test('FSC-C-01 T2 backfill: a ledger directory relocated before the ledger 
   assert.equal(readFileSync(join(root, POLICY_REL), 'utf8'), candidate(repoId), 'the policy write stands at the verified path');
 });
 
+// Round-1 review findings (Architect P1 = Critic P1, Critic P2): a relocation of
+// a SHARED ancestor of both targets — the root or `.ai` — observed at the ledger
+// stage, after this run's policy write, and the result rule for a ledger-stage
+// refusal when no policy written by this run stands at the verified path.
+
+void test("FSC-C-01 T2b backfill: a root replaced by a fresh directory before the ledger append refuses path_relocated naming the root, this run's policy is removed from the moved tree, the fresh root stays empty, and a root observed gone is never recreated", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t2b-moved-');
+  const root = fixtureRoot('backfill-fsc-t2b-');
+  const moved = join(movedParent, 'original');
+  let fired = false;
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        fired = true;
+        renameSync(root, moved);
+        mkdirSync(root);
+      },
+    },
+  });
+  assert.equal(fired, true, 'the append-boundary fault point must exist');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'no policy written by this run stands at the verified path');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: root }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.deepEqual(readdirSync(root), [], 'the fresh root stays empty');
+  assert.equal(existsSync(join(moved, POLICY_REL)), false, "this run's policy is removed from the moved tree while still its own inode and bytes");
+  assert.deepEqual(regularFilesUnder(moved), [], 'nothing this run wrote remains in the moved original');
+
+  const gone = fixtureRoot('backfill-fsc-t2b-gone-');
+  const goneMoved = join(fixtureRoot('backfill-fsc-t2b-gone-moved-'), 'original');
+  const second = runModule(['--policy-v2', '--root', gone], {
+    root: gone,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        renameSync(gone, goneMoved);
+      },
+    },
+  });
+  assert.equal(second.code, 1, `${second.out}${second.err}`);
+  assert.equal(reportOf(second).result, 'refused');
+  assert.deepEqual(refusalsOf(second), [{ code: 'path_relocated', detail: gone }]);
+  assert.notEqual(second.err, '', 'a refusal is never silent');
+  assert.equal(existsSync(gone), false, 'a root observed gone is never recreated');
+  assert.deepEqual(regularFilesUnder(goneMoved), [], 'nothing this run wrote remains in the moved original');
+});
+
+void test('FSC-C-01 T2c backfill: a root relocated before the ledger append after a v1 replacement restores the original v1 bytes in the moved tree and refuses path_relocated', () => {
+  const movedParent = fixtureRoot('backfill-fsc-t2c-moved-');
+  const root = fixtureRoot('backfill-fsc-t2c-');
+  const moved = join(movedParent, 'original');
+  const v1 = '{\n  "schema": "readiness-policy/1",\n  "repository": { "id": "kept-id" }\n}\n';
+  write(root, POLICY_REL, v1);
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        renameSync(root, moved);
+        mkdirSync(root);
+      },
+    },
+  });
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'no policy written by this run stands at the verified path');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: root }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(readFileSync(join(moved, POLICY_REL), 'utf8'), v1, 'the policy this run replaced is restored to its decision-time bytes');
+  assert.deepEqual(readdirSync(root), [], 'the fresh root stays empty');
+});
+
+void test("FSC-C-01 T2d backfill: a competitor's bytes on the policy inode this run wrote survive a root relocation observed at the ledger append", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t2d-moved-');
+  const root = fixtureRoot('backfill-fsc-t2d-');
+  const moved = join(movedParent, 'original');
+  const competitor = '{"schema":"competitor"}\n';
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        renameSync(root, moved);
+        mkdirSync(root);
+        // The competitor rewrites the inode this run wrote, before the run can
+        // observe the relocation: identity alone is not ownership of the bytes.
+        writeFileSync(join(moved, POLICY_REL), competitor);
+      },
+    },
+  });
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'no policy written by this run stands at the verified path');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: root }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(
+    readFileSync(join(moved, POLICY_REL), 'utf8'),
+    competitor,
+    "a competitor's bytes on this run's inode are never deleted or rewritten; the file is left as it is",
+  );
+  assert.deepEqual(readdirSync(root), [], 'the fresh root stays empty');
+});
+
+void test("FSC-C-01 T2e backfill: a .ai directory replaced before the ledger append refuses path_relocated naming .ai, this run's policy is removed from the moved tree, and the replacement .ai receives nothing but the refusal's audit line", () => {
+  const outside = fixtureRoot('backfill-fsc-t2e-outside-');
+  const root = fixtureRoot('backfill-fsc-t2e-');
+  const movedAi = join(outside, 'ai');
+  let fired = false;
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        fired = true;
+        renameSync(join(root, '.ai'), movedAi);
+        mkdirSync(join(root, '.ai'));
+      },
+    },
+  });
+  assert.equal(fired, true, 'the append-boundary fault point must exist');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'no policy written by this run stands at the verified path');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: join(root, '.ai') }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(existsSync(join(movedAi, 'policies', POLICY_NAME)), false, "this run's policy is removed from the moved tree");
+  assert.deepEqual(regularFilesUnder(movedAi), [], 'nothing this run wrote remains in the moved .ai');
+  assert.equal(existsSync(join(root, POLICY_REL)), false, 'no policy is written into the replacement .ai');
+  assert.deepEqual(
+    regularFilesUnder(root),
+    [LEDGER_REL],
+    'inside the verified root the replacement .ai receives only the audit line of the refusal',
+  );
+  assert.equal(ledgerLines(root).at(-1)?.result, 'refused');
+});
+
+void test('FSC-C-01 T2f backfill: a no-op run whose ledger directory is relocated before the ledger append refuses path_relocated with result refused, because no policy written by this run stands at the verified path', () => {
+  const outside = fixtureRoot('backfill-fsc-t2f-outside-');
+  const root = fixtureRoot('backfill-fsc-t2f-');
+  const repoId = root.split('/').at(-1) ?? '';
+  write(root, POLICY_REL, candidate(repoId));
+  let fired = false;
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => ok([]),
+    faults: {
+      beforeLedgerAppend: () => {
+        fired = true;
+        relocate(renameSync, join(root, '.ai/drift'), outside);
+      },
+    },
+  });
+  assert.equal(fired, true, 'the append-boundary fault point must exist');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'this run wrote no policy, so the ledger refusal is refused, not failed');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: join(root, '.ai/drift') }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(readFileSync(join(root, POLICY_REL), 'utf8'), candidate(repoId), 'the pre-existing policy is untouched');
+  assert.deepEqual(readdirSync(outside), [], 'nothing this run wrote may remain outside the root');
+});
+
 void test("FSC-C-01 T3 backfill: a policy directory relocated inside the policy write is refused path_relocated and this run's write is removed", () => {
   const outside = fixtureRoot('backfill-fsc-t3-outside-');
   const root = fixtureRoot('backfill-fsc-t3-');
