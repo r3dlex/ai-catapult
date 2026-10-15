@@ -18,15 +18,54 @@
  *
  * Fail-closed rules: a policy/2 with different bytes refuses, including one that
  * appears or changes during inventory (the bytes are re-read before the
- * decision); a symlinked root or a symlinked/out-of-root write target refuses;
- * a multiply linked target (a hard link shared with a file outside the root)
- * refuses, so no write can reach through that alias; both write targets are
- * validated before anything is mutated, and a ledger that cannot be written
- * fails the run rather than claiming a success it never recorded; only the
- * policy path and the ledger are written. Known-unsafe targets refuse. An
- * ancestor-directory swap during the mutation is a deferred residual
- * (ADR-0013): not solved, not waived, not an accepted assumption. Approvals,
- * anchors and readiness contexts are never written.
+ * decision); a symlinked root, a root reached through a symlinked ancestor
+ * (`root_not_canonical`, naming the canonical path to pass) and a
+ * symlinked/out-of-root write target refuse; a multiply linked target (a hard
+ * link shared with a file outside the root) refuses before any byte is
+ * written; both write targets are validated before anything is mutated, and a
+ * ledger that cannot be written fails the run rather than claiming a success
+ * it never recorded; only the policy path and the ledger are written.
+ * Known-unsafe targets refuse. Approvals, anchors and readiness contexts are
+ * never written.
+ *
+ * Containment of the write path (ADR-0013; src/evolve/containment.ts). The
+ * root is validated once by identity (device+inode) and every mutation then
+ * runs as a single-component name relative to the bound directory inode, with
+ * the recorded chain — the root, `.ai`, `.ai/policies` or `.ai/drift` —
+ * re-verified immediately before and again after each kernel mutation.
+ * Whenever the run observes that a component it validated is no longer the
+ * same directory (moved, replaced, removed or turned into a symlink), before
+ * or after a write it performed, it refuses `path_relocated` naming the
+ * component: `result: refused` when, after this run's cleanup, no policy
+ * written by this run stands at the verified path (a write this run removed or
+ * restored included); `result: failed` when this run's policy write stands at
+ * the verified path and the later ledger step refused; exit 1 with a stderr
+ * line, never `written`. A root observed gone is never recreated. A file this
+ * run created inside the relocated directory is removed only while the entry
+ * is still this run's inode and the file holds exactly this run's bytes; a
+ * prior policy this run replaced is restored to its decision-time bytes under
+ * the same two conditions; bytes a competitor placed on this run's inode are
+ * never deleted or rewritten — the file is left as it is and the refusal is
+ * still reported; the relocated directory itself is the relocator's and is not
+ * claimed removed. These removals and restorations are best-effort controls,
+ * not guarantees, and not single kernel operations.
+ *
+ * Declared residual (ADR-0013 (c)): a relocation of a write directory that
+ * takes effect only inside the interval between the run's final verification
+ * and its kernel write, and that is undone again before the run next verifies,
+ * is not observed — the run reports success and the bytes are at the verified
+ * path inside the root. The run is not required to detect or defeat that
+ * interval; ADR-0013 keeps (c) as the declared boundary and this surface
+ * changes only what is enforced inside it.
+ *
+ * Per entry class, the policy target is replaced as a directory entry by the
+ * rename (a symlink or hard link planted at its name is neither followed nor
+ * read), and the ledger target refuses a symlink (`path_symlinked`), a
+ * multiply linked file (`path_multiply_linked`), a non-file entry
+ * (`path_not_regular_file`) and an entry that stops naming the opened file
+ * before the write (`path_changed`); the existing fixtures in
+ * test/backfill.test.ts cover the replaced policy entry and the symlinked and
+ * multiply linked ledger leaf.
  *
  * Readings of the ambiguous acceptance sentences, recorded for review:
  *   - "every run appends": every invocation that reaches the decision stage
@@ -44,28 +83,24 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync, lstatSync, readFileSync, realpathSync, type Stats } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import {
-  closeSync,
-  constants,
-  existsSync,
-  fstatSync,
-  fsyncSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  realpathSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeSync,
-  type Stats,
-} from 'node:fs';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+  appendFileHere,
+  createFileHere,
+  enterOrCreateDirectory,
+  entryKind,
+  replaceFileAtomicallyHere,
+  withBoundRoot,
+  type DirectoryIdentity,
+} from './evolve/containment.ts';
+import { EvolveError, type EvolveRefusalReason } from './evolve/errors.ts';
 import { resolveVendorSkill } from './skill-resolver.ts';
 
 const POLICY_REL = '.ai/policies/readiness-policy.json';
 const LEDGER_REL = '.ai/drift/backfill-ledger.jsonl';
+const POLICY_NAME = basename(POLICY_REL);
+const LEDGER_NAME = basename(LEDGER_REL);
 const POLICY_SCHEMA = 'readiness-policy/2';
 const V1_POLICY_SCHEMA = 'readiness-policy/1';
 const INVENTORY_SCHEMA = 'v1-inventory/1';
@@ -94,9 +129,17 @@ not, and unstarted or partly merged plans are listed as requiring migration of
 their unmerged goals. While any plan is active, or when the hosted API is
 unreachable, the command refuses with one consolidated report naming every
 active plan. A readiness-policy/2 with different bytes refuses, including one
-that appears or changes during inventory. Known-unsafe targets refuse. An
-ancestor-directory swap during mutation is a deferred residual (ADR-0013):
-not solved, not waived, not an accepted assumption. Approvals, anchors and
+that appears or changes during inventory. Known-unsafe targets refuse.
+--root must be the canonical (physical) path: a root reached through a
+symlinked ancestor refuses root_not_canonical and names the path to pass.
+Writes run relative to verified directory identities (ADR-0013): a validated
+directory component - the root, .ai, .ai/policies or .ai/drift - observed
+moved, replaced, removed or turned into a symlink, before or after a write,
+refuses path_relocated with exit 1, and bytes this run wrote are removed or
+restored only while still identifiably its own; a competitor's bytes are
+never deleted or rewritten. Declared residual (ADR-0013 (c)): a relocation in
+effect only between the run's final verification and its kernel write, and
+undone before the next verification, is not detected. Approvals, anchors and
 readiness contexts are never touched.
 
 Options:
@@ -131,12 +174,12 @@ export type BackfillOptions = {
   now?: (() => Date) | undefined;
   io?: { out: (text: string) => void; err: (text: string) => void } | undefined;
   /**
-   * Test-only fault-injection points for the check/write races: they run at the
-   * last deterministic moment before the policy rename and before the ledger
-   * open. The CLI never sets them (observer pattern: a test adapter exists only
-   * in-process), and they are called with the final checks already done.
-   * Ancestor-directory swaps at these points are a known residual deferred to
-   * the ADR-0013 review: not solved, not waived, not an accepted assumption.
+   * Test-only fault-injection points for the check/write races. They run inside
+   * the bound target directory, after it has been entered or created under the
+   * verified chain and before the final verification that precedes the policy
+   * rename or the ledger open. The CLI never sets them (observer pattern: a
+   * test adapter exists only in-process). A relocation planted at either point
+   * is observed by that verification and refused `path_relocated`.
    */
   faults?: { beforePolicyWrite?: () => void; beforeLedgerAppend?: () => void } | undefined;
 };
@@ -144,6 +187,9 @@ export type BackfillOptions = {
 type Io = { out: (text: string) => void; err: (text: string) => void };
 type Refusal = { code: string; detail: string };
 type Migration = { id: string; plan_id: string | null; fate: string; goals: string[] };
+
+/** The root as validated once per run: its canonical path and its directory identity. */
+type VerifiedRoot = { path: string; identity: DirectoryIdentity };
 
 type ParsedArgs =
   | { kind: 'run'; root: string; dryRun: boolean }
@@ -208,9 +254,13 @@ function stamp(date: Date): string {
 
 /**
  * Refuse a root whose final component is a symlink (the target identity is
- * ambiguous), that is not a directory, or that does not exist.
+ * ambiguous), that is not a directory, that does not exist, or whose path
+ * reaches the repository through a symlinked ancestor (its lexical resolution
+ * differs from its canonical path — the caller passes the canonical path
+ * instead; ADR-0013 Depth of (a)). The accepted root's device+inode is the
+ * identity every later bind must match.
  */
-function inspectRoot(rootPath: string): { realRoot: string } | { refusal: Refusal } {
+function inspectRoot(rootPath: string): { root: VerifiedRoot } | { refusal: Refusal } {
   let stat;
   try {
     stat = lstatSync(rootPath);
@@ -219,7 +269,9 @@ function inspectRoot(rootPath: string): { realRoot: string } | { refusal: Refusa
   }
   if (stat.isSymbolicLink()) return { refusal: { code: 'root_symlinked', detail: rootPath } };
   if (!stat.isDirectory()) return { refusal: { code: 'root_not_directory', detail: rootPath } };
-  return { realRoot: realpathSync(rootPath) };
+  const canonical = realpathSync(rootPath);
+  if (canonical !== rootPath) return { refusal: { code: 'root_not_canonical', detail: canonical } };
+  return { root: { path: rootPath, identity: { dev: stat.dev, ino: stat.ino } } };
 }
 
 /**
@@ -433,13 +485,6 @@ function decidePolicy(policy: ReadablePolicy, candidateBytes: string): 'write' |
   return { code: 'policy_unsupported', detail: policy.schema ?? 'unparseable policy JSON' };
 }
 
-const LEDGER_FLAGS = constants.O_APPEND | constants.O_CREAT | constants.O_WRONLY | constants.O_NOFOLLOW;
-const TEMP_FLAGS = constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW;
-
-function insideRoot(realRoot: string, resolved: string): boolean {
-  return resolved === realRoot || resolved.startsWith(realRoot + sep);
-}
-
 /** Any ledger I/O failure names its cause instead of exiting silently. */
 function ledgerFailure(error: unknown): Refusal {
   const code = (error as NodeJS.ErrnoException).code;
@@ -448,99 +493,122 @@ function ledgerFailure(error: unknown): Refusal {
   return { code: 'ledger_append_failed', detail: `${code ?? 'error'}: ${(error as Error).message}` };
 }
 
+/** True when `subject` is the verified root or one of its ancestors. */
+function onRootChain(root: string, subject: string): boolean {
+  return subject === root || root.startsWith(`${subject}/`);
+}
+
+/** The leaf refusals keep their existing backfill codes. */
+function leafRefusalFor(reason: Exclude<EvolveRefusalReason, 'relocated'>, rel: string): Refusal {
+  switch (reason) {
+    case 'symlinked':
+      return { code: 'path_symlinked', detail: rel };
+    case 'multiply-linked':
+      return { code: 'path_multiply_linked', detail: rel };
+    case 'not-directory':
+      return { code: 'path_not_directory', detail: rel };
+    case 'not-regular-file':
+      return { code: 'path_not_regular_file', detail: rel };
+    case 'changed':
+      return { code: 'path_changed', detail: rel };
+  }
+}
+
 /**
- * The opened descriptor must be a regular, singly linked file whose path still
- * resolves inside the root to the same inode: a leaf swapped for a symlink
- * (ELOOP at open) or a hard link shared outside the root fails here.
+ * Map a containment refusal to the backfill vocabulary. A directory component
+ * the run validated that is observed moved, replaced, removed or turned into a
+ * symlink — the root chain included, whose identity was recorded by
+ * inspectRoot — is `path_relocated` naming that component; the leaf refusals
+ * keep their existing codes. Anything that is not a tagged containment refusal
+ * returns null and stays an unexpected error.
  */
-function verifyOpened(fd: number, target: string, realRoot: string, rel: string): Refusal | null {
-  const stat = fstatSync(fd);
-  if (!stat.isFile()) return { code: 'path_not_regular_file', detail: rel };
-  if (stat.nlink > 1) return { code: 'path_multiply_linked', detail: rel };
-  if (!insideRoot(realRoot, realpathSync(target))) return { code: 'path_symlinked', detail: rel };
-  const pathStat = statSync(target);
-  if (pathStat.dev !== stat.dev || pathStat.ino !== stat.ino) return { code: 'path_changed', detail: rel };
+function boundRefusal(error: unknown, rel: string, root: string): Refusal | null {
+  if (!(error instanceof EvolveError) || error.reason === null) return null;
+  const subject = error.subject ?? rel;
+  if (error.reason === 'relocated' || onRootChain(root, subject)) return { code: 'path_relocated', detail: subject };
+  return leafRefusalFor(error.reason, rel);
+}
+
+/**
+ * Bind the verified root (its recorded identity must match; a root observed
+ * gone is never recreated), descend into the target's directory creating
+ * missing levels under the verified chain, and run `mutate` there. Every
+ * tagged containment refusal comes back as a structured backfill refusal;
+ * anything else propagates to the caller.
+ */
+function mutateBound(root: VerifiedRoot, rel: string, mutate: () => Refusal | null): Refusal | null {
+  const directories = rel.split('/').slice(0, -1);
+  try {
+    return withBoundRoot(
+      root.path,
+      (anchor) => {
+        let from = anchor;
+        for (const name of directories) from = enterOrCreateDirectory(name, from);
+        return mutate();
+      },
+      { create: false, identity: root.identity },
+    );
+  } catch (error) {
+    const refusal = boundRefusal(error, rel, root.path);
+    if (refusal === null) throw error;
+    return refusal;
+  }
+}
+
+/**
+ * Replace the policy atomically inside the bound `.ai/policies` directory: a
+ * same-directory temp file created O_CREAT|O_EXCL|O_NOFOLLOW, fsynced, then
+ * renamed over the target by single-component names after the chain is
+ * re-verified, with the chain verified again after the rename. A symlink or
+ * hard-linked leaf planted at the target name is replaced by the rename, never
+ * followed or read. A relocation observed before the rename removes the temp
+ * file; one observed after it removes the written policy, or restores the
+ * decision-time bytes this run replaced, only while the entry is still this
+ * run's inode holding exactly this run's bytes.
+ */
+function writePolicy(run: Run, bytes: string): Refusal | null {
+  const unsafe = containment(run.root.path, POLICY_REL);
+  if (unsafe) return unsafe;
+  const original = run.policy.kind === 'present' ? Buffer.from(run.policy.bytes, 'utf8') : null;
+  return mutateBound(run.root, POLICY_REL, () => {
+    replaceFileAtomicallyHere(POLICY_NAME, bytes, { original, beforeRename: run.faults?.beforePolicyWrite });
+    return null;
+  });
+}
+
+/** Create the ledger with this line, or append to the existing regular file; any other entry refuses. */
+function appendLineHere(line: string): Refusal | null {
+  const kind = entryKind(LEDGER_NAME);
+  if (kind === 'missing') {
+    createFileHere(LEDGER_NAME, line, { requireEntryIdentity: true });
+    return null;
+  }
+  if (kind === 'symlink') return { code: 'path_symlinked', detail: LEDGER_REL };
+  if (kind !== 'file') return { code: 'path_not_regular_file', detail: LEDGER_REL };
+  appendFileHere(LEDGER_NAME, line, { requireEntryIdentity: true });
   return null;
 }
 
 /**
- * Replace the target atomically: the bytes land in a same-directory temp file
- * created with O_CREAT|O_EXCL|O_NOFOLLOW, fsynced, then renamed over the target.
- * A symlink or hard-linked leaf swapped in at any point is replaced by the
- * rename, never followed or truncated. An ancestor directory replaced with an
- * outside symlink before this rename is a known residual deferred to the
- * ADR-0013 review: not solved, not waived, not an accepted assumption.
+ * Append one ledger line inside the bound `.ai/drift` directory. A missing
+ * ledger is created O_CREAT|O_EXCL|O_NOFOLLOW; an existing one is opened
+ * O_NOFOLLOW and must be a singly linked regular file whose entry still names
+ * the opened descriptor. A relocation observed after the create removes the
+ * created ledger, and one observed after an append removes this run's own
+ * suffix, each only while still identifiably this run's bytes. Any failure is
+ * a structured refusal — never a silent exit.
  */
-function writeAtomic(realRoot: string, rel: string, bytes: string, beforeRename?: () => void): Refusal | null {
-  const unsafe = containment(realRoot, rel);
+function appendLedger(root: VerifiedRoot, entry: Record<string, unknown>, beforeAppend?: () => void): Refusal | null {
+  const unsafe = containment(root.path, LEDGER_REL);
   if (unsafe) return unsafe;
-  const target = join(realRoot, rel);
-  mkdirSync(dirname(target), { recursive: true });
-  const afterMkdir = containment(realRoot, rel);
-  if (afterMkdir) return afterMkdir;
-  const temp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  const line = `${JSON.stringify(entry)}\n`;
   try {
-    const fd = openSync(temp, TEMP_FLAGS, 0o644);
-    try {
-      writeSync(fd, bytes);
-      fsyncSync(fd);
-    } finally {
-      closeSync(fd);
-    }
-    const stat = lstatSync(temp);
-    if (!stat.isFile() || stat.nlink > 1) {
-      unlinkSync(temp);
-      return { code: 'path_multiply_linked', detail: rel };
-    }
-    beforeRename?.();
-    renameSync(temp, target);
-    return null;
-  } catch (error) {
-    try {
-      unlinkSync(temp);
-    } catch {
-      // nothing left to clean up (for example after a successful rename)
-    }
-    throw error;
-  }
-}
-
-/**
- * Append one ledger line to a leaf that cannot have been swapped or hard-linked:
- * O_NOFOLLOW refuses a symlinked leaf at open, and the descriptor identity check
- * refuses anything that is not the singly linked regular file inside the root.
- * Any failure is a structured refusal — never a silent exit. An ancestor
- * directory replaced with an outside symlink before this open can still let
- * O_CREAT create an empty ledger outside; that residual is deferred to the
- * ADR-0013 review: not solved, not waived, not an accepted assumption.
- */
-function appendLedger(
-  realRoot: string,
-  entry: Record<string, unknown>,
-  beforeAppend?: () => void,
-): Refusal | null {
-  const unsafe = containment(realRoot, LEDGER_REL);
-  if (unsafe) return unsafe;
-  const target = join(realRoot, LEDGER_REL);
-  let fd: number;
-  try {
-    mkdirSync(dirname(target), { recursive: true });
-    const afterMkdir = containment(realRoot, LEDGER_REL);
-    if (afterMkdir) return afterMkdir;
-    beforeAppend?.();
-    fd = openSync(target, LEDGER_FLAGS, 0o644);
+    return mutateBound(root, LEDGER_REL, () => {
+      beforeAppend?.();
+      return appendLineHere(line);
+    });
   } catch (error) {
     return ledgerFailure(error);
-  }
-  try {
-    const refusal = verifyOpened(fd, target, realRoot, LEDGER_REL);
-    if (refusal) return refusal;
-    writeSync(fd, `${JSON.stringify(entry)}\n`);
-    return null;
-  } catch (error) {
-    return ledgerFailure(error);
-  } finally {
-    closeSync(fd);
   }
 }
 
@@ -684,7 +752,7 @@ function unifiedDiff(rel: string, before: string, after: string): string {
 
 type RunState = {
   root: string;
-  realRoot: string | null;
+  verified: VerifiedRoot | null;
   repositoryId: string;
   at: string;
   before: string | null;
@@ -698,7 +766,7 @@ type Run = {
   current: Date;
   state: RunState;
   policy: ReadablePolicy;
-  realRoot: string;
+  root: VerifiedRoot;
   faults: BackfillOptions['faults'];
 };
 
@@ -714,10 +782,10 @@ function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean):
     refusals,
   });
   io.err(`backfill: refused (${refusals.map((item) => item.code).join(', ')})\n`);
-  if (!dryRun && state.realRoot !== null) {
+  if (!dryRun && state.verified !== null) {
     // The ledger target was validated before any mutation; a refusal here is a
     // race, and a refusal whose audit line cannot be written says so.
-    const ledger = appendLedger(state.realRoot, {
+    const ledger = appendLedger(state.verified, {
       schema: LEDGER_SCHEMA,
       command: COMMAND,
       repository_id: state.repositoryId,
@@ -759,7 +827,7 @@ function dryRun(run: Run, decision: 'write' | 'no-op', candidateBytes: string): 
 /** The policy write step: nothing on a no-op or dry-run, atomic replace on a write. */
 function writeStep(run: Run, candidateBytes: string, decision: 'write' | 'no-op'): Refusal | null {
   if (decision !== 'write' || run.parsed.dryRun) return null;
-  return writeAtomic(run.realRoot, POLICY_REL, candidateBytes, run.faults?.beforePolicyWrite);
+  return writePolicy(run, candidateBytes);
 }
 
 /** Apply the decision: write, ledger, report, or print the dry-run diff. */
@@ -769,7 +837,7 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
   if (unsafe) return refusal(io, state, [unsafe], parsed.dryRun);
   const after = decision === 'no-op' ? state.before : sha256(candidateBytes);
   if (parsed.dryRun) return dryRun(run, decision, candidateBytes);
-  const ledger = appendLedger(run.realRoot, {
+  const ledger = appendLedger(run.root, {
     schema: LEDGER_SCHEMA,
     command: COMMAND,
     repository_id: state.repositoryId,
@@ -794,15 +862,15 @@ function applyDecision(run: Run, candidateBytes: string, decision: 'write' | 'no
 
 /** Re-read the policy after inventory so the decision uses the bytes that are there now. */
 function refreshPolicy(run: Run): Refusal | null {
-  const policy = readPolicy(run.realRoot);
+  const policy = readPolicy(run.root.path);
   if (policy.kind === 'refusal') return policy.refusal;
   run.policy = policy;
   if (policy.kind === 'present') {
-    run.state.repositoryId = policy.repoId ?? basename(run.realRoot);
+    run.state.repositoryId = policy.repoId ?? basename(run.root.path);
     run.state.before = sha256(policy.bytes);
     return null;
   }
-  run.state.repositoryId = basename(run.realRoot);
+  run.state.repositoryId = basename(run.root.path);
   run.state.before = null;
   return null;
 }
@@ -812,7 +880,7 @@ function produceDecision(run: Run): number {
   // Revalidate both write targets after the inventory ran: a target invalidated
   // during that step refuses before any mutation. Re-read the policy too: a
   // differing policy/2 that appears during inventory must not be overwritten.
-  const recheck = containment(run.realRoot, LEDGER_REL) ?? containment(run.realRoot, POLICY_REL);
+  const recheck = containment(run.root.path, LEDGER_REL) ?? containment(run.root.path, POLICY_REL);
   if (recheck) return refusal(run.io, run.state, [recheck], run.parsed.dryRun);
   const fresh = refreshPolicy(run);
   if (fresh) return refusal(run.io, run.state, [fresh], run.parsed.dryRun);
@@ -828,7 +896,7 @@ function produceDecision(run: Run): number {
 /** Ask the vendored inventory; refuse unless every entry is settled or migrating. */
 function consultInventory(run: Run): number {
   const runInventory = run.options.inventory ?? defaultInventoryRunner(run.options.vendorSkillsDir);
-  const classified = classifyInventory(runInventory(run.realRoot));
+  const classified = classifyInventory(runInventory(run.root.path));
   run.state.migrations = classified.migrations;
   if (classified.refusal) return refusal(run.io, run.state, [classified.refusal], run.parsed.dryRun);
   return produceDecision(run);
@@ -840,27 +908,27 @@ function executeBackfill(parsed: { root: string; dryRun: boolean }, options: Bac
   const inspected = inspectRoot(rootPath);
   const state: RunState = {
     root: rootPath,
-    realRoot: null,
+    verified: null,
     repositoryId: basename(rootPath),
     at: stamp(current),
     before: null,
     migrations: [],
   };
   if ('refusal' in inspected) return refusal(io, state, [inspected.refusal], parsed.dryRun);
-  state.realRoot = inspected.realRoot;
+  state.verified = inspected.root;
 
   // Both write targets are validated before anything is mutated: an unsafe
   // ledger path refuses the run before the policy write, never a silent skip.
-  const ledgerTarget = containment(state.realRoot, LEDGER_REL);
+  const ledgerTarget = containment(inspected.root.path, LEDGER_REL);
   if (ledgerTarget) return refusal(io, state, [ledgerTarget], parsed.dryRun);
 
-  const policy = readPolicy(state.realRoot);
+  const policy = readPolicy(inspected.root.path);
   if (policy.kind === 'refusal') return refusal(io, state, [policy.refusal], parsed.dryRun);
   if (policy.kind === 'present') {
-    state.repositoryId = policy.repoId ?? basename(state.realRoot);
+    state.repositoryId = policy.repoId ?? basename(inspected.root.path);
     state.before = sha256(policy.bytes);
   }
-  return consultInventory({ parsed, options, io, current, state, policy, realRoot: state.realRoot, faults: options.faults });
+  return consultInventory({ parsed, options, io, current, state, policy, root: inspected.root, faults: options.faults });
 }
 
 /**
