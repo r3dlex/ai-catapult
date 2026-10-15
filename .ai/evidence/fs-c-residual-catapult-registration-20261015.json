@@ -1,0 +1,130 @@
+{
+  "generation": "b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+  "goal_id": "FSC-C-01",
+  "goals": [
+    "FSC-C-01"
+  ],
+  "limits": [
+    "Planning publication only: no approval was requested, minted or implied; execution needs this generation's own future tag approval/fs-c-residual-catapult/b83785a837ec (the live policy accepts agent-self; an agent-self approval must carry the verbatim disclosure AGENT-SELF \u2014 no human approved it). Implementation of FSC-C-01 is a separate coordinator dispatch, not part of this registration.",
+    "The acceptance criteria are OUTCOME-ONLY and narrowed by the human principal's decision (HITL batch 3, 2026-10-15T04:52:51Z). Per-entry-class behaviour of the write targets is out of this goal's contract (docstrings/tests). The specification's Implementation notes appendix is informative, non-binding.",
+    "Local suite results, digests and classifications are lane evidence, not hosted CI, readiness-context admission, merge certification or live authority.",
+    "No existing generation, registry entry, approval tag or spec copy is modified: this is a fresh-plan ADD (precedents PR #62 ach-catapult-delivery-ts, PR #65 xskp-p4-adopt-engine-ts, PR #73 af-06-catapult-local-ci). The six prior registry entries and their generations are byte-unchanged.",
+    "ADR-0013 is not edited: (c) remains the declared boundary; no text written by this plan claims race-freedom.",
+    "No root-workspace file, no vendor/skills file and no child repository other than ai-catapult was touched by this registration."
+  ],
+  "mandate_record": {
+    "adr_0013_ratification": "root PR #128, squash 22154ebbb8ab03cb500993ffee451a055ca26ea1 (ADR sha256 20850c2fe6cdc0faedbf0eac2dac7807c668a03881b06ecfed399bd5adc3589e)",
+    "path": "r3dlex/ai-tool-workspace .omc/plans/hitl-answers-20261014.md (gitignored, append-only coordinator transcript)",
+    "row_ADR_0013": "Ratify, but open a follow-up goal for (c) (ancestor-rename residual; native-free, bounded)",
+    "row_FSC_batch3_2026_10_15T04_52_51Z": "Narrow the goal to the undisputed outcomes (relocated-ancestor refusal/revert, residual-(c) conformance fixture, canonical caller root, structured reporting, claims discipline, gates; per-class tables -> docstrings/tests); one fresh pair; publish on APPROVE x2",
+    "snapshot_2026_10_14T07_09_32Z_first_17_lines_sha256": "12d1abd14a87d5fbeeab2a88cf267836ee36ebcc6c98bdbd64bb36077af40e06"
+  },
+  "packet_review_history": {
+    "published_vs_reviewed": {
+      "goals_json": "the published bundle (sha256 f98c0109c9603b1f10a04acb9d8a7210124f3a1d85aef14841972d35fec7bc14) differs from the r8-reviewed bundle (baeee3bd...) in: (1) the AGENT-SELF disclosure in attachments.agent_self and acceptance_criteria[5] rendered in its verbatim em-dash form (AGENT-SELF \u2014 no human approved it) instead of the ASCII-hyphen rendering the generator had emitted (fleet standing orders; PR #73 round-1 precedent); (2) attachments.decisions gains the SQ-1 and SQ-2 disclosures (lane-taken defaults with their supersession paths) required by the registration PR's first independent review; no other byte differs",
+      "sidecar_json": "byte-identical to the reviewed sidecar",
+      "spec_copy": "the reviewed r8 spec.md with its header Position paragraph changed from the held-draft wording to the published wording and one 'Lane-taken defaults' bullet added in the Decision section (SQ-1/SQ-2 disclosed with supersession paths, replacing a reference to the uncommitted stop-questions.md); every other section is byte-identical to the reviewed bytes"
+    },
+    "r8_approvals": {
+      "architect": {
+        "artifact": "codex-you-are-the-architect-on-an-independent-plan-review-this-is--2026-10-15T05-46-26-849Z.md",
+        "sha256": "50a93026ce0ba2d57fb077be1f77cea6d15a861f65d9456735d2f6b972ec7f75",
+        "verdict": "APPROVE"
+      },
+      "blind_critic": {
+        "artifact": "codex-you-are-a-blind-critic-on-an-independent-plan-review-you-hav-2026-10-15T05-40-49-836Z.md",
+        "sha256": "f39ecffe67419076954845a44b7c249fdd9e86336d5e7bfc83d993cacc2bcd42",
+        "verdict": "APPROVE"
+      },
+      "reviewed_bundle_sha256": "baeee3bde5d94348f03a74c3b936383452555dc66f49f87234e333a6fc9c8393",
+      "reviewed_sidecar_sha256": "44deedfe792a482ebd8fb279ded177ab1603f40b06e7d49d0e1637e46215cda2",
+      "reviewed_spec_sha256": "1474aef068683cb7529ce7d4e789488521d7939ec75c57911da673887fb132ea"
+    },
+    "receipts": "r3dlex/ai-tool-workspace .omc/plans/receipts-fs-c-residual-goal-plan-20261014/ and .omc/plans/fs-c-residual-goal-plan-20261014/ (gitignored)",
+    "revisions": "r1-r4 bound mechanism (REQUEST_CHANGES rounds on wording); r5 outcome-only per-class tables (REQUEST_CHANGES x2); r6 narrowed per the human (Architect APPROVE, Critic REQUEST_CHANGES on the result rule); r7 = r6 + result-rule definition + cosmetics (REQUEST_CHANGES x2 on one stale hold-file word); r8 = r7 + hold-file wording (APPROVE x2)."
+  },
+  "plan_id": "fs-c-residual-catapult",
+  "publication": {
+    "artifact_sha256": {
+      "goals.json": "f98c0109c9603b1f10a04acb9d8a7210124f3a1d85aef14841972d35fec7bc14",
+      "graph.json": "b1b766c9cd7cbcb9e09d48961eead7352b05d64cb3bf624711961f06e9efec00",
+      "handoff.md": "19db220045f9529ee3079a82068f19e4b434711bdcea4ca0eb1f2dde6baa16e3",
+      "sidecar.json": "44deedfe792a482ebd8fb279ded177ab1603f40b06e7d49d0e1637e46215cda2"
+    },
+    "base": "8815f1940c0125c2f7fa3ca24149a3779d613139",
+    "command": "bash vendor/skills/02-govern-plan/northstar/handoff-write.sh --root . --bundle <authored goals.json> --sidecar <authored sidecar.json> --target main (publish-v2 --admit-planning, pinned vendor 848a3dd6375d3552ea118914d4584d39aaa351ba)",
+    "entry": {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/goals.json",
+          "sha256": "f98c0109c9603b1f10a04acb9d8a7210124f3a1d85aef14841972d35fec7bc14"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/graph.json",
+          "sha256": "b1b766c9cd7cbcb9e09d48961eead7352b05d64cb3bf624711961f06e9efec00"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/handoff.md",
+          "sha256": "19db220045f9529ee3079a82068f19e4b434711bdcea4ca0eb1f2dde6baa16e3"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/sidecar.json"
+        }
+      },
+      "generation": "b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "handoff_path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/handoff.md",
+      "id": "northstar-plan-fs-c-residual-catapult",
+      "mode": "live",
+      "plan_id": "fs-c-residual-catapult",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md",
+        "sha256": "20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91"
+      },
+      "status": "active"
+    },
+    "publisher_report": "northstar-publication/2: planning_complete true; planning.blocking []; 5 approval-class and 5 deferred gates; authority none; target_revision 8815f1940c0125c2f7fa3ca24149a3779d613139; log sha256 f6ef629d28f1c824a4e794db128e270b337b6226c0809b2c697c1ce36838823d",
+    "work_intake": ".ai/work-intake/fs-c-residual-catapult.md (issue:ai-catapult:fs-c-residual-catapult, needs-triage, unassigned; no hosted issue)"
+  },
+  "record": "fresh-plan registration (add-only) for FSC-C-01 of plan fs-c-residual-catapult - the human-mandated ADR-0013 residual-(c) follow-up for the backfill --policy-v2 --root write surface, narrowed by the human principal (HITL batch 3) to the undisputed outcomes: relocated-ancestor refusal/revert, residual-(c) conformance fixture, canonical caller root, structured reporting vocabulary, claims discipline + historical red leg, TDD/gates/scope/sequencing",
+  "reserved_path_disposition": {
+    "paths_touched": {
+      ".ai/evidence/fs-c-residual-catapult-registration-20261015.json": "no active scope match (this record)",
+      ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/{goals.json,graph.json,handoff.md,sidecar.json}": "fixed reserved; added by the pinned publisher",
+      ".ai/traceability/graph.json": "free planning path; additive nodes/edges only (issue + spec seed before publication; handoff + plan nodes and spec backlink after)",
+      ".ai/work-intake/fs-c-residual-catapult.md": "new file; no active goal scope names it",
+      ".ai/workflows/northstar-readiness-v2.json": "fixed reserved; exact publish-v2 replay (one generation appended; six prior entries byte-unchanged)",
+      "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md": "free planning path; new plan-scoped spec copy bound by this generation only"
+    }
+  },
+  "revision": {
+    "reason": "Independent review round 1 of registration PR #75 at head cef135c3821ba8397089ccf24202ef475af6dc2b: Architect APPROVE; blind Critic REQUEST_CHANGES on one finding - the spec referred SQ-1/SQ-2 to an uncommitted stop-questions.md and attachments.decisions did not disclose both as lane-taken defaults with supersession paths. The cure adds exactly those disclosures (spec Decision bullet; goals.json attachments.decisions D5/D8) and nothing else; the acceptance criteria, scope, verification, sidecar and fixtures are byte-identical to the first publication.",
+    "republished_generation": "b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+    "withdrawn_generation": "cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155 (published in commit 03b32ad73bc070ede30e7928502cba9834a01aea on this branch, never merged; removed by git rm; registry and traceability graph restored to the base bytes before re-publication)"
+  },
+  "schema": "registration-evidence/1",
+  "seed": {
+    "edge": "issue -> spec specified-by; spec -> handoff plans; handoff -> plan plans",
+    "graph": "65 nodes / 59 edges after publication (61 / 56 at base); generated_at unchanged; pure appends",
+    "issue_node": "issue:ai-catapult:fs-c-residual-catapult (status needs-triage, owner unassigned)",
+    "spec_node": "spec:ai-catapult:fs-c-residual-catapult (sha256 20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91)"
+  },
+  "verification": {
+    "diff_check": {
+      "command": "git diff --check 8815f1940c0125c2f7fa3ca24149a3779d613139..HEAD",
+      "exit_code": 0
+    },
+    "generation_recomputed": "generation_v2(bundle_sha256 bf2219cf2df20338817676eb69bbb731307aee1f09661089f36679cf27afc83e, spec_sha256 20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91, policy_sha256 f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f, anchor_sha256 8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1) == b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83 (pinned readiness_contract_v2 at skills 848a3dd6)",
+    "goal_revision_v2_FSC_C_01": "a3bdda7337251d0f0c10a0c5171fa91928dd0409f1d65ea27e0312e3945aa9b5 (== generation graph.json)",
+    "npm_test": {
+      "command": "npm test",
+      "exit_code": 0,
+      "head": "4ca35267b1dfecf09061daedf150e9c9eabd98cf",
+      "log_sha256": "845a4994762a853cb147a39952dfcef2ada549b9af7457460f93c9f32eca4e1e",
+      "summary": "607 tests / 605 pass / 0 fail / 0 skipped / 2 todo (the two pre-existing deferred-to-ADR-0013 legs, unchanged by this registration)"
+    },
+    "prek": "typecheck (tsc --noEmit) passed at commit; eslint: no .ts files changed"
+  }
+}
