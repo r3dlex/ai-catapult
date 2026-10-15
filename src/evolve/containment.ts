@@ -1,6 +1,6 @@
 /**
- * Filesystem containment for evolve/ writes — enforced at open time, with an
- * explicit relocation contract.
+ * Filesystem containment for evolve/ and backfill writes — enforced at open
+ * time, with an explicit relocation contract.
  *
  * Review reproduced two escapes that path checks alone cannot close: (1) the
  * workspace root (or any component) substituted with a symlink between the
@@ -23,7 +23,11 @@
  *     the open is refused instead of adopted. Node exposes no fchdir, so cwd
  *     is established by path and then verified against the opened fd's
  *     identity. Callers whose root legitimately traverses a symlink (macOS
- *     /var, /tmp) must canonicalize it with realpath before binding.
+ *     /var, /tmp) must canonicalize it with realpath before binding. A caller
+ *     that validated the root earlier may pass its recorded device+inode
+ *     (`identity`) and refuse creation of a missing root (`create: false`):
+ *     a root that is no longer that directory, or is gone, is then refused at
+ *     bind time and never adopted or recreated.
  *   - Component substitution at any depth: each component is opened
  *     O_DIRECTORY|O_NOFOLLOW relative to the bound parent and its identity is
  *     recorded; `process.cwd()` must equal the expected physical path and its
@@ -32,8 +36,8 @@
  *     ancestors included — is recorded (device+inode) at bind time and
  *     re-resolved before every mutation, so an ancestor above the workspace
  *     that is symlinked, replaced or moved mid-operation is detected too.
- *   - Relocation: before every create/open/append, every recorded level is
- *     re-resolved with lstat and compared with its recorded identity; a
+ *   - Relocation: before every create/open/append/rename, every recorded level
+ *     is re-resolved with lstat and compared with its recorded identity; a
  *     missing, symlinked, replaced or moved level refuses with a distinct
  *     error naming the level — before any byte is written. File opens stay
  *     relative to the bound inode. A relocation first detected only after a
@@ -52,6 +56,23 @@
  *     the call refuses and does not truncate or rewrite. This is not a claim
  *     that net external change is zero, and it is not a claim that the check
  *     and the unlink are one kernel operation.
+ *   - Atomic replacement (`replaceFileAtomicallyHere`): the bytes land in a
+ *     same-directory temp file created O_CREAT|O_EXCL|O_NOFOLLOW and fsynced;
+ *     the chain is re-verified immediately before a two-single-component-name
+ *     rename over the target and again after it. A relocation observed before
+ *     the rename removes the temp file; one observed after it removes the
+ *     renamed file, or rewrites the caller's decision-time original into it —
+ *     each only while the entry is still this call's inode holding exactly this
+ *     call's bytes. The entry at the target name is replaced as a directory
+ *     entry by the rename and is neither followed nor read.
+ *   - Two mutations under one bind (`ascendHere`, `revertWrittenFile`): a caller
+ *     that mutates a sibling directory after a write leaves the first directory
+ *     through `..`, with the chain re-verified before and the parent's recorded
+ *     identity verified after; when a later step observes a relocation of a
+ *     shared ancestor, it walks back to the first directory by identity alone
+ *     (`..` and single-component names, each verified, at most three steps) and
+ *     unlinks the file it wrote there, or rewrites the original it replaced,
+ *     only while the entry is still that inode holding exactly those bytes.
  *   - Missing-root creation: the caller path is walked before any create and
  *     each existing component's device+inode is recorded. Missing components
  *     are created one level at a time only after every recorded ancestor still
@@ -68,20 +89,40 @@
  *     directory is absent, and cleanup does not delete a competitor's contents.
  *   - Hard-linked leaves: a regular file with nlink > 1 is refused before any
  *     write, so an outside hard link is not mutated.
+ *   - Refusal vocabulary: every refusal is an EvolveError whose kind is
+ *     unchanged; containment refusals additionally carry a machine-readable
+ *     `reason` and the `subject` path they name (errors.ts), so a caller with
+ *     its own refusal codes maps them without matching message text.
  *   - Known residual, declared: darwin has no openat2/RESOLVE_BENEATH and Node
  *     exposes no openat/fchdir. A concurrent hostile relocator that interposes
  *     between the very last identity re-verification and the kernel write can
  *     still have that single write land in the relocated inode. That interval
- *     is outside this boundary. Relocation is refused whenever observed;
- *     compensation above does not close the interval and does not undo a write
- *     that cannot be identified as ours.
+ *     is outside this boundary: this module is
+ *     not required to detect or defeat it. Relocation is refused whenever
+ *     observed; the compensation above is a best-effort control, not a
+ *     guarantee, not a single kernel operation, does not close the interval
+ *     and does not undo a write that cannot be identified as ours.
  *
  * Creation is atomic: directories via mkdir with an EEXIST re-check, new files
  * via O_CREAT|O_EXCL, wiki appends via O_APPEND. The cwd and the recorded
  * identity chain are process-global; every entry point restores both in a
  * finally and all operations here are synchronous.
  */
-import { closeSync, constants, fstatSync, ftruncateSync, lstatSync, mkdirSync, openSync, readSync, rmdirSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  renameSync,
+  rmdirSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import type { Stats } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { EvolveError, nodeErrorCode } from './errors.ts';
@@ -90,6 +131,58 @@ const NOFOLLOW = constants.O_NOFOLLOW;
 const DIRECTORY = constants.O_DIRECTORY;
 
 export type EntryKind = 'missing' | 'symlink' | 'directory' | 'file' | 'other';
+
+/** A directory's or file's kernel identity: device and inode number. */
+export interface InodeIdentity {
+  readonly dev: number;
+  readonly ino: number;
+}
+
+export interface BindOptions {
+  /** Create a missing root (init parity, the default) or refuse it as relocated. */
+  readonly create?: boolean;
+  /** Refuse a root whose device+inode differ from this previously verified identity. */
+  readonly identity?: InodeIdentity;
+}
+
+/**
+ * A file this bind wrote earlier, with what `revertWrittenFile` needs to find it
+ * again by identity alone and to tell its own bytes from anyone else's.
+ */
+export interface WrittenFile {
+  /** The single-component name of the file in `directory`. */
+  readonly name: string;
+  /** The inode this call wrote. */
+  readonly identity: InodeIdentity;
+  /** Exactly the bytes this call wrote. */
+  readonly bytes: Buffer;
+  /** The bytes this call replaced, or null when it created the file. */
+  readonly original: Buffer | null;
+  /** The directory that held the write, its parent, and its entry name in that parent. */
+  readonly directory: InodeIdentity;
+  readonly parent: InodeIdentity;
+  readonly entry: string;
+}
+
+export interface FileWriteOptions {
+  /**
+   * Refuse, before any byte is written, when the directory entry no longer
+   * names the opened file (a leaf swapped between the open and the write).
+   * Off by default: the evolve surface keeps its reviewed behaviour.
+   */
+  readonly requireEntryIdentity?: boolean;
+}
+
+export interface ReplaceOptions {
+  /**
+   * The bytes the caller decided to replace, or null when it decided on an
+   * absent file; rewritten into the renamed file when a relocation is observed
+   * after the rename, while that file is still exactly this call's bytes.
+   */
+  readonly original?: Buffer | null;
+  /** Test-only observer: runs after the temp file is complete, before the verification that precedes the rename. */
+  readonly beforeRename?: (() => void) | undefined;
+}
 
 interface BoundLevel {
   readonly path: string;
@@ -105,15 +198,15 @@ let boundAncestors: readonly BoundLevel[] = [];
  * of `fn`; `anchor` is the normalized caller path once every component of it
  * has been verified to be a real directory. The root must be a symlink-free
  * canonical path (callers canonicalize, e.g. with realpath, before binding).
- * Missing roots are created first (init parity); every component is still
- * verified.
+ * Missing roots are created first (init parity) unless `create` is false;
+ * every component is still verified, and a recorded `identity` must match.
  */
-export function withBoundRoot<T>(root: string, fn: (anchor: string) => T): T {
+export function withBoundRoot<T>(root: string, fn: (anchor: string) => T, options: BindOptions = {}): T {
   const previousCwd = process.cwd();
   const previousLevels = boundLevels;
   const previousAncestors = boundAncestors;
   try {
-    const binding = bindRoot(root);
+    const binding = bindRoot(root, options);
     boundLevels = [binding.level];
     boundAncestors = binding.ancestors;
     return fn(binding.level.path);
@@ -129,14 +222,101 @@ interface RootBinding {
   readonly ancestors: readonly BoundLevel[];
 }
 
-function bindRoot(root: string): RootBinding {
+function bindRoot(root: string, options: BindOptions): RootBinding {
   // Lexical normalization makes the walk and the physical path agree; the
   // caller path must itself be symlink-free (macOS /var, /tmp callers
   // canonicalize before binding).
   const anchor = resolve(root);
   const walked = walkCallerPath(anchor);
-  if (walked.complete) return bindVerifiedRoot(anchor, walked.levels);
-  return bindVerifiedRoot(anchor, createMissingRoot(anchor, walked.levels));
+  if (!walked.complete && options.create === false) throw movedRefusal(anchor);
+  const chain = walked.complete ? walked.levels : createMissingRoot(anchor, walked.levels);
+  const binding = bindVerifiedRoot(anchor, chain);
+  const expected = options.identity;
+  if (expected !== undefined && !sameIdentity(binding.level, expected)) throw movedRefusal(anchor);
+  return binding;
+}
+
+function sameIdentity(a: InodeIdentity, b: InodeIdentity): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
+}
+
+/** The recorded device+inode of the deepest bound directory (the cwd of the current bind). */
+export function boundIdentityHere(): InodeIdentity {
+  const deepest = boundLevels[boundLevels.length - 1];
+  if (deepest === undefined) throw new EvolveError('layout-violation', 'no directory is bound');
+  return { dev: deepest.dev, ino: deepest.ino };
+}
+
+/**
+ * Leave the deepest bound directory for its verified parent: the chain is
+ * re-verified first (a moved level is refused by name), the kernel resolves
+ * `..` from the bound inode, and the new cwd must be the parent level's
+ * recorded identity. Returns the parent level's path.
+ */
+export function ascendHere(): string {
+  verifyBoundChain();
+  const parent = boundLevels[boundLevels.length - 2];
+  if (parent === undefined) throw new EvolveError('layout-violation', 'the workspace root has no bound parent to ascend to');
+  process.chdir('..');
+  boundLevels = boundLevels.slice(0, -1);
+  if (!sameIdentity(openCwdIdentity(), parent)) throw movedRefusal(parent.path);
+  return parent.path;
+}
+
+/**
+ * Best-effort compensation for a file this bind wrote earlier, once a later
+ * step observed a relocation of a shared ancestor: walk back to the directory
+ * that held the write by inode identity alone — `..` and single-component
+ * names, each verified by device+inode, at most three steps — then unlink the
+ * file (`original` null) or rewrite `original` into it, only while the entry
+ * still names the written inode and the file holds exactly the written bytes
+ * (both branches check the entry and the bytes, the restoration re-checking
+ * them immediately before it truncates). A competitor's bytes on that inode, an
+ * entry that names another file, or a directory that cannot be reached by
+ * identity leave the file as it is. This is not a claim that the file is gone
+ * or restored, and neither the walk nor the checks and the write are one
+ * kernel operation.
+ */
+export function revertWrittenFile(written: WrittenFile): void {
+  try {
+    if (!revisitWrittenDirectory(written)) return;
+    const fd = openHere(written.name, constants.O_RDWR);
+    try {
+      const stat = fstatSync(fd);
+      if (!stat.isFile() || !sameIdentity(stat, written.identity) || !fileStillExactly(fd, written.bytes)) return;
+      // The entry must still name the opened descriptor for either branch: an
+      // inode renamed away while a competitor's file took the name is neither
+      // unlinked nor rewritten.
+      if (!entryIsThisFile(fd, written.name)) return;
+      if (written.original === null) {
+        unlinkSync(written.name);
+        return;
+      }
+      if (!fileStillExactly(fd, written.bytes) || !entryIsThisFile(fd, written.name)) return;
+      ftruncateSync(fd, 0);
+      writeAt(fd, written.original, 0);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    // Best-effort revert. A file that is not exactly the bytes this bind wrote,
+    // or a directory that is no longer reachable by identity, is left in place.
+  }
+}
+
+/** Reach `written.directory` from the current cwd by identity: `..` upwards, the entry name down from its parent. */
+function revisitWrittenDirectory(written: WrittenFile): boolean {
+  for (let step = 0; step < 3; step += 1) {
+    const here = openCwdIdentity();
+    if (sameIdentity(here, written.directory)) return true;
+    if (sameIdentity(here, written.parent)) {
+      if (!sameIdentity(openEntryIdentity(written.entry), written.directory)) return false;
+      process.chdir(written.entry);
+    } else {
+      process.chdir('..');
+    }
+  }
+  return sameIdentity(openCwdIdentity(), written.directory);
 }
 
 interface CreatedDir {
@@ -160,7 +340,10 @@ function createMissingRoot(anchor: string, recorded: readonly BoundLevel[]): Bou
     }
     const chain = callerPathChain(anchor);
     if (chain === null) {
-      throw new EvolveError('unsafe-path', `${anchor} could not be created as a real directory`);
+      throw new EvolveError('unsafe-path', `${anchor} could not be created as a real directory`, {
+        reason: 'not-directory',
+        subject: anchor,
+      });
     }
     return chain;
   } catch (error) {
@@ -212,7 +395,10 @@ function createOneDirectory(path: string, created: CreatedDir[]): void {
   // Re-walk after the create: a substituted ancestor is a symlink on this
   // path even when mkdir followed it and the leaf landed outside.
   if (!createdDirectoryIsInside(path, stat)) {
-    throw new EvolveError('unsafe-path', `${path} could not be created as a real directory`);
+    throw new EvolveError('unsafe-path', `${path} could not be created as a real directory`, {
+      reason: 'not-directory',
+      subject: path,
+    });
   }
 }
 
@@ -255,7 +441,7 @@ function bindVerifiedRoot(anchor: string, chain: readonly BoundLevel[]): RootBin
   try {
     const id = fstatSync(fd);
     if (!id.isDirectory()) throw openRootRefusal(anchor);
-    process.chdir(anchor);
+    changeToRoot(anchor);
     // cwd is established by path; it must still be the walked path and the
     // opened inode, or a substitution slipped in between walk/check and chdir.
     const cwdId = openCwdIdentity();
@@ -268,6 +454,11 @@ function bindVerifiedRoot(anchor: string, chain: readonly BoundLevel[]): RootBin
   }
 }
 
+/**
+ * Open the walked root. The walk just saw it, so a root that is gone at the
+ * open (ENOENT) or no longer a directory (ENOTDIR) is a root relocated during
+ * binding and is refused by name, never adopted or recreated.
+ */
 function openRootDirectory(root: string): number {
   try {
     return openSync(root, constants.O_RDONLY | DIRECTORY | NOFOLLOW);
@@ -276,6 +467,18 @@ function openRootDirectory(root: string): number {
     // Darwin returns ENOTDIR, not ELOOP, for O_DIRECTORY|O_NOFOLLOW on a symlink.
     if (code === 'ELOOP') throw symlinkedRootRefusal(root);
     if (code === 'ENOTDIR') throw openRootRefusal(root);
+    if (code === 'ENOENT') throw movedRefusal(root);
+    throw error;
+  }
+}
+
+/** chdir into the opened root; a root gone or replaced by a non-directory between the open and the chdir is a relocation. */
+function changeToRoot(anchor: string): void {
+  try {
+    process.chdir(anchor);
+  } catch (error) {
+    const code = nodeErrorCode(error);
+    if (code === 'ENOENT' || code === 'ENOTDIR') throw movedRefusal(anchor);
     throw error;
   }
 }
@@ -315,6 +518,7 @@ function nonDirectoryRootRefusal(path: string): EvolveError {
   return new EvolveError(
     'unsafe-path',
     `${path} must be a real directory; the workspace root path cannot traverse a non-directory`,
+    { reason: 'not-directory', subject: path },
   );
 }
 
@@ -322,11 +526,15 @@ function symlinkedRootRefusal(path: string): EvolveError {
   return new EvolveError(
     'unsafe-path',
     `${path} is a symlink; the workspace root must be a symlink-free canonical path (canonicalize with realpath before binding)`,
+    { reason: 'symlinked', subject: path },
   );
 }
 
 function openRootRefusal(root: string): EvolveError {
-  return new EvolveError('unsafe-path', `${root} must be a real directory; symlinks are refused as the workspace root`);
+  return new EvolveError('unsafe-path', `${root} must be a real directory; symlinks are refused as the workspace root`, {
+    reason: 'not-directory',
+    subject: root,
+  });
 }
 
 /** Descend into an existing component of the bound directory; missing is a layout violation. */
@@ -414,6 +622,7 @@ function substitutionRefusal(subject: string): EvolveError {
   return new EvolveError(
     'unsafe-path',
     `${subject} resolved to a different directory than the one just verified; a substitution between the check and the chdir is refused`,
+    { reason: 'relocated', subject },
   );
 }
 
@@ -421,7 +630,10 @@ function directoryRefusal(name: string, from: string, kind: EntryKind): EvolveEr
   if (kind === 'missing') {
     return new EvolveError('layout-violation', `${join(from, name)} does not exist`);
   }
-  return new EvolveError('unsafe-path', `${join(from, name)} must be a real directory; symlinks and non-directories are refused`);
+  return new EvolveError('unsafe-path', `${join(from, name)} must be a real directory; symlinks and non-directories are refused`, {
+    reason: kind === 'symlink' ? 'symlinked' : 'not-directory',
+    subject: join(from, name),
+  });
 }
 
 function removeDirectoryHere(name: string): void {
@@ -480,12 +692,13 @@ function verifyLevel(level: BoundLevel): void {
 function movedRefusal(path: string): EvolveError {
   return new EvolveError(
     'unsafe-path',
-    `${path} is no longer the verified directory (moved, replaced or symlinked); refusing to write through the relocation`,
+    `${path} is no longer the verified directory (moved, replaced, removed or symlinked); refusing to write through the relocation`,
+    { reason: 'relocated', subject: path },
   );
 }
 
 /** Create a new file atomically; an existing file — even a symlink — is refused. */
-export function createFileHere(name: string, contents: string): void {
+export function createFileHere(name: string, contents: string, options: FileWriteOptions = {}): void {
   verifyBoundChain();
   // O_RDWR so refusal cleanup can read this inode. A write-only descriptor
   // cannot tell a competitor append from the bytes this call wrote.
@@ -495,6 +708,7 @@ export function createFileHere(name: string, contents: string): void {
     try {
       verifyBoundChain();
       refuseMultiplyLinked(fd, name);
+      if (options.requireEntryIdentity === true) refuseChangedEntry(fd, name);
     } catch (error) {
       removeFileHere(fd, name, Buffer.alloc(0));
       throw error;
@@ -508,6 +722,84 @@ export function createFileHere(name: string, contents: string): void {
     }
   } finally {
     closeSync(fd);
+  }
+}
+
+/**
+ * Replace, or create, a regular file atomically: the bytes land in a
+ * same-directory temp file created O_CREAT|O_EXCL|O_NOFOLLOW and fsynced, the
+ * recorded chain is re-verified, and one rename of two single-component names
+ * moves the temp over `name`; the chain is verified again after the rename.
+ * Whatever entry stands at `name` is replaced as a directory entry and is
+ * neither followed nor read. A relocation observed before the rename removes
+ * the temp file; one observed after it removes the renamed file (the caller
+ * decided on an absent file) or rewrites `original` into it (the caller decided
+ * to replace those bytes) — each only while the entry is still this call's
+ * inode holding exactly this call's bytes. Neither is one kernel operation, and
+ * neither closes the interval between the final verification and the rename.
+ * Returns the identity of the inode that now stands at `name`.
+ */
+export function replaceFileAtomicallyHere(name: string, contents: string, options: ReplaceOptions = {}): InodeIdentity {
+  verifyBoundChain();
+  const temp = `${name}.tmp-${process.pid}-${Date.now()}`;
+  const fd = openHere(temp, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL);
+  const ownBytes = Buffer.from(contents, 'utf8');
+  try {
+    stageReplacement(fd, temp, ownBytes, options.beforeRename);
+    try {
+      renameSync(temp, name);
+    } catch (error) {
+      removeFileHere(fd, temp, ownBytes);
+      throw error;
+    }
+    try {
+      verifyBoundChain();
+    } catch (error) {
+      revertReplacement(fd, name, ownBytes, options.original ?? null);
+      throw error;
+    }
+    const written = fstatSync(fd);
+    return { dev: written.dev, ino: written.ino };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/** Fill and sync the temp file under a verified chain; on any refusal the temp is removed while still exactly ours. */
+function stageReplacement(fd: number, temp: string, ownBytes: Buffer, beforeRename: (() => void) | undefined): void {
+  let written: Buffer = Buffer.alloc(0);
+  try {
+    verifyBoundChain();
+    refuseMultiplyLinked(fd, temp);
+    writeAll(fd, ownBytes);
+    written = ownBytes;
+    fsyncSync(fd);
+    beforeRename?.();
+    verifyBoundChain();
+  } catch (error) {
+    removeFileHere(fd, temp, written);
+    throw error;
+  }
+}
+
+/**
+ * Compensation for a relocation observed after the rename: unlink the renamed
+ * file, or rewrite the decision-time original into it, only while the entry is
+ * still this call's inode holding exactly this call's bytes. A competitor's
+ * bytes on that inode fail the check and are left in place.
+ */
+function revertReplacement(fd: number, name: string, ownBytes: Buffer, original: Buffer | null): void {
+  if (original === null) {
+    removeFileHere(fd, name, ownBytes);
+    return;
+  }
+  try {
+    if (!entryIsThisFile(fd, name) || !fileStillExactly(fd, ownBytes)) return;
+    ftruncateSync(fd, 0);
+    writeAt(fd, original, 0);
+  } catch {
+    // Best-effort restore. A file that is not exactly the bytes this call
+    // wrote is left in place; this is not a claim that the restore happened.
   }
 }
 
@@ -540,11 +832,12 @@ export function replaceFileHere(name: string, contents: string): void {
 }
 
 /** Append to an existing regular file; refuses to create it and returns the full new bytes. */
-export function appendFileHere(name: string, contents: string): Buffer {
+export function appendFileHere(name: string, contents: string, options: FileWriteOptions = {}): Buffer {
   verifyBoundChain();
   const fd = openHere(name, constants.O_RDWR | constants.O_APPEND);
   try {
     refuseMultiplyLinked(fd, name);
+    if (options.requireEntryIdentity === true) refuseChangedEntry(fd, name);
     verifyBoundChain();
     const placedEnd = appendOwned(fd, contents);
     try {
@@ -653,7 +946,17 @@ function writeAt(fd: number, bytes: Buffer, position: number): void {
 function refuseMultiplyLinked(fd: number, name: string): void {
   const stat = fstatSync(fd);
   if (stat.isFile() && stat.nlink > 1) {
-    throw new EvolveError('unsafe-path', `${name} is multiply linked; evolve writes refuse a hard-linked leaf`);
+    throw new EvolveError('unsafe-path', `${name} is multiply linked; evolve writes refuse a hard-linked leaf`, {
+      reason: 'multiply-linked',
+      subject: name,
+    });
+  }
+}
+
+/** The directory entry must still name the opened file (the drop-time check, offered before a write). */
+function refuseChangedEntry(fd: number, name: string): void {
+  if (!entryIsThisFile(fd, name)) {
+    throw new EvolveError('unsafe-path', `${name} changed identity before the write; refusing`, { reason: 'changed', subject: name });
   }
 }
 
@@ -666,11 +969,14 @@ export function dropFileHere(name: string): void {
   const fd = openHere(name, constants.O_RDONLY);
   try {
     if (!fstatSync(fd).isFile()) {
-      throw new EvolveError('unsafe-path', `${name} is not a regular file; refusing to drop it`);
+      throw new EvolveError('unsafe-path', `${name} is not a regular file; refusing to drop it`, {
+        reason: 'not-regular-file',
+        subject: name,
+      });
     }
     verifyBoundChain();
     if (!entryIsThisFile(fd, name)) {
-      throw new EvolveError('unsafe-path', `${name} changed identity before drop; refusing`);
+      throw new EvolveError('unsafe-path', `${name} changed identity before drop; refusing`, { reason: 'changed', subject: name });
     }
     unlinkSync(name);
   } finally {
@@ -738,6 +1044,8 @@ function openHere(name: string, flags: number): number {
     if (nodeErrorCode(error) === 'ELOOP') {
       throw new EvolveError('unsafe-path', `${name} is a symlink; evolve writes do not follow symlinks`, {
         cause: error,
+        reason: 'symlinked',
+        subject: name,
       });
     }
     throw error;
