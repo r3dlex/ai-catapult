@@ -200,23 +200,23 @@
       "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
       "artifacts": {
         "bundle": {
-          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/goals.json",
-          "sha256": "43d9f3f6c62ad99c1e158c9aba4dc851a4071cbec40ca7e1bcd7308161fcea48"
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/goals.json",
+          "sha256": "f98c0109c9603b1f10a04acb9d8a7210124f3a1d85aef14841972d35fec7bc14"
         },
         "graph": {
-          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/graph.json",
-          "sha256": "077b70de5fa17c3c835ad13363dc7d6ba90a4058969af71372a6430d78bc3550"
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/graph.json",
+          "sha256": "b1b766c9cd7cbcb9e09d48961eead7352b05d64cb3bf624711961f06e9efec00"
         },
         "handoff": {
-          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/handoff.md",
-          "sha256": "406b5254cec3d7e8a676621aeee810aad7e1abc7f65e1b8aadb4058af9d6754e"
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/handoff.md",
+          "sha256": "19db220045f9529ee3079a82068f19e4b434711bdcea4ca0eb1f2dde6baa16e3"
         },
         "sidecar": {
-          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/sidecar.json"
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/sidecar.json"
         }
       },
-      "generation": "cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
-      "handoff_path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/handoff.md",
+      "generation": "b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "handoff_path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/handoff.md",
       "id": "northstar-plan-fs-c-residual-catapult",
       "mode": "live",
       "plan_id": "fs-c-residual-catapult",
@@ -224,7 +224,7 @@
       "schema": "readiness-contract/2",
       "spec": {
         "path": "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md",
-        "sha256": "d3f426241a41457862556a338ea0e8df6288ba0ab64b4d0131b215d21657fd29"
+        "sha256": "20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91"
       },
       "status": "active"
     }

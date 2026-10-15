@@ -7,7 +7,8 @@ definitional fix to AC-1's `result` rule and two cosmetic corrections (coordinat
 Position: plan-scoped planning specification published with the planning-input generation for plan
 `fs-c-residual-catapult` (readiness-contract/2, live policy `readiness-policy/2`). Packet revision r8 was approved by two
 independent reviewers (Architect + blind Critic, 2026-10-15) before publication; the normative content below is
-byte-identical to that reviewed revision except for this header paragraph.
+byte-identical to that reviewed revision except for this header paragraph and the "Lane-taken defaults" bullet added
+in §Decision after the registration PR's first independent review (SQ-1/SQ-2 disclosed with their supersession paths).
 Execution, admission, publication and approval authority: **none**. The generation will bind this file by
 `spec_sha256`; publication grants no execution, admission, approval or merge authority.
 
@@ -92,7 +93,21 @@ remainder (AC-2).
 - **Dependencies**: PR #63 (`tswc-ac-b1`, squash `3fa658b2142c8874aa3fd78986cff487be3b521d`) and PR #67 (`ACH-C-04`,
   squash `2fe7e303649e35a57de8194c79136c8bf9449a2d`) are ancestors of the base; the `AF06-C-01` goal PR (#74, squash
   `8815f194`) has merged, so the cross-plan ordering this goal carried is satisfied; `dependencies: []` because a bundle
-  cannot depend on another plan's goal. SQ-1 (canonical root) and SQ-2 (ordering, moot) in `stop-questions.md`.
+  cannot depend on another plan's goal.
+- **Lane-taken defaults, disclosed with their supersession paths** (also in `goals.json` `attachments.decisions`):
+  - **SQ-1 — canonical caller root (AC-3).** Refusing a `--root` that traverses a symlink (for example macOS `/tmp`) is a
+    lane-taken default. ADR-0013 "Depth of (a)" names "refuse it, or require and verify a canonical caller path" as the
+    acceptable resolutions and the evolve surface already imposes the requirement; the human's HITL batch #3 answer names
+    "canonical caller root" among the outcomes to keep, which confirms the default's inclusion but not its exact
+    user-visible form. Supersession: the human may say "defer the (a)-depth item to the C-04 successor and keep realpath
+    adoption"; then AC-3 is removed, `root_not_canonical` is dropped from AC-4 and fixture T6 from AC-6, and AC-5's claim
+    text records the ancestor-of-root adoption as the remaining open (a) requirement — a fresh generation, never an edit
+    of this one.
+  - **SQ-2 — ordering after `AF06-C-01`.** "The `FSC-C-01` goal PR merges only after the `AF06-C-01` goal PR has merged"
+    was a lane-taken default (reason: `AF06-C-01` acceptance criterion 8 observed the two todo legs this goal removes),
+    not a human decision. It is observed satisfied at base (#74 merged 2026-10-14T08:41:01Z, squash `8815f194`), so
+    nothing remains to supersede; had it not been satisfied, the supersession path would have been a human or af-06-lane
+    amendment of `AF06-C-01` AC-8 followed by a fresh generation of this plan without the ordering sentence.
 - **Options for the mandate's (i)/(ii)/(iii)** — adopted: (ii)-class before/after re-validation on a bound directory
   with (i)'s post-write re-walk and own-bytes cleanup retained and (iii)'s declaration discipline kept as AC-2/AC-5;
   rejected (i) alone and (iii) alone. How the adopted option is realised is informative (appendix).

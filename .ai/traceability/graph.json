@@ -289,12 +289,12 @@
     },
     {
       "source": "spec:ai-catapult:fs-c-residual-catapult",
-      "target": "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "target": "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
       "type": "plans"
     },
     {
-      "source": "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
-      "target": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "source": "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "target": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
       "type": "plans"
     }
   ],
@@ -1028,12 +1028,12 @@
     {
       "backlinks": [
         "issue:ai-catapult:fs-c-residual-catapult",
-        "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155"
+        "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83"
       ],
       "id": "spec:ai-catapult:fs-c-residual-catapult",
       "path": "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md",
       "repo_id": "ai-catapult",
-      "sha256": "d3f426241a41457862556a338ea0e8df6288ba0ab64b4d0131b215d21657fd29",
+      "sha256": "20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91",
       "status": "active",
       "title": "Filesystem containment residual (c) \u2014 ai-catapult plan-scoped planning specification (plan `fs-c-residual-catapult`)",
       "type": "spec"
@@ -1053,10 +1053,10 @@
     {
       "backlinks": [
         "spec:ai-catapult:fs-c-residual-catapult",
-        "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155"
+        "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83"
       ],
-      "id": "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
-      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/handoff.md",
+      "id": "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/handoff.md",
       "repo_id": "ai-catapult",
       "status": "active",
       "title": "fs-c-residual-catapult",
@@ -1064,10 +1064,10 @@
     },
     {
       "backlinks": [
-        "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155"
+        "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83"
       ],
-      "id": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
-      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/goals.json",
+      "id": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/goals.json",
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "FSC-C-01",

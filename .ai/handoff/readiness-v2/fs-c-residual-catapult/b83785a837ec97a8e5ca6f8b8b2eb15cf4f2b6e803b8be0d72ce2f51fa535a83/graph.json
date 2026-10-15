@@ -1,0 +1,31 @@
+{
+  "contract": "readiness-contract/2",
+  "edges": [
+    {
+      "source": "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "target": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "type": "plans"
+    }
+  ],
+  "generation": "b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+  "goal_ids": [
+    "FSC-C-01"
+  ],
+  "nodes": [
+    {
+      "id": "handoff:ai-catapult:fs-c-residual-catapult:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/handoff.md",
+      "repo_id": "ai-catapult",
+      "type": "handoff"
+    },
+    {
+      "goal_revision": "a3bdda7337251d0f0c10a0c5171fa91928dd0409f1d65ea27e0312e3945aa9b5",
+      "id": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83",
+      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83/goals.json",
+      "repo_id": "ai-catapult",
+      "type": "plan"
+    }
+  ],
+  "plan_id": "fs-c-residual-catapult",
+  "schema_version": "1.1"
+}
