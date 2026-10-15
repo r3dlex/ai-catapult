@@ -112,10 +112,19 @@
     "spec_node": "spec:ai-catapult:fs-c-residual-catapult (sha256 20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91)"
   },
   "verification": {
-    "diff_check": "re-run at the re-publication head and recorded below",
+    "diff_check": {
+      "command": "git diff --check 8815f1940c0125c2f7fa3ca24149a3779d613139..HEAD",
+      "exit_code": 0
+    },
     "generation_recomputed": "generation_v2(bundle_sha256 bf2219cf2df20338817676eb69bbb731307aee1f09661089f36679cf27afc83e, spec_sha256 20fbeccbd988823197cafeb4f71b0225fb9e574a0463b4f61bc60a49489b7e91, policy_sha256 f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f, anchor_sha256 8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1) == b83785a837ec97a8e5ca6f8b8b2eb15cf4f2b6e803b8be0d72ce2f51fa535a83 (pinned readiness_contract_v2 at skills 848a3dd6)",
     "goal_revision_v2_FSC_C_01": "a3bdda7337251d0f0c10a0c5171fa91928dd0409f1d65ea27e0312e3945aa9b5 (== generation graph.json)",
-    "npm_test": "re-run at the re-publication head and recorded below",
+    "npm_test": {
+      "command": "npm test",
+      "exit_code": 0,
+      "head": "4ca35267b1dfecf09061daedf150e9c9eabd98cf",
+      "log_sha256": "845a4994762a853cb147a39952dfcef2ada549b9af7457460f93c9f32eca4e1e",
+      "summary": "607 tests / 605 pass / 0 fail / 0 skipped / 2 todo (the two pre-existing deferred-to-ADR-0013 legs, unchanged by this registration)"
+    },
     "prek": "typecheck (tsc --noEmit) passed at commit; eslint: no .ts files changed"
   }
 }
