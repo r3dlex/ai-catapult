@@ -35,9 +35,14 @@
  * run's own bytes are removed or restored only while still identifiably its
  * own, a root observed gone is never recreated (ADR-0013 (b)); a --root reached
  * through a symlinked ancestor refuses `root_not_canonical` (ADR-0013 Depth of
- * (a)); and T9 asserts the declared ADR-0013 (c) residual. The ACH-C-04
- * criterion 3 wording above is quoted from that goal's registered record; the
- * guarantee enforced on this surface is the one stated in src/backfill.ts.
+ * (a)); and T9 asserts the declared ADR-0013 (c) residual: a relocation in
+ * effect only inside the interval between the run's final verification and its
+ * kernel write, undone before the run next verifies, is not observed; the run
+ * is not required to detect or defeat that interval, and the own-bytes removals
+ * and restorations the fixtures assert are best-effort controls, not
+ * guarantees, and not single kernel operations. The ACH-C-04 criterion 3
+ * wording above is quoted from that goal's registered record; the guarantee
+ * enforced on this surface is the one stated in src/backfill.ts.
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -757,7 +762,9 @@ void test('ACH-C-04 backfill: the policy is replaced atomically, never truncated
 // `root_not_canonical` (ADR-0013 Depth of (a)). T9 is the ADR-0013 (c)
 // conformance fixture: a relocation in effect only inside the interval between
 // the run's final verification and its kernel write, undone before the run next
-// verifies, is declared, not detected.
+// verifies, is declared, not detected — the run is not required to detect or
+// defeat it, and every removal or restoration asserted below is a best-effort
+// control, not a guarantee, and not a single kernel operation.
 //
 // T1, T2 and T7 relocate at the existing test-only `faults` observers. T3, T3b,
 // T4, T5 and T9 relocate inside the kernel call itself by patching `node:fs`
@@ -1230,6 +1237,94 @@ void test('FSC-C-01 T7 backfill: a root replaced by a fresh directory before the
   assert.notEqual(second.err, '', 'a refusal is never silent');
   assert.equal(existsSync(gone), false, 'a root observed gone is never recreated');
   assert.deepEqual(regularFilesUnder(goneMoved), [], 'nothing this run wrote remains in the moved original');
+});
+
+// Round-2 review findings (final round): a validated root that vanishes while
+// the run is binding it — after the caller-chain walk, immediately before the
+// root's O_DIRECTORY open — must still be a structured refusal (T7b); and the
+// restoration branch of the revert must re-check that the policy entry still
+// names this run's inode exactly as the removal branch does (T2g).
+
+void test("FSC-C-01 T7b backfill: a validated root that vanishes while it is being bound (before the root's O_DIRECTORY open) refuses path_relocated naming the root with a structured report, writes nothing anywhere and never recreates the root", () => {
+  const root = fixtureRoot('backfill-fsc-t7b-');
+  const moved = join(fixtureRoot('backfill-fsc-t7b-moved-'), 'original');
+  const originalOpen = fs.openSync;
+  const originalRename = fs.renameSync;
+  let fired = false;
+  const run = withPatchedFs(
+    {
+      openSync: (...args: unknown[]) => {
+        // The walk has just verified every component; the root is renamed away
+        // in the instant before the bind opens it.
+        if (!fired && String(args[0]) === root && (Number(args[1]) & constants.O_DIRECTORY) !== 0) {
+          fired = true;
+          originalRename(root, moved);
+        }
+        return (originalOpen as unknown as PatchedFsFunction)(...args);
+      },
+    },
+    () => runModule(['--policy-v2', '--root', root], { root, inventory: () => ok([]) }),
+  );
+  assert.equal(fired, true, 'the root must have been renamed away immediately before its O_DIRECTORY open');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'a detected relocation is a structured refusal, never a bare error');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: root }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(existsSync(root), false, 'a root observed gone is never recreated');
+  assert.deepEqual(regularFilesUnder(moved), [], 'nothing this run wrote remains in the moved original');
+});
+
+void test("FSC-C-01 T2g backfill: the revert restores a replaced v1 policy only while the entry still names this run's inode — an inode renamed away under a competitor's file is left as it is", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t2g-moved-');
+  const root = fixtureRoot('backfill-fsc-t2g-');
+  const moved = join(movedParent, 'original');
+  const repoId = 'kept-id';
+  const v1 = '{\n  "schema": "readiness-policy/1",\n  "repository": { "id": "kept-id" }\n}\n';
+  const competitor = '{"schema":"competitor"}\n';
+  write(root, POLICY_REL, v1);
+  const originalOpen = fs.openSync;
+  const originalRename = fs.renameSync;
+  let swapped = false;
+  const run = withPatchedFs(
+    {
+      openSync: (...args: unknown[]) => {
+        const fd = (originalOpen as unknown as PatchedFsFunction)(...args);
+        // The revert's open of the policy (relative name, O_RDWR, no O_CREAT),
+        // after the root was moved: the opened inode is renamed away and a
+        // competitor's file takes the policy name before the revert decides.
+        const flags = Number(args[1]);
+        if (!swapped && String(args[0]) === POLICY_NAME && (flags & constants.O_CREAT) === 0 && (flags & constants.O_RDWR) !== 0 && existsSync(moved)) {
+          swapped = true;
+          originalRename(join(moved, POLICY_REL), join(moved, '.ai/policies/saved-policy'));
+          writeFileSync(join(moved, POLICY_REL), competitor);
+        }
+        return fd;
+      },
+    },
+    () =>
+      runModule(['--policy-v2', '--root', root], {
+        root,
+        inventory: () => ok([]),
+        faults: {
+          beforeLedgerAppend: () => {
+            renameSync(root, moved);
+            mkdirSync(root);
+          },
+        },
+      }),
+  );
+  assert.equal(swapped, true, "the policy entry must have been swapped during the revert's open");
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused');
+  assert.deepEqual(refusalsOf(run), [{ code: 'path_relocated', detail: root }]);
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(
+    readFileSync(join(moved, '.ai/policies/saved-policy'), 'utf8'),
+    candidate(repoId),
+    "this run's inode, renamed away, is not rewritten: the entry no longer names it",
+  );
+  assert.equal(readFileSync(join(moved, POLICY_REL), 'utf8'), competitor, "the competitor's file at the policy name is untouched");
+  assert.deepEqual(readdirSync(root), [], 'the fresh root stays empty');
 });
 
 void test('FSC-C-01 T9 backfill (ADR-0013 (c), declared, not detected): a relocation in effect only inside the write interval and undone before the run next verifies is not observed', () => {

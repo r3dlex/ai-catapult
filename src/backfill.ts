@@ -149,10 +149,12 @@ directory component - the root, .ai, .ai/policies or .ai/drift - observed
 moved, replaced, removed or turned into a symlink, before or after a write,
 refuses path_relocated with exit 1, and bytes this run wrote are removed or
 restored only while still identifiably its own; a competitor's bytes are
-never deleted or rewritten. Declared residual (ADR-0013 (c)): a relocation in
-effect only between the run's final verification and its kernel write, and
-undone before the next verification, is not detected. Approvals, anchors and
-readiness contexts are never touched.
+never deleted or rewritten. Those removals and restorations are best-effort
+controls, not guarantees, and not single kernel operations. Declared residual
+(ADR-0013 (c)): a relocation in effect only between the run's final
+verification and its kernel write, and undone before the next verification,
+is not detected; the run is not required to detect or defeat that interval.
+Approvals, anchors and readiness contexts are never touched.
 
 Options:
   --policy-v2    Required. Write the baseline readiness-policy/2 candidate
@@ -191,7 +193,13 @@ export type BackfillOptions = {
    * verified chain and before the final verification that precedes the policy
    * rename or the ledger open. The CLI never sets them (observer pattern: a
    * test adapter exists only in-process). A relocation planted at either point
-   * is observed by that verification and refused `path_relocated`.
+   * is observed by that verification and refused `path_relocated`. Declared
+   * residual (ADR-0013 (c)): a relocation in effect only inside the interval
+   * between that final verification and the kernel write, and undone before
+   * the run next verifies, is not observed; the run is
+   * not required to detect or defeat it, and the own-bytes removals and
+   * restorations are best-effort controls, not guarantees, and not single
+   * kernel operations.
    */
   faults?: { beforePolicyWrite?: () => void; beforeLedgerAppend?: () => void } | undefined;
 };

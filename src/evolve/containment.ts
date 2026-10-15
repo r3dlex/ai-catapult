@@ -97,9 +97,11 @@
  *     exposes no openat/fchdir. A concurrent hostile relocator that interposes
  *     between the very last identity re-verification and the kernel write can
  *     still have that single write land in the relocated inode. That interval
- *     is outside this boundary. Relocation is refused whenever observed;
- *     compensation above does not close the interval and does not undo a write
- *     that cannot be identified as ours.
+ *     is outside this boundary: this module is
+ *     not required to detect or defeat it. Relocation is refused whenever
+ *     observed; the compensation above is a best-effort control, not a
+ *     guarantee, not a single kernel operation, does not close the interval
+ *     and does not undo a write that cannot be identified as ours.
  *
  * Creation is atomic: directories via mkdir with an EEXIST re-check, new files
  * via O_CREAT|O_EXCL, wiki appends via O_APPEND. The cwd and the recorded
@@ -267,10 +269,13 @@ export function ascendHere(): string {
  * that held the write by inode identity alone — `..` and single-component
  * names, each verified by device+inode, at most three steps — then unlink the
  * file (`original` null) or rewrite `original` into it, only while the entry
- * is still the written inode holding exactly the written bytes. A competitor's
- * bytes on that inode, or a directory that cannot be reached by identity,
- * leave the file as it is. This is not a claim that the file is gone or
- * restored, and the walk is not one kernel operation.
+ * still names the written inode and the file holds exactly the written bytes
+ * (both branches check the entry and the bytes, the restoration re-checking
+ * them immediately before it truncates). A competitor's bytes on that inode, an
+ * entry that names another file, or a directory that cannot be reached by
+ * identity leave the file as it is. This is not a claim that the file is gone
+ * or restored, and neither the walk nor the checks and the write are one
+ * kernel operation.
  */
 export function revertWrittenFile(written: WrittenFile): void {
   try {
@@ -279,10 +284,15 @@ export function revertWrittenFile(written: WrittenFile): void {
     try {
       const stat = fstatSync(fd);
       if (!stat.isFile() || !sameIdentity(stat, written.identity) || !fileStillExactly(fd, written.bytes)) return;
+      // The entry must still name the opened descriptor for either branch: an
+      // inode renamed away while a competitor's file took the name is neither
+      // unlinked nor rewritten.
+      if (!entryIsThisFile(fd, written.name)) return;
       if (written.original === null) {
-        if (entryIsThisFile(fd, written.name)) unlinkSync(written.name);
+        unlinkSync(written.name);
         return;
       }
+      if (!fileStillExactly(fd, written.bytes) || !entryIsThisFile(fd, written.name)) return;
       ftruncateSync(fd, 0);
       writeAt(fd, written.original, 0);
     } finally {
@@ -431,7 +441,7 @@ function bindVerifiedRoot(anchor: string, chain: readonly BoundLevel[]): RootBin
   try {
     const id = fstatSync(fd);
     if (!id.isDirectory()) throw openRootRefusal(anchor);
-    process.chdir(anchor);
+    changeToRoot(anchor);
     // cwd is established by path; it must still be the walked path and the
     // opened inode, or a substitution slipped in between walk/check and chdir.
     const cwdId = openCwdIdentity();
@@ -444,6 +454,11 @@ function bindVerifiedRoot(anchor: string, chain: readonly BoundLevel[]): RootBin
   }
 }
 
+/**
+ * Open the walked root. The walk just saw it, so a root that is gone at the
+ * open (ENOENT) or no longer a directory (ENOTDIR) is a root relocated during
+ * binding and is refused by name, never adopted or recreated.
+ */
 function openRootDirectory(root: string): number {
   try {
     return openSync(root, constants.O_RDONLY | DIRECTORY | NOFOLLOW);
@@ -452,6 +467,18 @@ function openRootDirectory(root: string): number {
     // Darwin returns ENOTDIR, not ELOOP, for O_DIRECTORY|O_NOFOLLOW on a symlink.
     if (code === 'ELOOP') throw symlinkedRootRefusal(root);
     if (code === 'ENOTDIR') throw openRootRefusal(root);
+    if (code === 'ENOENT') throw movedRefusal(root);
+    throw error;
+  }
+}
+
+/** chdir into the opened root; a root gone or replaced by a non-directory between the open and the chdir is a relocation. */
+function changeToRoot(anchor: string): void {
+  try {
+    process.chdir(anchor);
+  } catch (error) {
+    const code = nodeErrorCode(error);
+    if (code === 'ENOENT' || code === 'ENOTDIR') throw movedRefusal(anchor);
     throw error;
   }
 }

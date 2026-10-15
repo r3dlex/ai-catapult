@@ -23,6 +23,14 @@
  *   not-regular-file   a leaf that must be a regular file is not one
  *   multiply-linked    a regular-file leaf has more than one hard link
  *   changed            the directory entry no longer names the opened file
+ *
+ * A `relocated` refusal is raised whenever a relocation is observed, before or
+ * after a write. Declared residual (ADR-0013 (c)): a relocation in effect only
+ * inside the interval between the final identity verification and the kernel
+ * write, and undone before the next verification, is not observed; the
+ * containment layer is not required to detect or defeat that interval, and its
+ * own-bytes removals and restorations are best-effort controls, not guarantees,
+ * and not single kernel operations.
  */
 export type EvolveErrorKind =
   | 'append-only-violation'
