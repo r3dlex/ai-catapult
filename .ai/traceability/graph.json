@@ -281,6 +281,21 @@
       "source": "handoff:ai-catapult:af-06-catapult-local-ci:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
       "target": "plan:ai-catapult:af-06-catapult-local-ci:AF06-C-01:9d8d141338a00bb9eaa604f8ec70bf02c04d04da365bff5c7583233ecbe1fae4",
       "type": "plans"
+    },
+    {
+      "source": "issue:ai-catapult:fs-c-residual-catapult",
+      "target": "spec:ai-catapult:fs-c-residual-catapult",
+      "type": "specified-by"
+    },
+    {
+      "source": "spec:ai-catapult:fs-c-residual-catapult",
+      "target": "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "type": "plans"
+    },
+    {
+      "source": "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "target": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "type": "plans"
     }
   ],
   "generated_at": "2026-08-22T00:00:00Z",
@@ -1008,6 +1023,54 @@
       "repo_id": "ai-catapult",
       "status": "planned",
       "title": "AF06-C-01",
+      "type": "plan"
+    },
+    {
+      "backlinks": [
+        "issue:ai-catapult:fs-c-residual-catapult",
+        "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155"
+      ],
+      "id": "spec:ai-catapult:fs-c-residual-catapult",
+      "path": "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md",
+      "repo_id": "ai-catapult",
+      "sha256": "d3f426241a41457862556a338ea0e8df6288ba0ab64b4d0131b215d21657fd29",
+      "status": "active",
+      "title": "Filesystem containment residual (c) \u2014 ai-catapult plan-scoped planning specification (plan `fs-c-residual-catapult`)",
+      "type": "spec"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:fs-c-residual-catapult"
+      ],
+      "id": "issue:ai-catapult:fs-c-residual-catapult",
+      "owner": "unassigned",
+      "path": ".ai/work-intake/fs-c-residual-catapult.md",
+      "repo_id": "ai-catapult",
+      "status": "needs-triage",
+      "title": "Work Item: ADR-0013 residual (c) follow-up \u2014 backfill write surface (`ai-catapult`, plan `fs-c-residual-catapult`) \u2014 local work item",
+      "type": "issue"
+    },
+    {
+      "backlinks": [
+        "spec:ai-catapult:fs-c-residual-catapult",
+        "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155"
+      ],
+      "id": "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/handoff.md",
+      "repo_id": "ai-catapult",
+      "status": "active",
+      "title": "fs-c-residual-catapult",
+      "type": "handoff"
+    },
+    {
+      "backlinks": [
+        "handoff:ai-catapult:fs-c-residual-catapult:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155"
+      ],
+      "id": "plan:ai-catapult:fs-c-residual-catapult:FSC-C-01:cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/goals.json",
+      "repo_id": "ai-catapult",
+      "status": "planned",
+      "title": "FSC-C-01",
       "type": "plan"
     }
   ],

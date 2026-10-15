@@ -1,0 +1,115 @@
+{
+  "generation": "cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+  "goal_id": "FSC-C-01",
+  "goals": [
+    "FSC-C-01"
+  ],
+  "limits": [
+    "Planning publication only: no approval was requested, minted or implied; execution needs this generation's own future tag approval/fs-c-residual-catapult/cad6bbfdc459 (the live policy accepts agent-self; an agent-self approval must carry the verbatim disclosure AGENT-SELF \u2014 no human approved it). Implementation of FSC-C-01 is a separate coordinator dispatch, not part of this registration.",
+    "The acceptance criteria are OUTCOME-ONLY and narrowed by the human principal's decision (HITL batch 3, 2026-10-15T04:52:51Z). Per-entry-class behaviour of the write targets is out of this goal's contract (docstrings/tests). The specification's Implementation notes appendix is informative, non-binding.",
+    "Local suite results, digests and classifications are lane evidence, not hosted CI, readiness-context admission, merge certification or live authority.",
+    "No existing generation, registry entry, approval tag or spec copy is modified: this is a fresh-plan ADD (precedents PR #62 ach-catapult-delivery-ts, PR #65 xskp-p4-adopt-engine-ts, PR #73 af-06-catapult-local-ci). The six prior registry entries and their generations are byte-unchanged.",
+    "ADR-0013 is not edited: (c) remains the declared boundary; no text written by this plan claims race-freedom.",
+    "No root-workspace file, no vendor/skills file and no child repository other than ai-catapult was touched by this registration."
+  ],
+  "mandate_record": {
+    "adr_0013_ratification": "root PR #128, squash 22154ebbb8ab03cb500993ffee451a055ca26ea1 (ADR sha256 20850c2fe6cdc0faedbf0eac2dac7807c668a03881b06ecfed399bd5adc3589e)",
+    "path": "r3dlex/ai-tool-workspace .omc/plans/hitl-answers-20261014.md (gitignored, append-only coordinator transcript)",
+    "row_ADR_0013": "Ratify, but open a follow-up goal for (c) (ancestor-rename residual; native-free, bounded)",
+    "row_FSC_batch3_2026_10_15T04_52_51Z": "Narrow the goal to the undisputed outcomes (relocated-ancestor refusal/revert, residual-(c) conformance fixture, canonical caller root, structured reporting, claims discipline, gates; per-class tables -> docstrings/tests); one fresh pair; publish on APPROVE x2",
+    "snapshot_2026_10_14T07_09_32Z_first_17_lines_sha256": "12d1abd14a87d5fbeeab2a88cf267836ee36ebcc6c98bdbd64bb36077af40e06"
+  },
+  "packet_review_history": {
+    "published_vs_reviewed": {
+      "goals_json": "the published bundle (sha256 43d9f3f6c62ad99c1e158c9aba4dc851a4071cbec40ca7e1bcd7308161fcea48) differs from the r8-reviewed bundle (baeee3bd...) in exactly two strings (attachments.agent_self and acceptance_criteria[5]): the AGENT-SELF disclosure is rendered in its verbatim em-dash form (AGENT-SELF \u2014 no human approved it) instead of the ASCII-hyphen rendering the generator had emitted; required by the fleet standing orders and by the PR #73 round-1 precedent; no other byte differs",
+      "sidecar_json": "byte-identical to the reviewed sidecar",
+      "spec_copy": "the reviewed r8 spec.md with only its header Position paragraph changed from the held-draft wording to the published wording; every section from 'How to read this document' on is byte-identical to the reviewed bytes"
+    },
+    "r8_approvals": {
+      "architect": {
+        "artifact": "codex-you-are-the-architect-on-an-independent-plan-review-this-is--2026-10-15T05-46-26-849Z.md",
+        "sha256": "50a93026ce0ba2d57fb077be1f77cea6d15a861f65d9456735d2f6b972ec7f75",
+        "verdict": "APPROVE"
+      },
+      "blind_critic": {
+        "artifact": "codex-you-are-a-blind-critic-on-an-independent-plan-review-you-hav-2026-10-15T05-40-49-836Z.md",
+        "sha256": "f39ecffe67419076954845a44b7c249fdd9e86336d5e7bfc83d993cacc2bcd42",
+        "verdict": "APPROVE"
+      },
+      "reviewed_bundle_sha256": "baeee3bde5d94348f03a74c3b936383452555dc66f49f87234e333a6fc9c8393",
+      "reviewed_sidecar_sha256": "44deedfe792a482ebd8fb279ded177ab1603f40b06e7d49d0e1637e46215cda2",
+      "reviewed_spec_sha256": "1474aef068683cb7529ce7d4e789488521d7939ec75c57911da673887fb132ea"
+    },
+    "receipts": "r3dlex/ai-tool-workspace .omc/plans/receipts-fs-c-residual-goal-plan-20261014/ and .omc/plans/fs-c-residual-goal-plan-20261014/ (gitignored)",
+    "revisions": "r1-r4 bound mechanism (REQUEST_CHANGES rounds on wording); r5 outcome-only per-class tables (REQUEST_CHANGES x2); r6 narrowed per the human (Architect APPROVE, Critic REQUEST_CHANGES on the result rule); r7 = r6 + result-rule definition + cosmetics (REQUEST_CHANGES x2 on one stale hold-file word); r8 = r7 + hold-file wording (APPROVE x2)."
+  },
+  "plan_id": "fs-c-residual-catapult",
+  "publication": {
+    "artifact_sha256": {
+      "goals.json": "43d9f3f6c62ad99c1e158c9aba4dc851a4071cbec40ca7e1bcd7308161fcea48",
+      "graph.json": "077b70de5fa17c3c835ad13363dc7d6ba90a4058969af71372a6430d78bc3550",
+      "handoff.md": "406b5254cec3d7e8a676621aeee810aad7e1abc7f65e1b8aadb4058af9d6754e",
+      "sidecar.json": "44deedfe792a482ebd8fb279ded177ab1603f40b06e7d49d0e1637e46215cda2"
+    },
+    "base": "8815f1940c0125c2f7fa3ca24149a3779d613139",
+    "command": "bash vendor/skills/02-govern-plan/northstar/handoff-write.sh --root . --bundle <authored goals.json> --sidecar <authored sidecar.json> --target main (publish-v2 --admit-planning, pinned vendor 848a3dd6375d3552ea118914d4584d39aaa351ba)",
+    "entry": {
+      "anchor_sha256": "8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1",
+      "artifacts": {
+        "bundle": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/goals.json",
+          "sha256": "43d9f3f6c62ad99c1e158c9aba4dc851a4071cbec40ca7e1bcd7308161fcea48"
+        },
+        "graph": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/graph.json",
+          "sha256": "077b70de5fa17c3c835ad13363dc7d6ba90a4058969af71372a6430d78bc3550"
+        },
+        "handoff": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/handoff.md",
+          "sha256": "406b5254cec3d7e8a676621aeee810aad7e1abc7f65e1b8aadb4058af9d6754e"
+        },
+        "sidecar": {
+          "path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/sidecar.json"
+        }
+      },
+      "generation": "cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155",
+      "handoff_path": ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/handoff.md",
+      "id": "northstar-plan-fs-c-residual-catapult",
+      "mode": "live",
+      "plan_id": "fs-c-residual-catapult",
+      "policy_sha256": "f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f",
+      "schema": "readiness-contract/2",
+      "spec": {
+        "path": "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md",
+        "sha256": "d3f426241a41457862556a338ea0e8df6288ba0ab64b4d0131b215d21657fd29"
+      },
+      "status": "active"
+    },
+    "publisher_report": "northstar-publication/2: planning_complete true; planning.blocking []; 5 approval-class and 5 deferred gates; authority none; target_revision 8815f1940c0125c2f7fa3ca24149a3779d613139; log sha256 3933349bb042921561052918e81f86b6be97cdf58f2938e7352dc0eca9330786",
+    "work_intake": ".ai/work-intake/fs-c-residual-catapult.md (issue:ai-catapult:fs-c-residual-catapult, needs-triage, unassigned; no hosted issue)"
+  },
+  "record": "fresh-plan registration (add-only) for FSC-C-01 of plan fs-c-residual-catapult - the human-mandated ADR-0013 residual-(c) follow-up for the backfill --policy-v2 --root write surface, narrowed by the human principal (HITL batch 3) to the undisputed outcomes: relocated-ancestor refusal/revert, residual-(c) conformance fixture, canonical caller root, structured reporting vocabulary, claims discipline + historical red leg, TDD/gates/scope/sequencing",
+  "reserved_path_disposition": {
+    "paths_touched": {
+      ".ai/evidence/fs-c-residual-catapult-registration-20261015.json": "no active scope match (this record)",
+      ".ai/handoff/readiness-v2/fs-c-residual-catapult/cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155/{goals.json,graph.json,handoff.md,sidecar.json}": "fixed reserved; added by the pinned publisher",
+      ".ai/traceability/graph.json": "free planning path; additive nodes/edges only (issue + spec seed before publication; handoff + plan nodes and spec backlink after)",
+      ".ai/work-intake/fs-c-residual-catapult.md": "new file; no active goal scope names it",
+      ".ai/workflows/northstar-readiness-v2.json": "fixed reserved; exact publish-v2 replay (one generation appended; six prior entries byte-unchanged)",
+      "docs/specifications/ACTIVE/filesystem-containment-residual-fs-c-residual-catapult.md": "free planning path; new plan-scoped spec copy bound by this generation only"
+    }
+  },
+  "schema": "registration-evidence/1",
+  "seed": {
+    "edge": "issue -> spec specified-by; spec -> handoff plans; handoff -> plan plans",
+    "graph": "65 nodes / 59 edges after publication (61 / 56 at base); generated_at unchanged; pure appends",
+    "issue_node": "issue:ai-catapult:fs-c-residual-catapult (status needs-triage, owner unassigned)",
+    "spec_node": "spec:ai-catapult:fs-c-residual-catapult (sha256 d3f426241a41457862556a338ea0e8df6288ba0ab64b4d0131b215d21657fd29)"
+  },
+  "verification": {
+    "diff_check": "recorded after the run (see below)",
+    "generation_recomputed": "generation_v2(bundle_sha256 2537ed641370989616dc4847a1aba8f1650c4a016cda49919bfa5ff82691bd84, spec_sha256 d3f426241a41457862556a338ea0e8df6288ba0ab64b4d0131b215d21657fd29, policy_sha256 f1afba73d4c7282d9ea6038dfc8e390268fea8a11a13b86c648a224539730e0f, anchor_sha256 8b33406c8f2cfe54c0a4204f63ffa03e5c1a35aa0b648d0d3a7a35399ecb14f1) == cad6bbfdc4596dce6c13c5741222f3932213032c66663a16fc098b0f314f1155 (pinned readiness_contract_v2 at skills 848a3dd6)",
+    "goal_revision_v2_FSC_C_01": "a3bdda7337251d0f0c10a0c5171fa91928dd0409f1d65ea27e0312e3945aa9b5 (== generation graph.json)",
+    "npm_test": "recorded after the run (see below)"
+  }
+}

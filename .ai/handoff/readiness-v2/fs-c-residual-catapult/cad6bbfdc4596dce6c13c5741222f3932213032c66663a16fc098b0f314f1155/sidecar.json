@@ -1,0 +1,16 @@
+{
+  "goals": {
+    "FSC-C-01": {
+      "coverage_status": "unknown",
+      "legacy_risk_reason": "Coverage not recorded (no goal-scoped measurement exists; the suite is 607 node --test cases at base 8815f1940c0125c2f7fa3ca24149a3779d613139, 2 of them the todo legs this goal converts). Legacy-safe is chosen for blast radius, not low coverage: the slice changes the backfill command's write path and may extend the containment module the evolve surface already depends on. Characterize first: the two deferred-to-ADR-0013 todo legs and the 38 evolve-layout tests are the characterization; the converted legs plus the relocation fixtures T3-T7 are the red leg that must fail at base before the write path is changed. Cross-plan ordering after the AF06-C-01 goal PR (plan af-06-catapult-local-ci) is satisfied at this base (#74 merged). Unknown readiness is not execution authority.",
+      "legacy_safe_tdd": true,
+      "readiness": {
+        "implementation": "unknown",
+        "merge": "unknown",
+        "preparation": "unknown"
+      }
+    }
+  },
+  "plan_id": "fs-c-residual-catapult",
+  "schema": "readiness-sidecar/1"
+}
