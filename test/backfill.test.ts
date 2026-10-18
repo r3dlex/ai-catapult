@@ -1336,6 +1336,10 @@ void test("FSC-C-01 T2g backfill: the revert restores a replaced v1 policy only 
 // naming the invalidated root (T7c); and a relocation observed by the refusal's
 // own audit append is included in the final structured report with its
 // component, after the original refusal (T2h).
+//
+// The same ENOTDIR class at the caller-path pre-walk (before any level is
+// bound): on the mutation bind (T7d) and on the refusal's audit bind (T7e).
+// Both name the invalidated recorded component, never the unreachable leaf.
 
 void test("FSC-C-01 T7c backfill: a root replaced by a non-directory between two consecutive chain checks (the next .ai lookup reports ENOTDIR) refuses path_relocated naming the invalidated root, preserves the competitor's file and leaves no temporary file", () => {
   const movedParent = fixtureRoot('backfill-fsc-t7c-moved-');
@@ -1381,6 +1385,102 @@ void test("FSC-C-01 T7c backfill: a root replaced by a non-directory between two
   assert.equal(lstatSync(root).isFile(), true, 'the root is not recreated as a directory');
   assert.deepEqual(regularFilesUnder(moved), [], 'the staged temporary file is removed; nothing this run wrote remains in the moved original');
   assert.deepEqual(readdirSync(join(moved, '.ai/policies')), [], 'no temporary file remains in the relocated policy directory');
+});
+
+void test("FSC-C-01 T7d backfill: an ancestor of the root replaced by a non-directory during the caller-path pre-walk of the mutation bind refuses path_relocated naming the invalidated ancestor, preserves the competitor's file and writes nothing", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t7d-moved-');
+  const container = fixtureRoot('backfill-fsc-t7d-');
+  const root = join(container, 'root');
+  mkdirSync(root);
+  const moved = join(movedParent, 'container');
+  const originalLstat = fs.lstatSync;
+  let armed = false;
+  let fired = false;
+  const run = withPatchedFs(
+    {
+      lstatSync: (...args: unknown[]) => {
+        // The pre-walk has just verified the container; it is replaced by a
+        // non-directory immediately before the root's own lookup (ENOTDIR).
+        if (!fired && armed && String(args[0]) === root) {
+          fired = true;
+          renameSync(container, moved);
+          writeFileSync(container, 'competitor\n');
+        }
+        return (originalLstat as unknown as PatchedFsFunction)(...args);
+      },
+    },
+    () =>
+      runModule(['--policy-v2', '--root', root], {
+        root,
+        inventory: () => {
+          armed = true;
+          return ok([]);
+        },
+      }),
+  );
+  assert.equal(fired, true, 'the pre-walk must have observed ENOTDIR after the ancestor was replaced by a non-directory');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'a detected invalidation is a structured refusal, never a bare error');
+  assert.deepEqual(
+    refusalsOf(run),
+    [{ code: 'path_relocated', detail: container }],
+    'the refusal names the invalidated ancestor, not the unreachable root',
+  );
+  assert.equal(run.err.includes(container), true, 'stderr names the invalidated component');
+  assert.equal(readFileSync(container, 'utf8'), 'competitor\n', "the competitor's file at the ancestor name is untouched");
+  assert.equal(lstatSync(container).isFile(), true, 'the ancestor is not recreated as a directory');
+  assert.deepEqual(regularFilesUnder(moved), [], 'nothing this run wrote remains in the moved container');
+  assert.deepEqual(readdirSync(join(moved, 'root')), [], 'the moved root stays empty');
+});
+
+void test("FSC-C-01 T7e backfill: an ancestor of the root replaced by a non-directory during the caller-path pre-walk of the refusal's audit bind names the invalidated ancestor in refusals[] and on stderr, after the original refusal", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t7e-moved-');
+  const container = fixtureRoot('backfill-fsc-t7e-');
+  const root = join(container, 'root');
+  mkdirSync(root);
+  const moved = join(movedParent, 'container');
+  const originalLstat = fs.lstatSync;
+  let armed = false;
+  let fired = false;
+  const run = withPatchedFs(
+    {
+      lstatSync: (...args: unknown[]) => {
+        // The audit pre-walk has just verified the container; it is replaced by
+        // a non-directory immediately before the root's own lookup (ENOTDIR).
+        if (!fired && armed && String(args[0]) === root) {
+          fired = true;
+          renameSync(container, moved);
+          writeFileSync(container, 'competitor\n');
+        }
+        return (originalLstat as unknown as PatchedFsFunction)(...args);
+      },
+    },
+    () =>
+      runModule(['--policy-v2', '--root', root], {
+        root,
+        inventory: () => {
+          armed = true;
+          return { exitCode: null, error: 'outage' };
+        },
+      }),
+  );
+  assert.equal(fired, true, 'the audit pre-walk must have observed ENOTDIR after the ancestor was replaced by a non-directory');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused');
+  assert.deepEqual(
+    refusalsOf(run),
+    [
+      { code: 'inventory_unreachable', detail: 'outage' },
+      { code: 'path_relocated', detail: container },
+    ],
+    'the audit failure is structured after the original refusal and names the invalidated ancestor',
+  );
+  assert.match(run.err, /refused \(inventory_unreachable, path_relocated\)/, 'stderr names both refusal codes');
+  assert.match(run.err, /could not be ledgered \(path_relocated: /, 'stderr keeps the audit note and its component');
+  assert.equal(run.err.includes(container), true, 'the audit failure names the invalidated ancestor on stderr');
+  assert.equal(run.err.includes(LEDGER_REL), false, 'the unreachable ledger leaf is not named as the failure');
+  assert.equal(readFileSync(container, 'utf8'), 'competitor\n', "the competitor's file at the ancestor name is untouched");
+  assert.deepEqual(regularFilesUnder(moved), [], 'nothing this run wrote remains in the moved container');
 });
 
 void test("FSC-C-01 T2h backfill: a relocation observed by the refusal's audit append is included in the final structured report with its component, after the original refusal", () => {

@@ -488,7 +488,11 @@ interface WalkedPath {
   readonly complete: boolean;
 }
 
-/** Walk the caller path top-down. `complete` is false when a component is missing. */
+/**
+ * Walk the caller path top-down. `complete` is false when a component is
+ * missing; a lookup that reports ENOTDIR means a recorded component above it is
+ * no longer a directory, so it is refused at that invalidated level.
+ */
 function walkCallerPath(anchor: string): WalkedPath {
   const levels: BoundLevel[] = [];
   let prefix = '';
@@ -498,7 +502,11 @@ function walkCallerPath(anchor: string): WalkedPath {
     try {
       stat = lstatSync(prefix);
     } catch (error) {
-      if (nodeErrorCode(error) === 'ENOENT') return { levels, complete: false };
+      const code = nodeErrorCode(error);
+      if (code === 'ENOENT') return { levels, complete: false };
+      // Same observed invalidation verifyLevel refuses: name the recorded
+      // component the walk already verified that is no longer a directory.
+      if (code === 'ENOTDIR') throw movedRefusal(invalidatedLevel(prefix, levels));
       throw error;
     }
     if (stat.isSymbolicLink()) throw symlinkedRootRefusal(prefix);
@@ -678,12 +686,13 @@ function verifyBoundChain(): void {
 
 /**
  * The recorded level a failed lookup of `path` identifies: the first prefix of
- * the bound chain whose lstat no longer shows the recorded directory. Used when
- * the lookup itself reports ENOTDIR — a prefix was replaced by a non-directory
- * — so the refusal names that invalidated level, not the unreachable leaf.
+ * the given chain (the bound chain by default) whose lstat no longer shows the
+ * recorded directory. Used when the lookup itself reports ENOTDIR — a prefix was
+ * replaced by a non-directory — so the refusal names that invalidated level, not
+ * the unreachable leaf.
  */
-function invalidatedLevel(path: string): string {
-  for (const level of [...boundAncestors, ...boundLevels]) {
+function invalidatedLevel(path: string, levels: readonly BoundLevel[] = [...boundAncestors, ...boundLevels]): string {
+  for (const level of levels) {
     if (level.path === path || !path.startsWith(`${level.path}/`)) continue;
     let stat;
     try {
