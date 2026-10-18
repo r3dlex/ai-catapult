@@ -676,12 +676,39 @@ function verifyBoundChain(): void {
   if (cwdId.dev !== deepest.dev || cwdId.ino !== deepest.ino) throw movedRefusal(deepest.path);
 }
 
+/**
+ * The recorded level a failed lookup of `path` identifies: the first prefix of
+ * the bound chain whose lstat no longer shows the recorded directory. Used when
+ * the lookup itself reports ENOTDIR — a prefix was replaced by a non-directory
+ * — so the refusal names that invalidated level, not the unreachable leaf.
+ */
+function invalidatedLevel(path: string): string {
+  for (const level of [...boundAncestors, ...boundLevels]) {
+    if (level.path === path || !path.startsWith(`${level.path}/`)) continue;
+    let stat;
+    try {
+      stat = lstatSync(level.path);
+    } catch {
+      return level.path;
+    }
+    if (stat.isSymbolicLink() || !stat.isDirectory() || stat.dev !== level.dev || stat.ino !== level.ino) {
+      return level.path;
+    }
+  }
+  return path;
+}
+
 function verifyLevel(level: BoundLevel): void {
   let stat;
   try {
     stat = lstatSync(level.path);
   } catch (error) {
-    if (nodeErrorCode(error) === 'ENOENT') throw movedRefusal(level.path);
+    const code = nodeErrorCode(error);
+    if (code === 'ENOENT') throw movedRefusal(level.path);
+    // ENOTDIR means an ancestor of this level is no longer a directory: a
+    // replaced root makes the next `.ai` lookup fail this way. That is an
+    // observed invalidation, refused structurally with the invalidated level.
+    if (code === 'ENOTDIR') throw movedRefusal(invalidatedLevel(level.path));
     throw error;
   }
   if (stat.isSymbolicLink() || !stat.isDirectory() || stat.dev !== level.dev || stat.ino !== level.ino) {

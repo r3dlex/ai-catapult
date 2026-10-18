@@ -28,10 +28,10 @@
  * Expected policy bytes are computed in this file directly from the vendored
  * template, never by importing the implementation's renderer.
  *
- * FSC-C-01 (plan fs-c-residual-catapult, ADR-0013 follow-up) adds the fixtures
- * T1-T7 and T9 at the end of the "AC-3" section: a directory component the run
- * validated for a write target (the root, .ai, .ai/policies or .ai/drift) that
- * is observed relocated before or after a write refuses `path_relocated`, this
+ * FSC-C-01 (plan fs-c-residual-catapult, ADR-0013 follow-up) adds the fixture
+ * families T1-T7, T7b, T7c, T2b-T2h and T9 at the end of the "AC-3" section: a
+ * directory component the run validated for a write target (the root, .ai,
+ * .ai/policies or .ai/drift) that is observed relocated before or after a write refuses `path_relocated`, this
  * run's own bytes are removed or restored only while still identifiably its
  * own, a root observed gone is never recreated (ADR-0013 (b)); a --root reached
  * through a symlinked ancestor refuses `root_not_canonical` (ADR-0013 Depth of
@@ -771,8 +771,11 @@ void test('ACH-C-04 backfill: the policy is replaced atomically, never truncated
 // `renameSync` / `openSync` through `syncBuiltinESMExports` (the mechanism of
 // test/evolve-layout.test.ts, duplicated here): the patch performs the
 // relocation with the saved original, records that it was in effect when the
-// call ran, then calls through. The relocated directory is always the
-// relocator's; the fixtures assert only what this run wrote.
+// call ran, then calls through. T2b-T2h and T7b-T7c extend those seams: the
+// inventory seam for T2h, the root's `O_DIRECTORY` open for T7b, and a
+// `lstatSync` between two consecutive chain checks for T7c. The relocated
+// directory is always the relocator's; the fixtures assert only what this run
+// wrote.
 // ---------------------------------------------------------------------------
 
 const POLICY_NAME = 'readiness-policy.json';
@@ -785,7 +788,7 @@ type PatchedFsFunction = (...args: unknown[]) => unknown;
  * the builtin's ESM exports, so already-loaded modules that imported these
  * functions by name observe the patch. Test-only helper.
  */
-function withPatchedFs<T>(patches: Partial<Record<'renameSync' | 'openSync', PatchedFsFunction>>, run: () => T): T {
+function withPatchedFs<T>(patches: Partial<Record<'renameSync' | 'openSync' | 'lstatSync', PatchedFsFunction>>, run: () => T): T {
   const originals: Array<[string, unknown]> = [];
   try {
     for (const [name, replacement] of Object.entries(patches)) {
@@ -1325,6 +1328,87 @@ void test("FSC-C-01 T2g backfill: the revert restores a replaced v1 policy only 
   );
   assert.equal(readFileSync(join(moved, POLICY_REL), 'utf8'), competitor, "the competitor's file at the policy name is untouched");
   assert.deepEqual(readdirSync(root), [], 'the fresh root stays empty');
+});
+
+// Round-3 review findings (terminal pair): an ancestor replaced by a
+// non-directory between two consecutive chain checks makes the next lookup
+// report ENOTDIR — that observed invalidation is a structured `path_relocated`
+// naming the invalidated root (T7c); and a relocation observed by the refusal's
+// own audit append is included in the final structured report with its
+// component, after the original refusal (T2h).
+
+void test("FSC-C-01 T7c backfill: a root replaced by a non-directory between two consecutive chain checks (the next .ai lookup reports ENOTDIR) refuses path_relocated naming the invalidated root, preserves the competitor's file and leaves no temporary file", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t7c-moved-');
+  const root = fixtureRoot('backfill-fsc-t7c-');
+  const moved = join(movedParent, 'original');
+  const originalLstat = fs.lstatSync;
+  let armed = false;
+  let fired = false;
+  const run = withPatchedFs(
+    {
+      lstatSync: (...args: unknown[]) => {
+        // The chain check has just passed the root; the root is replaced by a
+        // non-directory immediately before the next `.ai` lookup (ENOTDIR).
+        if (!fired && armed && String(args[0]) === join(root, '.ai')) {
+          fired = true;
+          renameSync(root, moved);
+          writeFileSync(root, 'competitor\n');
+        }
+        return (originalLstat as unknown as PatchedFsFunction)(...args);
+      },
+    },
+    () =>
+      runModule(['--policy-v2', '--root', root], {
+        root,
+        inventory: () => ok([]),
+        faults: {
+          beforePolicyWrite: () => {
+            armed = true;
+          },
+        },
+      }),
+  );
+  assert.equal(fired, true, 'the .ai lookup must have observed ENOTDIR after the root was replaced by a non-directory');
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused', 'a detected invalidation is a structured refusal, never a bare error');
+  assert.deepEqual(
+    refusalsOf(run),
+    [{ code: 'path_relocated', detail: root }],
+    'the refusal names the invalidated root, not the unreachable .ai leaf',
+  );
+  assert.notEqual(run.err, '', 'a refusal is never silent');
+  assert.equal(readFileSync(root, 'utf8'), 'competitor\n', "the competitor's file at the root name is untouched");
+  assert.equal(lstatSync(root).isFile(), true, 'the root is not recreated as a directory');
+  assert.deepEqual(regularFilesUnder(moved), [], 'the staged temporary file is removed; nothing this run wrote remains in the moved original');
+  assert.deepEqual(readdirSync(join(moved, '.ai/policies')), [], 'no temporary file remains in the relocated policy directory');
+});
+
+void test("FSC-C-01 T2h backfill: a relocation observed by the refusal's audit append is included in the final structured report with its component, after the original refusal", () => {
+  const movedParent = fixtureRoot('backfill-fsc-t2h-moved-');
+  const root = fixtureRoot('backfill-fsc-t2h-');
+  const moved = join(movedParent, 'original');
+  const run = runModule(['--policy-v2', '--root', root], {
+    root,
+    inventory: () => {
+      renameSync(root, moved);
+      return { exitCode: null, error: 'outage' };
+    },
+  });
+  assert.equal(run.code, 1, `${run.out}${run.err}`);
+  assert.equal(reportOf(run).result, 'refused');
+  assert.deepEqual(
+    refusalsOf(run),
+    [
+      { code: 'inventory_unreachable', detail: 'outage' },
+      { code: 'path_relocated', detail: root },
+    ],
+    'the audit failure is structured in refusals[] after the original refusal',
+  );
+  assert.match(run.err, /refused \(inventory_unreachable, path_relocated\)/, 'stderr names both refusal codes');
+  assert.match(run.err, /could not be ledgered \(path_relocated: /, 'stderr keeps the audit note and its component');
+  assert.equal(run.err.includes(root), true, 'the audit failure names the relocated component on stderr');
+  assert.equal(existsSync(root), false, 'a root observed gone is never recreated');
+  assert.deepEqual(regularFilesUnder(moved), [], 'nothing this run wrote remains in the moved original');
 });
 
 void test('FSC-C-01 T9 backfill (ADR-0013 (c), declared, not detected): a relocation in effect only inside the write interval and undone before the run next verifies is not observed', () => {

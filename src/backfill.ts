@@ -89,7 +89,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, realpathSync, type Stats } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   appendFileHere,
   ascendHere,
@@ -876,21 +876,27 @@ type Run = {
   faults: BackfillOptions['faults'];
 };
 
+/**
+ * Whether the refusal-audit failure adds information to the report: an
+ * identical refusal is already there, or its subject lies inside a component
+ * already refused as relocated — the audit append re-observing the same
+ * relocation from a deeper entry must not duplicate it.
+ */
+function auditAlreadyReported(reported: Refusal[], ledger: Refusal, root: string): boolean {
+  if (reported.some((item) => item.code === ledger.code && item.detail === ledger.detail)) return true;
+  const subject = isAbsolute(ledger.detail) ? ledger.detail : join(root, ledger.detail);
+  return reported.some(
+    (item) => item.code === 'path_relocated' && (subject === item.detail || subject.startsWith(`${item.detail}/`)),
+  );
+}
+
 function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean): number {
-  printReport(io, {
-    root: state.root,
-    repositoryId: state.repositoryId,
-    at: state.at,
-    before: state.before,
-    after: null,
-    result: 'refused',
-    migrations: state.migrations,
-    refusals,
-  });
-  io.err(`backfill: refused (${refusals.map((item) => item.code).join(', ')})\n`);
+  const reported = [...refusals];
   if (!dryRun && state.verified !== null) {
     // The ledger target was validated before any mutation; a refusal here is a
-    // race, and a refusal whose audit line cannot be written says so.
+    // race. The audit attempt finishes before the envelope, so a relocation it
+    // observed is part of the structured report — with its component — instead
+    // of a code-only stderr note after the report was already printed.
     const ledger = appendLedger(state.verified, {
       schema: LEDGER_SCHEMA,
       command: COMMAND,
@@ -900,8 +906,22 @@ function refusal(io: Io, state: RunState, refusals: Refusal[], dryRun: boolean):
       at: state.at,
       result: 'refused',
     });
-    if (ledger !== null) io.err(`backfill: the refusal could not be ledgered (${ledger.code})\n`);
+    if (ledger !== null) {
+      if (!auditAlreadyReported(reported, ledger, state.root)) reported.push(ledger);
+      io.err(`backfill: the refusal could not be ledgered (${ledger.code}: ${ledger.detail})\n`);
+    }
   }
+  printReport(io, {
+    root: state.root,
+    repositoryId: state.repositoryId,
+    at: state.at,
+    before: state.before,
+    after: null,
+    result: 'refused',
+    migrations: state.migrations,
+    refusals: reported,
+  });
+  io.err(`backfill: refused (${reported.map((item) => item.code).join(', ')})\n`);
   return 1;
 }
 
