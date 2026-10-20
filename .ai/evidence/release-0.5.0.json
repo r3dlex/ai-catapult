@@ -1,0 +1,10 @@
+{
+  "dist_tag": "latest",
+  "note": "Live npm view of dist-tag latest for both published names at queried_at. Comparison baseline only; this file is not a publication.",
+  "packages": {
+    "@r3dlex/ai-catapult": "0.4.4",
+    "ai-catapult": "0.4.4"
+  },
+  "queried_at": "2026-10-20T12:06:59Z",
+  "registry": "https://registry.npmjs.org"
+}
