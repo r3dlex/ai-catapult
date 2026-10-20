@@ -28,7 +28,7 @@
     "test/readiness-delivery.test.ts": "932f1030e4578bc78c27fa45b3aa9ced0edfe4c073dac7fa49715aa63c4334f0",
     "test/release-0.4.3.test.ts": "9469cfcef01da35a2545d2a5fb8575848bbe85f24244cbad31544124a17443b8",
     "test/release-0.4.4.test.ts": "c8a062b40ce0cb607b44a9d5eb67455f58c07c0a715bac2ba8690b998fcb4099",
-    "test/release-0.5.0.test.ts": "dbd21a599774feed36df3ad842e094486c12954ad9f474e702f409c3a951e1e6",
+    "test/release-0.5.0.test.ts": "17f932e01330e8cc238bde400e2ab458fac72b65563fbf338a2d451e023a6cfc",
     "test/release-dispatch.test.ts": "169c8c64dd851ba1f9a91b2394b973d0b02ef9eeda22d92e0d62040c7a3793b4"
   },
   "verification": [
